@@ -7,6 +7,18 @@
 
 session_start();
 
+// Prevent re-running setup after installation is complete
+$setupLockFile = __DIR__ . '/../setup.lock';
+if (file_exists($setupLockFile)) {
+    http_response_code(403);
+    echo '<!DOCTYPE html><html><head><title>Setup Locked</title></head><body>';
+    echo '<h1>Installation Already Complete</h1>';
+    echo '<p>The OEM Activation System has already been installed.</p>';
+    echo '<p>To re-run setup, delete the <code>setup.lock</code> file from the application root.</p>';
+    echo '</body></html>';
+    exit;
+}
+
 // System Configuration
 define('OEM_VERSION', '2.0.0');
 define('OEM_RELEASE_DATE', '2025-08-24');

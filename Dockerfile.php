@@ -33,17 +33,17 @@ RUN a2enmod rewrite ssl headers
 
 # Configure PHP for production
 RUN { \
-    echo 'memory_limit = 256M'; \
-    echo 'upload_max_filesize = 500M'; \
-    echo 'post_max_size = 500M'; \
-    echo 'max_execution_time = 300'; \
-    echo 'max_input_time = 300'; \
+    echo 'memory_limit = 128M'; \
+    echo 'upload_max_filesize = 50M'; \
+    echo 'post_max_size = 50M'; \
+    echo 'max_execution_time = 30'; \
+    echo 'max_input_time = 30'; \
     echo 'date.timezone = UTC'; \
     echo 'display_errors = Off'; \
     echo 'log_errors = On'; \
     echo 'error_log = /var/www/html/activate/logs/php_errors.log'; \
     echo 'session.cookie_httponly = 1'; \
-    echo 'session.cookie_secure = 0'; \
+    echo 'session.cookie_secure = 1'; \
     echo 'session.use_strict_mode = 1'; \
     } > /usr/local/etc/php/conf.d/custom.ini
 

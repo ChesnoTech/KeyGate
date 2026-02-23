@@ -25,7 +25,9 @@ if ($install_error) {
     return;
 }
 
-// Installation successful
+// Installation successful — create lock file to prevent re-running setup
+$lockFile = __DIR__ . '/../../setup.lock';
+@file_put_contents($lockFile, 'Installed: ' . date('Y-m-d H:i:s') . PHP_EOL);
 ?>
 
 <div style="text-align: center; padding: 40px 0;">

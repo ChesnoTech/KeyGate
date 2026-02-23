@@ -43,6 +43,23 @@ vision_tests/
 Thumbs.db
 desktop.ini
 
+# ── Test & Debug Files ───────────────────────────────────
+test_*.php
+test_*.html
+test_*.ps1
+full_system_regression_test.ps1
+test-security-features.ps1
+
+# ── Backup Files ─────────────────────────────────────────
+*.backup
+*.bak
+*.old
+*.orig
+
+# ── Setup Lock (created after installation) ──────────────
+setup.lock
+FINAL_PRODUCTION_SYSTEM/setup.lock
+
 # ── Build & Temp ─────────────────────────────────────────
 *.tmp
 *.temp
