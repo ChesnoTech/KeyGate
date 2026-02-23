@@ -1,0 +1,121 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.php
+    container_name: oem-activation-web
+    ports:
+      - "8080:80"
+      - "8443:443"
+    volumes:
+      - ./FINAL_PRODUCTION_SYSTEM:/var/www/html/activate
+      - ./test-data:/test-data
+      - ./logs:/var/www/html/activate/logs
+      - ./backups:/var/www/html/activate/backups
+      - ./ssl:/etc/apache2/ssl
+    environment:
+      - PHP_MEMORY_LIMIT=${PHP_MEMORY_LIMIT}
+      - PHP_UPLOAD_MAX_FILESIZE=${PHP_UPLOAD_MAX_FILESIZE}
+      - PHP_POST_MAX_SIZE=${PHP_POST_MAX_SIZE}
+      - DB_HOST=${DB_HOST}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+      - APP_TIMEZONE=${APP_TIMEZONE:-UTC}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - oem-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/activate/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  db:
+    image: mariadb:10.11
+    container_name: oem-activation-db
+    environment:
+      - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
+      - MARIADB_DATABASE=${DB_NAME}
+      - MARIADB_USER=${DB_USER}
+      - MARIADB_PASSWORD=${DB_PASS}
+      - MARIADB_AUTO_UPGRADE=1
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+      - ./FINAL_PRODUCTION_SYSTEM/database:/docker-entrypoint-initdb.d
+    networks:
+      - oem-network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --max_connections=200
+      --innodb_buffer_pool_size=256M
+      --innodb_log_file_size=64M
+      --innodb_flush_log_at_trx_commit=2
+      --innodb_flush_method=O_DIRECT
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: oem-activation-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD} --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - oem-network
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: oem-activation-phpmyadmin
+    ports:
+      - "8081:80"
+    environment:
+      - PMA_HOST=${DB_HOST}
+      - PMA_PORT=3306
+      - PMA_USER=${DB_USER}
+      - PMA_PASSWORD=${DB_PASS}
+      - UPLOAD_LIMIT=50M
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - oem-network
+
+networks:
+  oem-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  mariadb-data:
+    driver: local
+  redis-data:
+    driver: local

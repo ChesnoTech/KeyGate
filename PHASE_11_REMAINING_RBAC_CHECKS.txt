@@ -1,0 +1,200 @@
+# RBAC Permission Checks to Add/Replace in admin_v2.php
+# Apply these changes to complete Step 2 of Phase 11
+
+# ===================================================================
+# INSTRUCTIONS:
+# 1. Find each "case 'action_name':" in admin_v2.php
+# 2. Add or REPLACE the permission check as shown below
+# 3. For REPLACE operations, remove the old if() check completely
+# ===================================================================
+
+# ------------------------------
+# 1. list_history (Line ~289)
+# ACTION: ADD (no existing check)
+# ------------------------------
+case 'list_history':
+    // RBAC: Check view_activations permission
+    requirePermission('view_activations', $admin_session);
+
+    $page = max(1, intval($_GET['page'] ?? 1));
+
+
+# ------------------------------
+# 2. list_logs (Line ~400)
+# ACTION: ADD (no existing check)
+# ------------------------------
+case 'list_logs':
+    // RBAC: Check view_logs permission
+    requirePermission('view_logs', $admin_session);
+
+    $page = max(1, intval($_GET['page'] ?? 1));
+
+
+# ------------------------------
+# 3. add_tech (Line ~448)
+# ACTION: REPLACE existing viewer check
+# ------------------------------
+# OLD CODE TO REMOVE:
+if ($admin_session['role'] === 'viewer') {
+    echo json_encode(['success' => false, 'error' => 'Permission denied']);
+    exit;
+}
+
+# NEW CODE:
+case 'add_tech':
+    // RBAC: Check add_technician permission
+    requirePermission('add_technician', $admin_session);
+
+    $tech_id = trim($_POST['tech_id'] ?? '');
+
+
+# ------------------------------
+# 4. edit_tech (Line ~499)
+# ACTION: REPLACE existing viewer check
+# ------------------------------
+case 'edit_tech':
+    // RBAC: Check edit_technician permission
+    requirePermission('edit_technician', $admin_session);
+
+    $tech_id = trim($_POST['tech_id'] ?? '');
+
+
+# ------------------------------
+# 5. reset_password (Line ~527)
+# ACTION: REPLACE existing viewer check
+# ------------------------------
+case 'reset_password':
+    // RBAC: Check reset_technician_password permission
+    requirePermission('reset_technician_password', $admin_session);
+
+    $tech_id = trim($_POST['tech_id'] ?? '');
+
+
+# ------------------------------
+# 6. toggle_tech (Line ~560)
+# ACTION: REPLACE existing viewer check
+# ------------------------------
+case 'toggle_tech':
+    // RBAC: Check edit_technician permission
+    requirePermission('edit_technician', $admin_session);
+
+    $tech_id = trim($_POST['tech_id'] ?? '');
+
+
+# ------------------------------
+# 7. delete_tech (Line ~585)
+# ACTION: REPLACE existing super_admin check
+# ------------------------------
+# OLD CODE TO REMOVE:
+if ($admin_session['role'] !== 'super_admin') {
+    echo json_encode(['success' => false, 'error' => 'Permission denied']);
+    exit;
+}
+
+# NEW CODE:
+case 'delete_tech':
+    // RBAC: Check delete_technician permission
+    requirePermission('delete_technician', $admin_session);
+
+    $tech_id = trim($_POST['tech_id'] ?? '');
+
+
+# ------------------------------
+# 8. recycle_key (Line ~606)
+# ACTION: REPLACE existing viewer check
+# ------------------------------
+case 'recycle_key':
+    // RBAC: Check recycle_key permission
+    requirePermission('recycle_key', $admin_session);
+
+    $id = intval($_POST['id'] ?? 0);
+
+
+# ------------------------------
+# 9. delete_key (Line ~631)
+# ACTION: REPLACE existing super_admin check
+# ------------------------------
+case 'delete_key':
+    // RBAC: Check delete_key permission
+    requirePermission('delete_key', $admin_session);
+
+    $id = intval($_POST['id'] ?? 0);
+
+
+# ------------------------------
+# 10. import_keys (Line ~652)
+# ACTION: ADD (no existing check)
+# ------------------------------
+case 'import_keys':
+    // RBAC: Check import_keys permission
+    requirePermission('import_keys', $admin_session);
+
+    $csv_data = trim($_POST['csv_data'] ?? '');
+
+
+# ------------------------------
+# 11. export_keys (Line ~689)
+# ACTION: ADD (no existing check)
+# ------------------------------
+case 'export_keys':
+    // RBAC: Check export_data permission
+    requirePermission('export_data', $admin_session);
+
+    $filter = $_GET['filter'] ?? 'all';
+
+
+# ------------------------------
+# 12. generate_report (Line ~756)
+# ACTION: ADD (no existing check)
+# ------------------------------
+case 'generate_report':
+    // RBAC: Check view_reports permission
+    requirePermission('view_reports', $admin_session);
+
+    $report_type = $_POST['report_type'] ?? 'summary';
+
+
+# ------------------------------
+# 13. register_usb_device (Line ~1051)
+# ACTION: REPLACE existing viewer check
+# ------------------------------
+case 'register_usb_device':
+    // RBAC: Check register_usb_device permission
+    requirePermission('register_usb_device', $admin_session);
+
+    $device_serial = trim($_POST['device_serial_number'] ?? '');
+
+
+# ------------------------------
+# 14. update_usb_device_status (Line ~1152)
+# ACTION: REPLACE existing viewer check
+# ------------------------------
+case 'update_usb_device_status':
+    // RBAC: Check disable_usb_device permission
+    requirePermission('disable_usb_device', $admin_session);
+
+    $device_id = intval($_POST['device_id'] ?? 0);
+
+
+# ------------------------------
+# 15. delete_usb_device (Line ~1220)
+# ACTION: REPLACE existing super_admin check
+# ------------------------------
+case 'delete_usb_device':
+    // RBAC: Check delete_usb_device permission
+    requirePermission('delete_usb_device', $admin_session);
+
+    $device_id = intval($_POST['device_id'] ?? 0);
+
+
+# ===================================================================
+# VERIFICATION:
+# After applying all changes, search for these patterns to ensure
+# no old permission checks remain:
+#
+# Search: if \(\$admin_session\['role'\]
+# Expected: Should only find checks in HTML/JavaScript, not in PHP action handlers
+#
+# The requirePermission() function will handle all permission checks
+# consistently and log denials to rbac_permission_denials table.
+# ===================================================================

@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>USB Device Detector - OEM Activation System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+
+        .info-box strong {
+            color: #1976d2;
+        }
+
+        .btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #45a049;
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        #output {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            min-height: 100px;
+            display: none;
+        }
+
+        #output.show {
+            display: block;
+        }
+
+        .device-card {
+            background: white;
+            border: 2px solid #4CAF50;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .device-card h3 {
+            color: #4CAF50;
+            margin-bottom: 10px;
+        }
+
+        .device-info {
+            display: grid;
+            grid-template-columns: 150px 1fr;
+            gap: 10px;
+            font-size: 14px;
+        }
+
+        .device-info strong {
+            color: #333;
+        }
+
+        .copy-btn {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+            font-size: 13px;
+        }
+
+        .copy-btn:hover {
+            background: #1976d2;
+        }
+
+        .error {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            padding: 15px;
+            border-radius: 4px;
+            color: #c62828;
+        }
+
+        .loading {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #2196f3;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .steps {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+
+        .steps ol {
+            margin-left: 20px;
+        }
+
+        .steps li {
+            margin: 5px 0;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 USB Device Detector</h1>
+        <p class="subtitle">OEM Activation System - USB Registration Helper</p>
+
+        <div class="info-box">
+            <strong>What this tool does:</strong><br>
+            Detects USB flash drives connected to this computer and displays their serial numbers for easy registration.
+        </div>
+
+        <button class="btn" onclick="detectUSB()" id="detectBtn">
+            🔎 Detect USB Devices
+        </button>
+
+        <div id="output"></div>
+
+        <div class="steps">
+            <strong>📋 How to use this tool:</strong>
+            <ol>
+                <li>Make sure your USB flash drive is connected</li>
+                <li>Click "Detect USB Devices" button above</li>
+                <li>Copy the Serial Number from the results</li>
+                <li>Paste it into the admin panel registration form</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        function detectUSB() {
+            const output = document.getElementById('output');
+            const btn = document.getElementById('detectBtn');
+
+            output.className = 'show';
+            output.innerHTML = '<div class="loading"><div class="spinner"></div>Scanning for USB devices...</div>';
+            btn.disabled = true;
+
+            // Create a downloadable batch file approach
+            const batchContent = `@echo off
+powershell -NoProfile -Command "Get-WmiObject Win32_DiskDrive | Where-Object { $_.InterfaceType -eq 'USB' } | ForEach-Object { Write-Host ''; Write-Host 'Serial Number: ' $_.SerialNumber.Trim(); Write-Host 'Model:         ' $_.Model.Trim(); Write-Host 'Capacity:      ' ([Math]::Round($_.Size/1GB, 2)) 'GB'; Write-Host ''; }" & pause`;
+
+            // Since we can't directly access USB from browser, show instructions
+            setTimeout(() => {
+                output.innerHTML = `
+                    <div class="error">
+                        <strong>⚠️ Browser Limitation</strong><br><br>
+                        Modern browsers cannot directly access USB devices for security reasons.
+                        Please use one of the methods below:
+                    </div>
+
+                    <div style="margin-top: 20px;">
+                        <h3 style="margin-bottom: 10px;">Method 1: Download Detection Tool</h3>
+                        <button class="btn" onclick="downloadDetector()" style="background: #2196f3;">
+                            📥 Download USB Detector (.cmd file)
+                        </button>
+                        <p style="margin-top: 10px; font-size: 13px; color: #666;">
+                            Download and run this file to detect USB devices. It will show the serial number in a window.
+                        </p>
+                    </div>
+
+                    <div style="margin-top: 20px;">
+                        <h3 style="margin-bottom: 10px;">Method 2: PowerShell Command</h3>
+                        <div style="background: #2d2d2d; color: #f8f8f2; padding: 12px; border-radius: 4px; font-family: monospace; font-size: 12px; overflow-x: auto;">
+Get-WmiObject Win32_DiskDrive | Where-Object { $_.InterfaceType -eq 'USB' } | Select SerialNumber,Model
+                        </div>
+                        <button class="copy-btn" onclick="copyCommand()">📋 Copy Command</button>
+                        <p style="margin-top: 10px; font-size: 13px; color: #666;">
+                            Copy this command, open PowerShell (Win+X → A), paste and run it.
+                        </p>
+                    </div>
+                `;
+                btn.disabled = false;
+            }, 1000);
+        }
+
+        function downloadDetector() {
+            const batchContent = `@echo off
+title USB Device Detector
+color 0A
+cls
+echo ============================================================
+echo         USB DEVICE INFORMATION DETECTOR
+echo ============================================================
+echo.
+echo Detecting USB flash drives...
+echo.
+powershell -NoProfile -Command "Get-WmiObject Win32_DiskDrive | Where-Object { $_.InterfaceType -eq 'USB' } | ForEach-Object { Write-Host ''; Write-Host '========================================' -ForegroundColor Cyan; Write-Host 'USB Device Found!' -ForegroundColor Green; Write-Host '========================================' -ForegroundColor Cyan; Write-Host ''; Write-Host 'Serial Number:' $_.SerialNumber.Trim() -ForegroundColor Yellow; Write-Host 'Model:        ' $_.Model.Trim(); Write-Host 'Capacity:     ' ([Math]::Round($_.Size/1GB, 2)) 'GB'; Write-Host ''; }"
+echo.
+echo ============================================================
+echo.
+echo Copy the Serial Number above and paste it into the
+echo admin panel registration form.
+echo.
+echo ============================================================
+echo.
+pause`;
+
+            const blob = new Blob([batchContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'usb-detector.cmd';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            alert('✅ USB Detector downloaded!\n\n1. Find the file in your Downloads folder\n2. Double-click to run it\n3. Copy the Serial Number shown');
+        }
+
+        function copyCommand() {
+            const command = "Get-WmiObject Win32_DiskDrive | Where-Object { $_.InterfaceType -eq 'USB' } | Select SerialNumber,Model";
+
+            navigator.clipboard.writeText(command).then(() => {
+                alert('✅ Command copied!\n\n1. Press Win+X then A (PowerShell Admin)\n2. Paste (Ctrl+V) and press Enter\n3. Copy the SerialNumber');
+            }).catch(() => {
+                prompt('Copy this command:', command);
+            });
+        }
+    </script>
+</body>
+</html>

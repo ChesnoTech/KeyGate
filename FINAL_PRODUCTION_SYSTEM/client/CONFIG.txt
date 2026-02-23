@@ -1,0 +1,21 @@
+# OEM Activation System v2.0 - Configuration File
+# =================================================
+# Edit this file to customize the activation client
+
+# Server Configuration
+# Replace "activate.local" with your actual server address
+SERVER_URL=https://roo24.ieatkittens.netcraze.pro:65083
+API_ENDPOINT=https://roo24.ieatkittens.netcraze.pro:65083/activate/api
+SCRIPT_ENDPOINT=https://roo24.ieatkittens.netcraze.pro:65083/activate/activation/main_v2.PS1
+
+# Alternative Examples:
+# SERVER_URL=http://192.168.1.100
+# SERVER_URL=https://oem.yourcompany.com
+# SERVER_URL=http://oem-server.local:8080
+
+# Notes:
+# - Use http:// for internal networks
+# - Use https:// for secure connections (recommended for production)
+# - Include port number if different from default (80 for HTTP, 443 for HTTPS)
+# - Ensure the server is accessible from technician workstations
+# - Test connectivity before deploying to technicians

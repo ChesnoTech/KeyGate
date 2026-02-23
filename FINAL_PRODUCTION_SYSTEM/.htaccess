@@ -1,0 +1,129 @@
+# OEM Activation System - URL Rewriting & Security
+# Hide .php extensions and enhance security
+
+# Enable URL Rewriting
+RewriteEngine On
+
+# Security Headers
+<IfModule mod_headers.c>
+    # Prevent MIME sniffing
+    Header always set X-Content-Type-Options "nosniff"
+    
+    # XSS Protection
+    Header always set X-XSS-Protection "1; mode=block"
+    
+    # Clickjacking protection
+    Header always set X-Frame-Options "SAMEORIGIN"
+    
+    # Referrer policy
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    
+    # Content Security Policy (adjust as needed)
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self';"
+</IfModule>
+
+# Hide .php extension from URLs
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^([^.]+)$ $1.php [NC,L]
+
+# Redirect .php URLs to clean URLs (DISABLED to allow admin_v2.php to work)
+# RewriteCond %{THE_REQUEST} /([^.]+)\.php [NC]
+# RewriteRule ^ /%1 [NC,L,R=301]
+
+# Specific rules for main application files
+RewriteRule ^secure-admin/?$ secure-admin.php [NC,L]
+RewriteRule ^admin/?$ secure-admin.php [NC,L]
+RewriteRule ^admin-v2/?$ admin_v2.php [NC,L]
+
+# Redirect old webroot paths to new structure
+RewriteRule ^webroot/secure-admin.php$ /secure-admin.php [R=301,L]
+RewriteRule ^webroot/(.*)$ /$1 [R=301,L]
+RewriteRule ^verify/?$ verify_deployment.php [NC,L]
+RewriteRule ^install-phpmailer/?$ install_phpmailer.php [NC,L]
+
+# API endpoints - keep .php for API consistency
+RewriteRule ^api/(.*)$ api/$1 [NC,L]
+
+# Setup wizard - allow both with and without .php
+RewriteRule ^setup/?$ setup/index.php [NC,L]
+RewriteRule ^setup/(.*)$ setup/$1 [NC,L]
+
+# Client download
+RewriteRule ^download/?$ client/ [NC,L]
+
+# Database files - block direct access
+<Files ~ "\.sql$">
+    Deny from all
+</Files>
+
+# Block access to sensitive files
+<FilesMatch "(config|composer\.(json|lock)|\.env)">
+    Deny from all
+</FilesMatch>
+
+# Block access to directories
+Options -Indexes
+
+# Custom error pages
+ErrorDocument 404 /404.html
+ErrorDocument 500 /502.html
+ErrorDocument 502 /502.html
+ErrorDocument 503 /502.html
+
+# Security: Block common attack patterns
+RewriteCond %{QUERY_STRING} (\<|%3C).*script.*(\>|%3E) [NC,OR]
+RewriteCond %{QUERY_STRING} GLOBALS(=|\[|\%[0-9A-Z]{0,2}) [OR]
+RewriteCond %{QUERY_STRING} _REQUEST(=|\[|\%[0-9A-Z]{0,2}) [OR]
+RewriteCond %{QUERY_STRING} (\<|%3C).*iframe.*(\>|%3E) [NC,OR]
+RewriteCond %{QUERY_STRING} base64_encode.*\(.*\) [NC,OR]
+RewriteCond %{QUERY_STRING} base64_(en|de)code[^(]*\([^)]*\) [NC,OR]
+RewriteCond %{QUERY_STRING} (javascript|vbscript):.*; [NC,OR]
+RewriteCond %{QUERY_STRING} mosConfig_[a-zA-Z_]{1,21}(=|\%3D) [OR]
+RewriteCond %{QUERY_STRING} ^.*(\[|\]|\(|\)|<|>|ê|"|;|\*).* [NC]
+RewriteRule ^(.*)$ - [F,L]
+
+# Block access to backup and temporary files
+<FilesMatch "\.(bak|backup|old|tmp|temp|log)$">
+    Deny from all
+</FilesMatch>
+
+# Force HTTPS (uncomment when SSL is configured)
+# RewriteCond %{HTTPS} off
+# RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# UTF-8 encoding for JavaScript and CSS files
+AddCharset utf-8 .js .css
+
+# Compression for better performance
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/plain
+    AddOutputFilterByType DEFLATE text/html
+    AddOutputFilterByType DEFLATE text/xml
+    AddOutputFilterByType DEFLATE text/css
+    AddOutputFilterByType DEFLATE application/xml
+    AddOutputFilterByType DEFLATE application/xhtml+xml
+    AddOutputFilterByType DEFLATE application/rss+xml
+    AddOutputFilterByType DEFLATE application/javascript
+    AddOutputFilterByType DEFLATE application/x-javascript
+    AddOutputFilterByType DEFLATE application/json
+</IfModule>
+
+# Browser caching
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/ico "access plus 1 year"
+    ExpiresByType image/icon "access plus 1 year"
+    ExpiresByType text/html "access plus 1 hour"
+</IfModule>
+
+# Prevent hotlinking (adjust domain as needed)
+# RewriteCond %{HTTP_REFERER} !^$
+# RewriteCond %{HTTP_REFERER} !^https?://(www\.)?yourdomain\.com [NC]
+# RewriteRule \.(jpe?g|png|gif|css|js)$ - [F]

@@ -1,0 +1,61 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Build artifacts
+*.zip
+*.tar.gz
+build/releases/
+
+# Node modules (if any)
+node_modules/
+
+# Environment files
+.env
+.env.local
+
+# Docker
+.dockerignore
+Dockerfile*
+docker-compose*.yml
+
+# Documentation (keep in image but ignore large files)
+*.pdf
+*.docx
+
+# Test files
+test/
+tests/
+*.test.php
+
+# Backup files
+*.bak
+*.backup
+backup/
+
+# Claude files
+.claude/
+CLAUDE.md

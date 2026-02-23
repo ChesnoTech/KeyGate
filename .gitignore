@@ -1,0 +1,52 @@
+# ── Credentials & Environment ─────────────────────────────
+.env
+.env.local
+.env.production
+
+# ── SSL Certificates (local dev certs) ────────────────────
+ssl/localhost.key
+ssl/localhost.crt
+
+# ── Database Backups ──────────────────────────────────────
+backups/
+*.sql.gz
+
+# ── Logs ──────────────────────────────────────────────────
+logs/
+*.log
+
+# ── PHP Dependencies (managed by Composer) ────────────────
+FINAL_PRODUCTION_SYSTEM/vendor/
+
+# ── C# Build Artifacts ───────────────────────────────────
+hardware-bridge/native-app/bin/
+hardware-bridge/native-app/obj/
+*.exe
+*.dll
+*.pdb
+
+# ── WebRootAfterInstall (deployment artifact, not source) ─
+WebRootAfterInstall/
+
+# ── Vision Tests (screenshots contain credentials) ───────
+vision_tests/
+
+# ── Claude Session Data ──────────────────────────────────
+.claude/
+
+# ── IDE & OS ─────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Build & Temp ─────────────────────────────────────────
+*.tmp
+*.temp
+*.cache
+*.zip
+*.tar.gz
+nul

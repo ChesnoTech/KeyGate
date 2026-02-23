@@ -1,0 +1,21 @@
+ICON FILES NEEDED:
+- icon16.png (16x16 pixels)
+- icon48.png (48x48 pixels)
+- icon128.png (128x128 pixels)
+
+GENERATE ICONS:
+Run the included PowerShell script to generate all three icon files:
+
+    powershell -ExecutionPolicy Bypass -File generate-icons.ps1
+
+The script uses .NET System.Drawing to create blue rounded-rectangle icons
+with a white USB plug/trident symbol. No external dependencies required.
+
+Output files are written to this same directory (icon16.png, icon48.png, icon128.png).
+
+ALTERNATIVE:
+You can also create icons manually using any image editor.
+Suggested design: USB plug icon with "OEM" text or gear/hardware symbol.
+
+For quick placeholder, you can use this online tool:
+https://redketchup.io/icon-editor

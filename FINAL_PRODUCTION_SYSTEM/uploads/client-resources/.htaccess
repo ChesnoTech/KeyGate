@@ -1,0 +1,2 @@
+# Deny direct access — files are served through the API endpoint only
+Require all denied

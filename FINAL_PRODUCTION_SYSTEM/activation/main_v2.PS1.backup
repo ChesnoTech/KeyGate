@@ -1,0 +1,577 @@
+#VALIDATION_SIGNATURE: 9x3C4-6H0D3-E5G8F (DO NOT REMOVE/MODIFY)
+
+# === Configuration ===
+param(
+    [string]$APIBaseURL = "https://roo24.ieatkittens.netcraze.pro:65083/activate/api"
+)
+
+$ActivationDelaySeconds = 10
+$MaxRetryAttempts = 3
+
+Write-Host "`n🔐 OEM Activation System v2.0 (Database Edition)`n" -ForegroundColor Cyan
+Write-Host "⚠️ Please do NOT close this window manually. It will close automatically.`n"
+
+# Get technician credentials
+$TechnicianID = ""
+$Password = ""
+$SessionInfo = $null
+
+# Validate technician ID format
+function Get-Valid-TechnicianID {
+    while ($true) {
+        $id = Read-Host "Technician ID"
+        if ($id -match '^[A-Za-z0-9]{1,20}$') { return $id }
+        Write-Host "⚠️ Technician ID must be alphanumeric, max 20 characters" -ForegroundColor Yellow
+    }
+}
+
+function Get-Valid-OrderNumber {
+    while ($true) {
+        $o = Read-Host "Enter the last 5 characters of the order number"
+        if ($o -match '^[A-Za-z0-9]{5}$') { return $o }
+        Write-Host "⚠️ Order number must be exactly 5 alphanumeric characters" -ForegroundColor Yellow
+    }
+}
+
+function Invoke-APICall {
+    param(
+        [string]$Endpoint,
+        [hashtable]$Body = @{},
+        [string]$Method = "POST"
+    )
+    
+    try {
+        $jsonBody = $Body | ConvertTo-Json -Compress
+        $response = Invoke-RestMethod -Uri "$APIBaseURL/$Endpoint" -Method $Method -Body $jsonBody -ContentType "application/json" -UserAgent "PowerShell-OEM-Client"
+        return $response
+    } catch {
+        $errorMsg = "API call failed"
+        if ($_.Exception.Response) {
+            $errorMsg += " (HTTP $($_.Exception.Response.StatusCode))"
+            if ($_.Exception.Response.StatusCode -eq 401) {
+                $errorMsg += " - Invalid credentials"
+            } elseif ($_.Exception.Response.StatusCode -eq 423) {
+                $errorMsg += " - Account locked"
+            }
+        }
+        Write-Host "❌ $errorMsg" -ForegroundColor Red
+        return $null
+    }
+}
+
+function Authenticate-Technician {
+    $maxAttempts = 3
+    $attempt = 0
+    
+    while ($attempt -lt $maxAttempts) {
+        $attempt++
+        
+        if ($attempt -gt 1) {
+            Write-Host "`n⚠️ Authentication failed. Attempt $attempt of $maxAttempts" -ForegroundColor Yellow
+        }
+        
+        $TechnicianID = Get-Valid-TechnicianID
+        $Password = Read-Host "Password" -AsSecureString
+        $PasswordText = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($Password))
+        
+        Write-Host "`n🔐 Authenticating..." -ForegroundColor Cyan
+        
+        $loginBody = @{
+            technician_id = $TechnicianID
+            password = $PasswordText
+        }
+        
+        $loginResponse = Invoke-APICall -Endpoint "login.php" -Body $loginBody
+        
+        if ($loginResponse -and $loginResponse.success) {
+            Write-Host "✅ Welcome, $($loginResponse.full_name)" -ForegroundColor Green
+            
+            # Check if password change is required
+            if ($loginResponse.action_required -eq 'change_password') {
+                Write-Host "`n🔄 Password change required" -ForegroundColor Yellow
+                Write-Host "$($loginResponse.message)" -ForegroundColor Yellow
+                
+                if (Change-Password -TechnicianID $TechnicianID -CurrentPassword $PasswordText) {
+                    Write-Host "✅ Password changed successfully. You may now proceed with activation." -ForegroundColor Green
+                } else {
+                    Write-Host "❌ Password change failed. Cannot continue." -ForegroundColor Red
+                    return $null
+                }
+            }
+            
+            return @{
+                technician_id = $loginResponse.technician_id
+                full_name = $loginResponse.full_name
+            }
+        }
+        
+        if ($loginResponse -and $loginResponse.error -eq 'Account locked due to too many failed attempts') {
+            Write-Host "❌ Account is locked. Please contact administrator." -ForegroundColor Red
+            return $null
+        }
+        
+        # Clear password from memory
+        $PasswordText = $null
+    }
+    
+    Write-Host "❌ Authentication failed after $maxAttempts attempts. Access denied." -ForegroundColor Red
+    return $null
+}
+
+function Change-Password {
+    param(
+        [string]$TechnicianID,
+        [string]$CurrentPassword
+    )
+    
+    $maxAttempts = 3
+    $attempt = 0
+    
+    while ($attempt -lt $maxAttempts) {
+        $attempt++
+        
+        Write-Host "`nPassword Requirements:" -ForegroundColor Cyan
+        Write-Host "- At least 8 characters long" -ForegroundColor Gray
+        Write-Host "- Must contain uppercase, lowercase, and numbers" -ForegroundColor Gray
+        Write-Host "- Must be different from current password`n" -ForegroundColor Gray
+        
+        $NewPassword = Read-Host "Enter new password" -AsSecureString
+        $NewPasswordText = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($NewPassword))
+        
+        $ConfirmPassword = Read-Host "Confirm new password" -AsSecureString
+        $ConfirmPasswordText = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($ConfirmPassword))
+        
+        if ($NewPasswordText -ne $ConfirmPasswordText) {
+            Write-Host "❌ Passwords do not match. Please try again." -ForegroundColor Red
+            $NewPasswordText = $null
+            $ConfirmPasswordText = $null
+            continue
+        }
+        
+        $changeBody = @{
+            technician_id = $TechnicianID
+            current_password = $CurrentPassword
+            new_password = $NewPasswordText
+            confirm_password = $ConfirmPasswordText
+        }
+        
+        $changeResponse = Invoke-APICall -Endpoint "change-password.php" -Body $changeBody
+        
+        # Clear passwords from memory
+        $NewPasswordText = $null
+        $ConfirmPasswordText = $null
+        
+        if ($changeResponse -and $changeResponse.success) {
+            return $true
+        } else {
+            Write-Host "❌ Password change failed: $($changeResponse.error)" -ForegroundColor Red
+            if ($attempt -lt $maxAttempts) {
+                Write-Host "Please try again..." -ForegroundColor Yellow
+            }
+        }
+    }
+    
+    return $false
+}
+
+function Sync-SystemTime {
+    Write-Host "`n🕐 Synchronizing system time..." -ForegroundColor Cyan
+
+    try {
+        # Stop Windows Time service
+        $stopResult = & net stop w32time 2>&1
+        Start-Sleep -Seconds 1
+
+        # Start Windows Time service
+        $startResult = & net start w32time 2>&1
+        Start-Sleep -Seconds 1
+
+        # Force time resync
+        $resyncResult = & w32tm /resync 2>&1
+
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "✓ System time synchronized successfully" -ForegroundColor Green
+            return $true
+        } else {
+            Write-Host "⚠️ Time sync completed with warnings" -ForegroundColor Yellow
+            return $true  # Continue anyway as this is not critical
+        }
+    } catch {
+        Write-Host "⚠️ Time sync encountered an issue: $($_.Exception.Message)" -ForegroundColor Yellow
+        return $true  # Continue anyway as this is not critical
+    }
+}
+
+function Activate-Key {
+    param ([string]$key)
+
+    # Synchronize system time before activation
+    Sync-SystemTime
+
+    Write-Host "`n🔑 Installing product key..." -ForegroundColor Cyan
+
+    try {
+        $ipkResult = & cscript.exe //NoLogo C:\Windows\System32\slmgr.vbs /ipk $key 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "⚠️ Key installation returned code: $LASTEXITCODE" -ForegroundColor Yellow
+        } else {
+            Write-Host "✓ Product key installed" -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "❌ Error installing key: $($_.Exception.Message)" -ForegroundColor Red
+        return $false
+    }
+
+    Start-Sleep -Seconds 3
+
+    Write-Host "🌐 Activating Windows..." -ForegroundColor Cyan
+
+    try {
+        $atoResult = & cscript.exe //NoLogo C:\Windows\System32\slmgr.vbs /ato 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "⚠️ Activation returned code: $LASTEXITCODE" -ForegroundColor Yellow
+        } else {
+            Write-Host "✓ Activation command completed" -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "❌ Error during activation: $($_.Exception.Message)" -ForegroundColor Red
+    }
+
+    Write-Host "`n⏳ Waiting $ActivationDelaySeconds seconds..." -ForegroundColor Yellow
+    for ($i = $ActivationDelaySeconds; $i -ge 1; $i--) {
+        Write-Host -NoNewline "`r⏳ Checking in $i... "
+        Start-Sleep -Seconds 1
+    }
+
+    # Verify activation status
+    for ($i = 0; $i -lt 3; $i++) {
+        try {
+            $licenseStatus = Get-CimInstance -Query "SELECT LicenseStatus FROM SoftwareLicensingProduct WHERE PartialProductKey IS NOT NULL"
+            if ($licenseStatus -and $licenseStatus.LicenseStatus -eq 1) {
+                Write-Host "`n✓ Windows activation confirmed!" -ForegroundColor Green
+                return $true
+            }
+        } catch {
+            Write-Host "⚠️ Status check failed, retrying..." -ForegroundColor Yellow
+        }
+        Start-Sleep -Seconds 3
+    }
+
+    Write-Host "`n✗ Activation verification failed" -ForegroundColor Red
+    return $false
+}
+
+function Collect-HardwareInfo {
+    Write-Host "`n📋 Collecting hardware information..." -ForegroundColor Cyan
+    $hardwareInfo = @{}
+
+    try {
+        # Motherboard Information
+        Write-Host "  • Motherboard..." -ForegroundColor Gray
+        $motherboard = Get-WmiObject Win32_BaseBoard -ErrorAction Stop
+        $hardwareInfo['motherboard_manufacturer'] = $motherboard.Manufacturer
+        $hardwareInfo['motherboard_product'] = $motherboard.Product
+        $hardwareInfo['motherboard_serial'] = $motherboard.SerialNumber
+        $hardwareInfo['motherboard_version'] = $motherboard.Version
+
+        # BIOS Information
+        Write-Host "  • BIOS..." -ForegroundColor Gray
+        $bios = Get-WmiObject Win32_BIOS -ErrorAction Stop
+        $hardwareInfo['bios_manufacturer'] = $bios.Manufacturer
+        $hardwareInfo['bios_version'] = $bios.SMBIOSBIOSVersion
+        $hardwareInfo['bios_release_date'] = $bios.ReleaseDate
+        $hardwareInfo['bios_serial_number'] = $bios.SerialNumber
+
+        # Secure Boot Status
+        Write-Host "  • Secure Boot..." -ForegroundColor Gray
+        try {
+            $secureBootEnabled = Confirm-SecureBootUEFI -ErrorAction Stop
+            $hardwareInfo['secure_boot_enabled'] = if ($secureBootEnabled) { 1 } else { 0 }
+        } catch {
+            $hardwareInfo['secure_boot_enabled'] = $null
+            Write-Host "    ℹ️ Secure Boot status unavailable" -ForegroundColor DarkGray
+        }
+
+        # CPU Information
+        Write-Host "  • CPU..." -ForegroundColor Gray
+        $cpu = Get-WmiObject Win32_Processor -ErrorAction Stop | Select-Object -First 1
+        $hardwareInfo['cpu_name'] = $cpu.Name.Trim()
+        $hardwareInfo['cpu_manufacturer'] = $cpu.Manufacturer
+        $hardwareInfo['cpu_cores'] = $cpu.NumberOfCores
+        $hardwareInfo['cpu_logical_processors'] = $cpu.NumberOfLogicalProcessors
+        $hardwareInfo['cpu_max_clock_speed'] = $cpu.MaxClockSpeed
+
+        # RAM Information
+        Write-Host "  • RAM..." -ForegroundColor Gray
+        $ramModules = Get-WmiObject Win32_PhysicalMemory -ErrorAction Stop
+        $totalRamBytes = ($ramModules | Measure-Object -Property Capacity -Sum).Sum
+        $hardwareInfo['ram_total_capacity_gb'] = [math]::Round($totalRamBytes / 1GB, 2)
+        $hardwareInfo['ram_slots_used'] = $ramModules.Count
+
+        try {
+            $ramSlots = Get-WmiObject Win32_PhysicalMemoryArray -ErrorAction Stop
+            $hardwareInfo['ram_slots_total'] = ($ramSlots | Measure-Object -Property MemoryDevices -Sum).Sum
+        } catch {
+            $hardwareInfo['ram_slots_total'] = $ramModules.Count
+        }
+
+        $ramDetails = @()
+        foreach ($module in $ramModules) {
+            $ramDetails += @{
+                manufacturer = $module.Manufacturer
+                capacity_gb = [math]::Round($module.Capacity / 1GB, 2)
+                speed_mhz = $module.Speed
+                part_number = $module.PartNumber
+                serial_number = $module.SerialNumber
+            }
+        }
+        $hardwareInfo['ram_modules'] = ($ramDetails | ConvertTo-Json -Compress)
+
+        # Video Cards Information
+        Write-Host "  • Video cards..." -ForegroundColor Gray
+        $videoCards = Get-WmiObject Win32_VideoController -ErrorAction Stop
+        $videoDetails = @()
+        foreach ($card in $videoCards) {
+            $videoDetails += @{
+                name = $card.Name
+                driver_version = $card.DriverVersion
+                video_processor = $card.VideoProcessor
+                adapter_ram_mb = if ($card.AdapterRAM) { [math]::Round($card.AdapterRAM / 1MB, 0) } else { $null }
+                resolution = "$($card.CurrentHorizontalResolution)x$($card.CurrentVerticalResolution)"
+            }
+        }
+        $hardwareInfo['video_cards'] = ($videoDetails | ConvertTo-Json -Compress)
+
+        # Storage Devices Information
+        Write-Host "  • Storage..." -ForegroundColor Gray
+        $disks = Get-WmiObject Win32_DiskDrive -ErrorAction Stop
+        $storageDetails = @()
+        foreach ($disk in $disks) {
+            $storageDetails += @{
+                model = $disk.Model
+                interface_type = $disk.InterfaceType
+                size_gb = [math]::Round($disk.Size / 1GB, 2)
+                serial_number = $disk.SerialNumber
+                media_type = $disk.MediaType
+            }
+        }
+        $hardwareInfo['storage_devices'] = ($storageDetails | ConvertTo-Json -Compress)
+
+        # Disk Partitions Layout
+        Write-Host "  • Partitions..." -ForegroundColor Gray
+        $partitions = Get-WmiObject Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction Stop
+        $partitionDetails = @()
+        foreach ($partition in $partitions) {
+            $partitionDetails += @{
+                drive_letter = $partition.DeviceID
+                file_system = $partition.FileSystem
+                size_gb = [math]::Round($partition.Size / 1GB, 2)
+                free_space_gb = [math]::Round($partition.FreeSpace / 1GB, 2)
+                volume_name = $partition.VolumeName
+            }
+        }
+        $hardwareInfo['disk_partitions'] = ($partitionDetails | ConvertTo-Json -Compress)
+
+        # Operating System Information
+        Write-Host "  • Operating System..." -ForegroundColor Gray
+        $os = Get-WmiObject Win32_OperatingSystem -ErrorAction Stop
+        $hardwareInfo['os_name'] = $os.Caption
+        $hardwareInfo['os_version'] = $os.Version
+        $hardwareInfo['os_architecture'] = $os.OSArchitecture
+        $hardwareInfo['computer_name'] = $env:COMPUTERNAME
+
+        Write-Host "✅ Hardware information collected successfully" -ForegroundColor Green
+        return $hardwareInfo
+
+    } catch {
+        Write-Host "❌ Error collecting hardware information: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "⚠️ Continuing without hardware data..." -ForegroundColor Yellow
+        return $null
+    }
+}
+
+function Submit-HardwareInfo {
+    param(
+        [string]$SessionToken,
+        [string]$OrderNumber,
+        [hashtable]$HardwareData
+    )
+
+    if (-not $HardwareData) {
+        Write-Host "⚠️ No hardware data to submit" -ForegroundColor Yellow
+        return $false
+    }
+
+    Write-Host "`n📤 Submitting hardware information to server..." -ForegroundColor Cyan
+
+    try {
+        $submitBody = @{
+            session_token = $SessionToken
+            order_number = $OrderNumber
+        }
+
+        foreach ($key in $HardwareData.Keys) {
+            $submitBody[$key] = $HardwareData[$key]
+        }
+
+        $response = Invoke-APICall -Endpoint "submit-hardware.php" -Body $submitBody
+
+        if ($response -and $response.success) {
+            Write-Host "✅ Hardware information submitted successfully" -ForegroundColor Green
+            return $true
+        } else {
+            $errorMsg = if ($response -and $response.error) { $response.error } else { "Unknown error" }
+            Write-Host "❌ Failed to submit hardware info: $errorMsg" -ForegroundColor Red
+            return $false
+        }
+    } catch {
+        Write-Host "❌ Error submitting hardware info: $($_.Exception.Message)" -ForegroundColor Red
+        return $false
+    }
+}
+
+function Main-ActivationLoop {
+    param([string]$sessionToken, [string]$productKey, [string]$OrderNumber, [int]$currentAttempt = 1)
+    
+    while ($currentAttempt -le $MaxRetryAttempts) {
+        Write-Host "`n--- Attempt #$currentAttempt ---" -ForegroundColor Magenta
+        Write-Host "Using key: $($productKey.Substring(0,5))..." -ForegroundColor Gray
+        
+        $activationSuccess = Activate-Key -key $productKey
+        $result = if ($activationSuccess) { "success" } else { "failed" }
+        
+        # Report result to API
+        $reportBody = @{
+            session_token = $sessionToken
+            result = $result
+            attempt_number = $currentAttempt
+        }
+        
+        $reportResponse = Invoke-APICall -Endpoint "report-result.php" -Body $reportBody
+        
+        if ($reportResponse -and $reportResponse.success) {
+            if ($activationSuccess) {
+                Write-Host "`n✅ $($reportResponse.message)" -ForegroundColor Green
+
+                # Collect and submit hardware information
+                $hardwareData = Collect-HardwareInfo
+                if ($hardwareData) {
+                    Submit-HardwareInfo -SessionToken $sessionToken -OrderNumber $OrderNumber -HardwareData $hardwareData | Out-Null
+                }
+
+                Write-Host "`n🎉 Activation complete! You can now close this window." -ForegroundColor Green
+
+                # Wait for user confirmation about sticker placement
+                Write-Host "`n🏷️ Please confirm that the license sticker has been placed on the PC case."
+                Read-Host "Press Enter to continue"
+
+                return $true
+            } else {
+                Write-Host "`n❌ Activation failed: $($reportResponse.message)" -ForegroundColor Red
+                
+                if ($reportResponse.continue_session -and $currentAttempt -lt $MaxRetryAttempts) {
+                    $retry = Read-Host "`nRetry with same key? (Y/N)"
+                    if ($retry -in @('Y', 'y', 'yes', 'Yes')) {
+                        $currentAttempt++
+                        continue
+                    } else {
+                        Write-Host "🔄 Getting next available key..." -ForegroundColor Yellow
+                        return $false  # Will trigger getting a new key
+                    }
+                } else {
+                    Write-Host "⚠️ Maximum retry attempts reached for this key." -ForegroundColor Yellow
+                    return $false
+                }
+            }
+        } else {
+            Write-Host "❌ Failed to report result to server" -ForegroundColor Red
+            $currentAttempt++
+        }
+    }
+    
+    return $false
+}
+
+# === MAIN EXECUTION ===
+
+# Pre-check if Windows is already activated
+try {
+    $preStatus = (Get-CimInstance -Query "SELECT * FROM SoftwareLicensingProduct WHERE PartialProductKey IS NOT NULL").LicenseStatus
+    if ($preStatus -eq 1) {
+        Write-Host "`n✅ Windows is already activated — no action needed." -ForegroundColor Green
+        Start-Sleep -Seconds 3
+        exit 0
+    }
+} catch {
+    Write-Host "⚠️ Cannot check current activation status. Proceeding..." -ForegroundColor Yellow
+}
+
+# Authenticate technician
+$SessionInfo = Authenticate-Technician
+if (-not $SessionInfo) {
+    Write-Host "`n❌ Authentication failed. Cannot continue." -ForegroundColor Red
+    Start-Sleep -Seconds 3
+    exit 1
+}
+
+# Get order number
+$OrderNumber = Get-Valid-OrderNumber
+
+# Main activation loop
+$activationComplete = $false
+$keyAttempts = 0
+$maxKeyAttempts = 10  # Prevent infinite loops
+
+while (-not $activationComplete -and $keyAttempts -lt $maxKeyAttempts) {
+    $keyAttempts++
+    
+    Write-Host "`n🔍 Getting activation key... (Key attempt #$keyAttempts)" -ForegroundColor Cyan
+    
+    # Get key from API
+    $keyBody = @{
+        technician_id = $SessionInfo.technician_id
+        order_number = $OrderNumber
+    }
+    
+    $keyResponse = Invoke-APICall -Endpoint "get-key.php" -Body $keyBody
+
+    if (-not $keyResponse -or -not $keyResponse.success) {
+        Write-Host "❌ Failed to get activation key from server" -ForegroundColor Red
+        if ($keyResponse -and $keyResponse.error) {
+            Write-Host "Error: $($keyResponse.error)" -ForegroundColor Red
+        }
+        Start-Sleep -Seconds 3
+        exit 1
+    }
+
+    # Validate required properties
+    if (-not $keyResponse.session_token -or -not $keyResponse.product_key) {
+        Write-Host "❌ Invalid response from server (missing required fields)" -ForegroundColor Red
+        Start-Sleep -Seconds 3
+        exit 1
+    }
+
+    Write-Host "✅ Key retrieved: $($keyResponse.oem_identifier)" -ForegroundColor Green
+    if ($keyResponse.key_status -eq 'retry' -and $keyResponse.fail_counter) {
+        Write-Host "ℹ️ This key has $($keyResponse.fail_counter) previous failure(s)" -ForegroundColor Yellow
+    }
+
+    # Try to activate with this key
+    $activationComplete = Main-ActivationLoop -sessionToken $keyResponse.session_token -productKey $keyResponse.product_key -OrderNumber $OrderNumber
+    
+    if (-not $activationComplete) {
+        Write-Host "`n🔄 Trying next available key..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 2
+    }
+}
+
+if (-not $activationComplete) {
+    Write-Host "`n⚠️ Activation failed after trying $keyAttempts keys." -ForegroundColor Red
+    Write-Host "`nPress any key to close..." -ForegroundColor Gray
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit 1
+} else {
+    Write-Host "`nClosing in 5 seconds..." -ForegroundColor Gray
+    Start-Sleep -Seconds 5
+    exit 0
+}
