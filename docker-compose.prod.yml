@@ -62,7 +62,8 @@ services:
     # No ports exposed — only accessible from oem-network
     volumes:
       - mariadb-data:/var/lib/mysql
-      - ./FINAL_PRODUCTION_SYSTEM/database:/docker-entrypoint-initdb.d
+      - ./FINAL_PRODUCTION_SYSTEM/database/docker-init:/docker-entrypoint-initdb.d
+      - ./FINAL_PRODUCTION_SYSTEM/database:/docker-entrypoint-initdb.d/sql
     networks:
       - oem-network
     healthcheck:
@@ -98,6 +99,27 @@ services:
       start_period: 10s
 
   # No PHPMyAdmin in production — use CLI or secure tunnel for DB admin
+
+  backup:
+    image: mariadb:10.11
+    container_name: oem-activation-backup
+    restart: unless-stopped
+    volumes:
+      - ./FINAL_PRODUCTION_SYSTEM/scripts:/scripts:ro
+      - ./backups:/var/www/html/activate/backups
+    environment:
+      - DB_HOST=${DB_HOST:-db}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
+    entrypoint: >
+      sh -c 'echo "0 3 * * * /scripts/backup-database.sh >> /var/log/backup.log 2>&1" | crontab - && crond -f'
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - oem-network
 
 networks:
   oem-network:

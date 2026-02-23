@@ -54,7 +54,8 @@ services:
       - "3306:3306"
     volumes:
       - mariadb-data:/var/lib/mysql
-      - ./FINAL_PRODUCTION_SYSTEM/database:/docker-entrypoint-initdb.d
+      - ./FINAL_PRODUCTION_SYSTEM/database/docker-init:/docker-entrypoint-initdb.d
+      - ./FINAL_PRODUCTION_SYSTEM/database:/docker-entrypoint-initdb.d/sql
     networks:
       - oem-network
     healthcheck:

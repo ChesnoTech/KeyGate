@@ -15,7 +15,7 @@ BACKUP_DIR="/var/www/html/activate/backups"
 DB_HOST="${DB_HOST:-db}"
 DB_NAME="${DB_NAME:-oem_activation}"
 DB_USER="${DB_USER:-oem_user}"
-DB_PASSWORD="${DB_PASSWORD:-${DB_PASS:-oem_pass_456}}"
+DB_PASSWORD="${DB_PASSWORD:-${DB_PASS}}"
 RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"
 BACKUP_TYPE="${BACKUP_TYPE:-scheduled}"
 # MariaDB SSL workaround - skip SSL for internal Docker connections

@@ -3,9 +3,13 @@
 .env.local
 .env.production
 
-# ── SSL Certificates (local dev certs) ────────────────────
-ssl/localhost.key
-ssl/localhost.crt
+# ── SSL Certificates (never commit private keys) ─────────
+ssl/*.key
+ssl/*.crt
+ssl/*.pem
+
+# ── Database (root-level copy is obsolete; use FINAL_PRODUCTION_SYSTEM/database/)
+/database/
 
 # ── Database Backups ──────────────────────────────────────
 backups/

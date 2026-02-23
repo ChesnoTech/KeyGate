@@ -25,29 +25,27 @@ ls build/releases/
 
 ### Database Operations
 ```bash
-# Initialize database (via PHPMyAdmin or MySQL client)
-mysql -u username -p database_name < database/install.sql
+# Database is auto-initialized by Docker via docker-init/00-init.sh
+# For manual initialization:
+mysql -u username -p database_name < FINAL_PRODUCTION_SYSTEM/database/install.sql
 
 # Or use the web-based installation wizard
-# Navigate to: http://your-server/activate/setup/
+# Navigate to: https://your-server/activate/setup/
 ```
 
 ### Testing
 ```bash
-# Test database connection and basic functionality
-php Current\ wwwroot/activate/test.php
-
 # Test API endpoints
-curl -X POST http://your-server/activate/api/login.php -d "technician_id=test&password=test123"
+curl -X POST https://your-server/activate/api/login.php -d "technician_id=test&password=test123"
 
 # Test PowerShell activation (on Windows client)
-powershell -ExecutionPolicy Bypass -File "Current wwwroot/activate/activation/main_v2.PS1"
+powershell -ExecutionPolicy Bypass -File "FINAL_PRODUCTION_SYSTEM/activation/main_v2.PS1"
 ```
 
 ## Project Structure
 
 ### Core Application Files
-- `Current wwwroot/activate/` - Main web application root
+- `FINAL_PRODUCTION_SYSTEM/` - Main web application root
   - `config.php` - Database configuration and PDO connection
   - `admin_v2.php` - Complete admin management interface
   - `secure-admin.php` - Secure admin authentication
@@ -59,18 +57,19 @@ powershell -ExecutionPolicy Bypass -File "Current wwwroot/activate/activation/ma
     - `import-csv.php` - CSV data migration
 
 ### Client Components
-- `OEM_Activator/OEM_Activator_v2.cmd` - Technician launcher script
-- `Current wwwroot/activate/activation/main_v2.PS1` - PowerShell activation logic
+- `FINAL_PRODUCTION_SYSTEM/client/OEM_Activator_v2.cmd` - Technician launcher script
+- `FINAL_PRODUCTION_SYSTEM/activation/main_v2.PS1` - PowerShell activation logic (v2, i18n)
+- `FINAL_PRODUCTION_SYSTEM/activation/main_v3.PS1` - PowerShell activation logic (v3, USB auth)
 
 ### Database Schema
-- `database/install.sql` - Complete database schema with indexes
-- `database_setup_with_users.sql` - Schema with user management tables
-- Tables: `technicians`, `oem_keys`, `activation_attempts`, `active_sessions`, `system_config`, `password_reset_tokens`
+- `FINAL_PRODUCTION_SYSTEM/database/install.sql` - Core database schema
+- `FINAL_PRODUCTION_SYSTEM/database/docker-init/00-init.sh` - Ordered migration runner for Docker
+- Tables: `technicians`, `oem_keys`, `activation_attempts`, `active_sessions`, `system_config`, `password_reset_tokens`, `admin_users`, + 20 more
 
 ### Configuration & Setup
-- `setup/` - Joomla-style installation wizard
-- `config/config-template.php` - Template for database configuration
-- `deployment/SETUP_INSTRUCTIONS.txt` - Manual setup procedures
+- `FINAL_PRODUCTION_SYSTEM/setup/` - Web-based installation wizard (auto-locks after completion)
+- `.env.example` - Environment variable template
+- `ssl/` - Apache SSL configuration and certificate docs
 
 ## Security Considerations
 
