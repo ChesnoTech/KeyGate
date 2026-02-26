@@ -8,6 +8,7 @@
  */
 
 require_once '../config.php';
+require_once __DIR__ . '/../functions/totp-helpers.php';
 require_once __DIR__ . '/middleware/ApiMiddleware.php';
 
 $data = ApiMiddleware::bootstrap('totp-verify', [], [
@@ -17,16 +18,14 @@ $data = ApiMiddleware::bootstrap('totp-verify', [], [
 
 $totpCode = $data['totp_code'] ?? '';
 $adminId = $data['admin_id'] ?? null;
-$isSetup = $data['is_setup'] ?? false; // True if this is initial setup verification
+$isSetup = $data['is_setup'] ?? false;
 
 // Validate input
 if (empty($totpCode) || !$adminId) {
-    http_response_code(400);
-    echo json_encode([
+    jsonResponse([
         'error' => 'Missing required fields',
         'required' => ['totp_code', 'admin_id']
-    ]);
-    exit;
+    ], 400);
 }
 
 // Remove spaces and dashes from code
@@ -34,109 +33,37 @@ $totpCode = preg_replace('/[\s\-]/', '', $totpCode);
 
 // Validate code format (6 digits or 8 digit backup code)
 if (!preg_match('/^\d{6}$/', $totpCode) && !preg_match('/^\d{8}$/', $totpCode)) {
-    http_response_code(400);
-    echo json_encode([
+    jsonResponse([
         'error' => 'Invalid code format',
         'message' => 'Code must be 6 digits (TOTP) or 8 digits (backup code)'
-    ]);
-    exit;
+    ], 400);
 }
-
-// Load Composer autoloader
-require_once __DIR__ . '/../vendor/autoload.php';
-
-use OTPHP\TOTP;
 
 try {
     // Get admin's TOTP secret
-    $stmt = $pdo->prepare("
-        SELECT id, totp_secret, totp_enabled, backup_codes
-        FROM admin_totp_secrets
-        WHERE admin_id = ?
-    ");
-    $stmt->execute([$adminId]);
-    $totpData = $stmt->fetch(PDO::FETCH_ASSOC);
+    $totpData = fetchTotpData($pdo, $adminId);
 
     if (!$totpData) {
-        http_response_code(404);
-        echo json_encode([
+        jsonResponse([
             'error' => '2FA not setup',
             'message' => 'Please setup 2FA first'
-        ]);
-        exit;
+        ], 404);
     }
 
-    $isBackupCode = strlen($totpCode) === 8;
-    $verified = false;
-    $usedBackupCode = false;
+    // Verify code — consume backup codes on use (login flow)
+    $result = verifyTotpCode($pdo, $adminId, $totpCode, $totpData, true);
 
-    if ($isBackupCode) {
-        // Verify backup code
-        $backupCodes = json_decode($totpData['backup_codes'], true);
+    if (!$result['verified']) {
+        $errorMsg = $result['is_backup_code']
+            ? 'Backup code is invalid or already used'
+            : 'The code you entered is incorrect or expired';
+        $errorKey = $result['is_backup_code'] ? 'Invalid backup code' : 'Invalid TOTP code';
 
-        if (!is_array($backupCodes)) {
-            http_response_code(500);
-            echo json_encode(['error' => 'Invalid backup codes data']);
-            exit;
-        }
-
-        foreach ($backupCodes as $index => $hashedCode) {
-            if (password_verify($totpCode, $hashedCode)) {
-                // Backup code is valid - remove it so it can't be reused
-                unset($backupCodes[$index]);
-                $backupCodes = array_values($backupCodes); // Re-index array
-
-                $stmt = $pdo->prepare("
-                    UPDATE admin_totp_secrets
-                    SET backup_codes = ?, last_used_at = NOW()
-                    WHERE admin_id = ?
-                ");
-                $stmt->execute([json_encode($backupCodes), $adminId]);
-
-                $verified = true;
-                $usedBackupCode = true;
-                break;
-            }
-        }
-
-        if (!$verified) {
-            http_response_code(401);
-            echo json_encode([
-                'success' => false,
-                'error' => 'Invalid backup code',
-                'message' => 'Backup code is invalid or already used'
-            ]);
-            exit;
-        }
-
-    } else {
-        // Verify TOTP code
-        $totp = TOTP::createFromSecret($totpData['totp_secret']);
-
-        // Get time window from config (default ±1 = 90 seconds)
-        $stmt = $pdo->query("SELECT config_value FROM system_config WHERE config_key = 'totp_window'");
-        $windowResult = $stmt->fetch(PDO::FETCH_ASSOC);
-        $window = $windowResult ? (int)$windowResult['config_value'] : 1;
-
-        $verified = $totp->verify($totpCode, null, $window);
-
-        if (!$verified) {
-            http_response_code(401);
-            echo json_encode([
-                'success' => false,
-                'error' => 'Invalid TOTP code',
-                'message' => 'The code you entered is incorrect or expired'
-            ]);
-            exit;
-        }
-
-        // Update last used timestamp
-        $stmt = $pdo->prepare("
-            UPDATE admin_totp_secrets
-            SET last_used_at = NOW()
-            WHERE admin_id = ?
-        ");
-        $stmt->execute([$adminId]);
+        jsonResponse([
+            'success' => false,
+            'error' => $errorKey,
+            'message' => $errorMsg
+        ], 401);
     }
 
     // If this is initial setup verification, enable 2FA
@@ -167,7 +94,7 @@ try {
     ");
     $stmt->execute([
         $adminId,
-        $usedBackupCode ? '2FA verified with backup code' : '2FA verified with TOTP',
+        $result['is_backup_code'] ? '2FA verified with backup code' : '2FA verified with TOTP',
         $_SERVER['REMOTE_ADDR'] ?? null,
         $_SERVER['HTTP_USER_AGENT'] ?? null
     ]);
@@ -177,15 +104,14 @@ try {
         'success' => true,
         'verified' => true,
         'message' => $isSetup ? '2FA enabled successfully!' : 'Verification successful',
-        'used_backup_code' => $usedBackupCode,
-        'remaining_backup_codes' => $usedBackupCode ? count(json_decode($totpData['backup_codes'], true)) - 1 : null
+        'used_backup_code' => $result['is_backup_code'],
+        'remaining_backup_codes' => $result['remaining_backup_count']
     ]);
 
 } catch (Exception $e) {
     error_log("TOTP verification error: " . $e->getMessage());
-    http_response_code(500);
-    echo json_encode([
+    jsonResponse([
         'error' => 'Verification failed',
         'message' => 'An error occurred. Please try again.'
-    ]);
+    ], 500);
 }

@@ -8,6 +8,7 @@
 
 require_once '../config.php';
 require_once '../functions/rbac.php';
+require_once __DIR__ . '/../functions/totp-helpers.php';
 require_once __DIR__ . '/middleware/ApiMiddleware.php';
 
 ApiMiddleware::bootstrap('totp-setup', [], [
@@ -17,26 +18,18 @@ ApiMiddleware::bootstrap('totp-setup', [], [
 ]);
 
 // Verify admin session
-session_start();
-if (!isset($_SESSION['admin_id']) || !isset($_SESSION['session_id'])) {
-    http_response_code(401);
-    echo json_encode(['error' => 'Unauthorized - Please login']);
-    exit;
-}
+$session = validateAdminApiSession();
+$adminId = $session['admin_id'];
+$sessionId = $session['session_id'];
 
-$adminId = $_SESSION['admin_id'];
-$sessionId = $_SESSION['session_id'];
-
-// Verify session is valid
+// Verify session is valid in DB
 $stmt = $pdo->prepare("
     SELECT admin_id FROM admin_sessions
     WHERE id = ? AND admin_id = ? AND is_active = 1
 ");
 $stmt->execute([$sessionId, $adminId]);
 if (!$stmt->fetch()) {
-    http_response_code(401);
-    echo json_encode(['error' => 'Invalid session']);
-    exit;
+    jsonResponse(['error' => 'Invalid session'], 401);
 }
 
 // Get admin info
@@ -45,33 +38,24 @@ $stmt->execute([$adminId]);
 $admin = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$admin) {
-    http_response_code(404);
-    echo json_encode(['error' => 'Admin not found']);
-    exit;
+    jsonResponse(['error' => 'Admin not found'], 404);
 }
 
-// Load Composer autoloader
-require_once __DIR__ . '/../vendor/autoload.php';
-
-use OTPHP\TOTP;
 use BaconQrCode\Renderer\ImageRenderer;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\RendererStyle\RendererStyle;
 use BaconQrCode\Writer;
+use OTPHP\TOTP;
 
 try {
     // Check if admin already has 2FA setup
-    $stmt = $pdo->prepare("SELECT id, totp_enabled FROM admin_totp_secrets WHERE admin_id = ?");
-    $stmt->execute([$adminId]);
-    $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+    $existing = fetchTotpData($pdo, $adminId);
 
     if ($existing && $existing['totp_enabled'] == 1) {
-        http_response_code(400);
-        echo json_encode([
+        jsonResponse([
             'error' => '2FA already enabled',
             'message' => 'You must disable 2FA before setting up a new secret'
-        ]);
-        exit;
+        ], 400);
     }
 
     // Generate TOTP secret
@@ -79,31 +63,17 @@ try {
     $secret = $totp->getSecret();
 
     // Get issuer name from config
-    $stmt = $pdo->query("SELECT config_value FROM system_config WHERE config_key = 'totp_issuer_name'");
-    $issuerResult = $stmt->fetch(PDO::FETCH_ASSOC);
-    $issuer = $issuerResult ? $issuerResult['config_value'] : 'OEM Activation System';
+    $issuer = getConfig('totp_issuer_name') ?: 'OEM Activation System';
 
     // Set TOTP parameters
     $totp->setLabel($admin['username']);
     $totp->setIssuer($issuer);
 
-    // Generate backup codes (10 codes, 8 digits each)
-    $stmt = $pdo->query("SELECT config_value FROM system_config WHERE config_key = 'totp_backup_codes_count'");
-    $backupCountResult = $stmt->fetch(PDO::FETCH_ASSOC);
-    $backupCodeCount = $backupCountResult ? (int)$backupCountResult['config_value'] : 10;
-
-    $backupCodes = [];
-    $hashedBackupCodes = [];
-
-    for ($i = 0; $i < $backupCodeCount; $i++) {
-        $code = str_pad(random_int(0, 99999999), 8, '0', STR_PAD_LEFT);
-        $backupCodes[] = $code;
-        $hashedBackupCodes[] = password_hash($code, PASSWORD_BCRYPT, ['cost' => 12]);
-    }
+    // Generate backup codes
+    $backupCodes = generateBackupCodes($pdo);
 
     // Store in database (not yet enabled)
     if ($existing) {
-        // Update existing record
         $stmt = $pdo->prepare("
             UPDATE admin_totp_secrets
             SET totp_secret = ?, backup_codes = ?, totp_enabled = 0, verified_at = NULL, created_at = NOW()
@@ -111,11 +81,10 @@ try {
         ");
         $stmt->execute([
             $secret,
-            json_encode($hashedBackupCodes),
+            json_encode($backupCodes['hashed']),
             $adminId
         ]);
     } else {
-        // Insert new record
         $stmt = $pdo->prepare("
             INSERT INTO admin_totp_secrets (admin_id, totp_secret, backup_codes, totp_enabled)
             VALUES (?, ?, ?, 0)
@@ -123,7 +92,7 @@ try {
         $stmt->execute([
             $adminId,
             $secret,
-            json_encode($hashedBackupCodes)
+            json_encode($backupCodes['hashed'])
         ]);
     }
 
@@ -154,8 +123,8 @@ try {
         'success' => true,
         'message' => '2FA setup initiated. Scan QR code with your authenticator app.',
         'qr_code_svg' => $qrCodeSvg,
-        'secret' => $secret, // Show secret for manual entry
-        'backup_codes' => $backupCodes, // Show plaintext codes ONCE
+        'secret' => $secret,
+        'backup_codes' => $backupCodes['plain'],
         'issuer' => $issuer,
         'account' => $admin['username'],
         'next_step' => 'Scan QR code and verify with first TOTP code'
@@ -163,9 +132,8 @@ try {
 
 } catch (Exception $e) {
     error_log("TOTP setup error: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine());
-    http_response_code(500);
-    echo json_encode([
+    jsonResponse([
         'error' => 'Failed to setup 2FA',
         'message' => 'An error occurred. Please try again.'
-    ]);
+    ], 500);
 }

@@ -47,14 +47,13 @@ if (!$trustedNetwork) {
         error_log("Failed to log blocked USB auth attempt: " . $e->getMessage());
     }
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'authenticated' => false,
         'reason' => 'USB authentication only allowed from trusted networks',
         'security_info' => 'Please use password authentication from this location',
         'client_ip' => $clientIP
     ]);
-    exit;
 }
 
 // Log that USB auth was attempted from trusted network
@@ -62,9 +61,7 @@ error_log("USB authentication attempt from trusted network: {$trustedNetwork['ne
 
 // Validate input
 if (empty($usbSerialNumber)) {
-    http_response_code(400);
-    echo json_encode(['success' => false, 'error' => 'Missing usb_serial_number']);
-    exit;
+    jsonResponse(['success' => false, 'error' => 'Missing usb_serial_number'], 400);
 }
 
 try {
@@ -83,12 +80,11 @@ try {
             $computerName
         );
 
-        echo json_encode([
+        jsonResponse([
             'success' => true,
             'authenticated' => false,
             'reason' => 'USB authentication disabled'
         ]);
-        exit;
     }
 
     // Find USB device by serial number
@@ -113,12 +109,11 @@ try {
             $computerName
         );
 
-        echo json_encode([
+        jsonResponse([
             'success' => true,
             'authenticated' => false,
             'reason' => 'USB device not registered'
         ]);
-        exit;
     }
 
     // Check device status
@@ -133,12 +128,11 @@ try {
             $computerName
         );
 
-        echo json_encode([
+        jsonResponse([
             'success' => true,
             'authenticated' => false,
             'reason' => "USB device is {$device['device_status']}"
         ]);
-        exit;
     }
 
     // Check if technician is active
@@ -154,19 +148,19 @@ try {
             $computerName
         );
 
-        echo json_encode([
+        jsonResponse([
             'success' => true,
             'authenticated' => false,
             'reason' => 'Technician account is inactive'
         ]);
-        exit;
     }
 
     // === AUTHENTICATION SUCCESSFUL ===
 
     // Create session token
     $sessionToken = bin2hex(random_bytes(32));
-    $expiresAt = date('Y-m-d H:i:s', strtotime('+8 hours'));
+    $sessionHours = (int)(getConfig('usb_session_timeout_hours') ?: 8);
+    $expiresAt = date('Y-m-d H:i:s', strtotime("+{$sessionHours} hours"));
     $clientIP = getClientIP();
 
     // Insert session
@@ -217,7 +211,7 @@ try {
     );
 
     // Return success with session token
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'authenticated' => true,
         'session_token' => $sessionToken,
@@ -230,12 +224,10 @@ try {
 
 } catch (PDOException $e) {
     error_log("USB authentication error: " . $e->getMessage());
-    http_response_code(503);
-    echo json_encode(['success' => false, 'error' => 'Database error']);
+    jsonResponse(['success' => false, 'error' => 'Database error'], 503);
 } catch (Exception $e) {
     error_log("USB auth API error: " . $e->getMessage());
-    http_response_code(500);
-    echo json_encode(['success' => false, 'error' => 'Internal server error']);
+    jsonResponse(['success' => false, 'error' => 'Internal server error'], 500);
 }
 
 /**

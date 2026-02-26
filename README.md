@@ -181,6 +181,7 @@ OEM_Activation_System/
 
 | Document | Location |
 |----------|----------|
+| **Production deployment (aaPanel)** | [`docs/PRODUCTION_DEPLOYMENT_GUIDE.md`](docs/PRODUCTION_DEPLOYMENT_GUIDE.md) |
 | Web application details | [`FINAL_PRODUCTION_SYSTEM/README.md`](FINAL_PRODUCTION_SYSTEM/README.md) |
 | Hardware bridge setup | [`hardware-bridge/README.md`](hardware-bridge/README.md) |
 | Technician quick start | [`FINAL_PRODUCTION_SYSTEM/client/README_TECHNICIAN.md`](FINAL_PRODUCTION_SYSTEM/client/README_TECHNICIAN.md) |

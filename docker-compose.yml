@@ -6,6 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile.php
     container_name: oem-activation-web
+    restart: always
     ports:
       - "8080:80"
       - "8443:443"
@@ -44,6 +45,7 @@ services:
   db:
     image: mariadb:10.11
     container_name: oem-activation-db
+    restart: always
     environment:
       - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
       - MARIADB_DATABASE=${DB_NAME}
@@ -76,7 +78,7 @@ services:
   redis:
     image: redis:7.2-alpine
     container_name: oem-activation-redis
-    restart: unless-stopped
+    restart: always
     command: redis-server --requirepass ${REDIS_PASSWORD} --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis-data:/data
@@ -94,6 +96,7 @@ services:
   phpmyadmin:
     image: phpmyadmin:latest
     container_name: oem-activation-phpmyadmin
+    restart: always
     ports:
       - "8081:80"
     environment:

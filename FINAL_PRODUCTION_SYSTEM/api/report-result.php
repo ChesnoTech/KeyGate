@@ -247,7 +247,7 @@ try {
         }
 
         $failCounter = (int)$keyData['fail_counter'];
-        $maxAttempts = 3;
+        $maxAttempts = MAX_KEY_FAIL_COUNTER;
 
         // Determine new key status
         if ($failCounter >= $maxAttempts) {

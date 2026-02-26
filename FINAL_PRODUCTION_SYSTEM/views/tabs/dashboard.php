@@ -3,7 +3,7 @@
                     <div class="loading"><?= __('common.loading') ?></div>
                 </div>
 
-                <h3 style="margin: 30px 0 15px 0; font-size: 18px;"><?= __('dashboard.recent_activity') ?></h3>
+                <h3 class="section-heading"><?= __('dashboard.recent_activity') ?></h3>
                 <div id="recent-activity">
                     <div class="loading"><?= __('common.loading') ?></div>
                 </div>

@@ -53,6 +53,11 @@
         vapidPublicKey: '<?= htmlspecialchars(getConfig('vapid_public_key') ?: '', ENT_QUOTES) ?>'
     };
     </script>
-    <script src="public/js/admin.js?v=<?= filemtime(__DIR__ . '/../public/js/admin.js') ?>" charset="utf-8"></script>
+    <script src="public/js/admin-core.js?v=<?= filemtime(__DIR__ . '/../public/js/admin-core.js') ?>" charset="utf-8"></script>
+    <script src="public/js/admin-keys.js?v=<?= filemtime(__DIR__ . '/../public/js/admin-keys.js') ?>" charset="utf-8"></script>
+    <script src="public/js/admin-techs.js?v=<?= filemtime(__DIR__ . '/../public/js/admin-techs.js') ?>" charset="utf-8"></script>
+    <script src="public/js/admin-acl.js?v=<?= filemtime(__DIR__ . '/../public/js/admin-acl.js') ?>" charset="utf-8"></script>
+    <script src="public/js/admin-misc.js?v=<?= filemtime(__DIR__ . '/../public/js/admin-misc.js') ?>" charset="utf-8"></script>
+    <script src="public/js/admin-notifications.js?v=<?= filemtime(__DIR__ . '/../public/js/admin-notifications.js') ?>" charset="utf-8"></script>
 </body>
 </html>

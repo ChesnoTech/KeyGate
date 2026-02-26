@@ -37,8 +37,7 @@ $sessionToken = $data['session_token'];
 $orderNumber = $data['order_number'] ?? '';
 
 if (empty($sessionToken) || empty($orderNumber)) {
-    echo json_encode(['success' => false, 'error' => 'Missing required fields: session_token and order_number']);
-    exit;
+    jsonResponse(['success' => false, 'error' => 'Missing required fields: session_token and order_number'], 400);
 }
 
 try {
@@ -58,8 +57,7 @@ try {
     $activation = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$activation) {
-        echo json_encode(['success' => false, 'error' => 'Invalid session or no matching activation found']);
-        exit;
+        jsonResponse(['success' => false, 'error' => 'Invalid session or no matching activation found'], 401);
     }
 
     $activationId = $activation['activation_id'];
@@ -68,8 +66,7 @@ try {
     $stmt = $pdo->prepare("SELECT id FROM hardware_info WHERE activation_id = ?");
     $stmt->execute([$activationId]);
     if ($stmt->fetch()) {
-        echo json_encode(['success' => true, 'message' => 'Hardware information already recorded', 'duplicate' => true]);
-        exit;
+        jsonResponse(['success' => true, 'message' => 'Hardware information already recorded', 'duplicate' => true]);
     }
 
     // Insert hardware information
@@ -188,7 +185,7 @@ try {
     $stmt = $pdo->prepare("UPDATE activation_attempts SET hardware_collected = 1 WHERE id = ?");
     $stmt->execute([$activationId]);
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'message' => 'Hardware information recorded successfully',
         'hardware_id' => $pdo->lastInsertId()
@@ -196,6 +193,5 @@ try {
 
 } catch (PDOException $e) {
     error_log("Hardware submission error: " . $e->getMessage());
-    echo json_encode(['success' => false, 'error' => 'Database error occurred']);
+    jsonResponse(['success' => false, 'error' => 'Database error occurred'], 500);
 }
-?>

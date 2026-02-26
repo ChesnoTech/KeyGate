@@ -6,7 +6,7 @@
                 <input type="hidden" id="edit_tech_id" name="tech_id">
                 <div class="form-group">
                     <label><?= __('tech.id_label') ?></label>
-                    <input type="text" id="edit_technician_id" name="technician_id" readonly style="background: #f5f5f5;">
+                    <input type="text" id="edit_technician_id" name="technician_id" readonly class="input-readonly">
                 </div>
                 <div class="form-group">
                     <label><?= __('tech.name_label') ?></label>
@@ -18,15 +18,15 @@
                 </div>
                 <div class="form-group">
                     <label for="edit_preferred_server"><?= __('tech.server_label') ?></label>
-                    <select id="edit_preferred_server" name="preferred_server" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <select id="edit_preferred_server" name="preferred_server" class="form-select">
                         <option value="oem"><?= __('tech.oem_primary') ?></option>
                         <option value="alternative"><?= __('tech.alt_backup') ?></option>
                     </select>
-                    <small style="display: block; color: #666; margin-top: 5px;"><?= __('tech.server_desc') ?></small>
+                    <small class="form-hint"><?= __('tech.server_desc') ?></small>
                 </div>
                 <div class="form-group">
                     <label for="edit_preferred_language"><?= __('tech.language_label') ?></label>
-                    <select id="edit_preferred_language" name="preferred_language" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <select id="edit_preferred_language" name="preferred_language" class="form-select">
                         <?php foreach (getAvailableLanguages() as $code => $name): ?>
                         <option value="<?= $code ?>"><?= htmlspecialchars($name) ?></option>
                         <?php endforeach; ?>

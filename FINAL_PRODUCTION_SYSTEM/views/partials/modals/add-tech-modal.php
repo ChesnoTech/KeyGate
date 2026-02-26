@@ -21,15 +21,15 @@
                 </div>
                 <div class="form-group">
                     <label for="add_preferred_server"><?= __('tech.server_label') ?></label>
-                    <select id="add_preferred_server" name="preferred_server" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <select id="add_preferred_server" name="preferred_server" class="form-select">
                         <option value="oem" selected><?= __('tech.oem_primary') ?></option>
                         <option value="alternative"><?= __('tech.alt_backup') ?></option>
                     </select>
-                    <small style="display: block; color: #666; margin-top: 5px;"><?= __('tech.server_desc') ?></small>
+                    <small class="form-hint"><?= __('tech.server_desc') ?></small>
                 </div>
                 <div class="form-group">
                     <label for="add_preferred_language"><?= __('tech.language_label') ?></label>
-                    <select id="add_preferred_language" name="preferred_language" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <select id="add_preferred_language" name="preferred_language" class="form-select">
                         <?php foreach (getAvailableLanguages() as $code => $name): ?>
                         <option value="<?= $code ?>"<?= $code === 'en' ? ' selected' : '' ?>><?= htmlspecialchars($name) ?></option>
                         <?php endforeach; ?>

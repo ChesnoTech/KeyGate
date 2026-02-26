@@ -151,9 +151,8 @@ function handle_import_keys(PDO $pdo, array $admin_session): void {
     $file = $_FILES['csv_file'];
     $update_existing = isset($_POST['update_existing']);
 
-    // Include CSV import functions from secure-admin.php
-    $webRoot = dirname(__DIR__, 2);
-    require_once $webRoot . '/secure-admin.php';
+    // Include CSV import functions
+    require_once dirname(__DIR__, 2) . '/functions/csv-import.php';
 
     $result = handleCSVImport($file);
 
