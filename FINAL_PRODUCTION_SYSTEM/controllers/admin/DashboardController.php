@@ -21,22 +21,23 @@ function buildReportHtml(PDO $pdo, string $reportType): string {
             $keyStats = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
             $totalKeys = array_sum($keyStats);
 
-            $html .= '<h3>Key Summary Report</h3>';
-            $html .= '<table><tr><th>Status</th><th>Count</th><th>Percentage</th></tr>';
+            $html .= '<h3>' . __('keys.report_summary_heading') . '</h3>';
+            $html .= '<table><tr><th>' . __('keys.status') . '</th><th>' . __('common.count') . '</th><th>' . __('keys.report_percentage') . '</th></tr>';
             foreach ($keyStats as $status => $count) {
                 $pct = $totalKeys > 0 ? round(($count / $totalKeys) * 100, 1) : 0;
-                $html .= "<tr><td>" . htmlspecialchars(ucfirst($status)) . "</td><td>$count</td><td>{$pct}%</td></tr>";
+                $statusLabel = __('keys.status_' . $status);
+                $html .= "<tr><td>" . htmlspecialchars($statusLabel) . "</td><td>$count</td><td>{$pct}%</td></tr>";
             }
-            $html .= "<tr style='font-weight:bold'><td>Total</td><td>$totalKeys</td><td>100%</td></tr>";
+            $html .= "<tr style='font-weight:bold'><td>" . __('keys.report_total') . "</td><td>$totalKeys</td><td>100%</td></tr>";
             $html .= '</table>';
 
             // Technician summary
             $stmt = $pdo->query("SELECT is_active, COUNT(*) as count FROM technicians GROUP BY is_active");
             $techStats = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
-            $html .= '<h3>Technician Summary</h3>';
-            $html .= '<table><tr><th>Status</th><th>Count</th></tr>';
-            $html .= '<tr><td>Active</td><td>' . ($techStats[1] ?? 0) . '</td></tr>';
-            $html .= '<tr><td>Inactive</td><td>' . ($techStats[0] ?? 0) . '</td></tr>';
+            $html .= '<h3>' . __('keys.report_tech_summary') . '</h3>';
+            $html .= '<table><tr><th>' . __('keys.status') . '</th><th>' . __('common.count') . '</th></tr>';
+            $html .= '<tr><td>' . __('tech.active') . '</td><td>' . ($techStats[1] ?? 0) . '</td></tr>';
+            $html .= '<tr><td>' . __('tech.inactive') . '</td><td>' . ($techStats[0] ?? 0) . '</td></tr>';
             $html .= '</table>';
             break;
 
@@ -52,8 +53,8 @@ function buildReportHtml(PDO $pdo, string $reportType): string {
             ");
             $usageData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            $html .= '<h3>Usage Report (Last 30 Days)</h3>';
-            $html .= '<table><tr><th>Date</th><th>Total</th><th>Successes</th><th>Failures</th><th>Success Rate</th></tr>';
+            $html .= '<h3>' . __('keys.report_usage_heading') . '</h3>';
+            $html .= '<table><tr><th>' . __('keys.report_date') . '</th><th>' . __('keys.report_total') . '</th><th>' . __('keys.report_successful') . '</th><th>' . __('keys.report_failures') . '</th><th>' . __('keys.report_success_rate') . '</th></tr>';
             foreach ($usageData as $row) {
                 $rate = $row['count'] > 0 ? round(($row['successes'] / $row['count']) * 100, 1) : 0;
                 $html .= "<tr><td>{$row['date']}</td><td>{$row['count']}</td><td>{$row['successes']}</td><td>{$row['failures']}</td><td>{$rate}%</td></tr>";
@@ -73,12 +74,12 @@ function buildReportHtml(PDO $pdo, string $reportType): string {
             ");
             $failedData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            $html .= '<h3>Failed Activations Report</h3>';
-            $html .= '<table><tr><th>Date</th><th>Technician</th><th>Order</th><th>Key</th><th>Notes</th></tr>';
+            $html .= '<h3>' . __('keys.report_failed_heading') . '</h3>';
+            $html .= '<table><tr><th>' . __('keys.report_date') . '</th><th>' . __('keys.report_technician') . '</th><th>' . __('keys.report_order') . '</th><th>' . __('keys.report_key') . '</th><th>' . __('keys.report_notes') . '</th></tr>';
             foreach ($failedData as $row) {
                 $maskedKey = $row['product_key']
                     ? substr($row['product_key'], 0, 5) . '...' . substr($row['product_key'], -5)
-                    : 'N/A';
+                    : __('common.na');
                 $html .= "<tr><td>{$row['attempted_date']}</td><td>" . htmlspecialchars($row['technician_id']) . "</td>"
                     . "<td>" . htmlspecialchars($row['order_number'] ?? '') . "</td>"
                     . "<td><code>$maskedKey</code></td>"
@@ -100,8 +101,8 @@ function buildReportHtml(PDO $pdo, string $reportType): string {
             ");
             $monthlyData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            $html .= '<h3>Monthly Statistics Report</h3>';
-            $html .= '<table><tr><th>Month</th><th>Total Activations</th><th>Successes</th><th>Success Rate</th><th>Active Technicians</th></tr>';
+            $html .= '<h3>' . __('keys.report_monthly_heading') . '</h3>';
+            $html .= '<table><tr><th>' . __('keys.report_month') . '</th><th>' . __('keys.report_total_attempts') . '</th><th>' . __('keys.report_successful') . '</th><th>' . __('keys.report_success_rate') . '</th><th>' . __('keys.report_active_techs') . '</th></tr>';
             foreach ($monthlyData as $row) {
                 $rate = $row['total'] > 0 ? round(($row['successes'] / $row['total']) * 100, 1) : 0;
                 $html .= "<tr><td>{$row['month']}</td><td>{$row['total']}</td><td>{$row['successes']}</td><td>{$rate}%</td><td>{$row['unique_techs']}</td></tr>";
@@ -189,10 +190,10 @@ function handle_download_report(PDO $pdo, array $admin_session): void {
     }
 
     $reportLabels = [
-        'summary' => 'Key Summary Report',
-        'usage'   => 'Usage Report (Last 30 Days)',
-        'failed'  => 'Failed Activations Report',
-        'monthly' => 'Monthly Statistics Report'
+        'summary' => __('keys.report_summary_heading'),
+        'usage'   => __('keys.report_usage_heading'),
+        'failed'  => __('keys.report_failed_heading'),
+        'monthly' => __('keys.report_monthly_heading')
     ];
 
     $adminName = htmlspecialchars($admin_session['full_name'] ?? $admin_session['username']);
@@ -218,9 +219,9 @@ function handle_download_report(PDO $pdo, array $admin_session): void {
 </head>
 <body>
     <h2>' . htmlspecialchars($reportTitle) . '</h2>
-    <div class="meta">Generated: ' . $generatedAt . ' &bull; Admin: ' . $adminName . '</div>
+    <div class="meta">' . __('keys.report_generated') . ' ' . $generatedAt . ' &bull; ' . __('keys.report_admin') . ' ' . $adminName . '</div>
     ' . $reportHtml . '
-    <div class="footer">OEM Activation System v2.0 &mdash; Confidential</div>
+    <div class="footer">' . htmlspecialchars(__('keys.report_footer')) . '</div>
 </body>
 </html>';
 

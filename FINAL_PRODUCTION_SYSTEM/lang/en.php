@@ -107,6 +107,16 @@ return [
     'keys.report_monthly_heading' => 'Monthly Statistics (Last 12 Months)',
     'keys.report_total_attempts' => 'Total Attempts',
     'keys.report_technicians' => 'Technicians',
+    'keys.report_tech_summary' => 'Technician Summary',
+    'keys.report_failures' => 'Failures',
+    'keys.report_success_rate' => 'Success Rate',
+    'keys.report_order' => 'Order',
+    'keys.report_month' => 'Month',
+    'keys.report_active_techs' => 'Active Technicians',
+    'keys.report_generated' => 'Generated:',
+    'keys.report_admin' => 'Admin:',
+    'keys.report_footer' => 'OEM Activation System v2.0 — Confidential',
+    'keys.report_generating' => 'Generating report...',
 
     // Technicians
     'tech.search_placeholder' => 'Search by ID, name, or email...',
@@ -521,6 +531,7 @@ return [
     'common.count' => 'Count',
     'common.total' => 'Total',
     'common.description' => 'Description',
+    'common.na' => 'N/A',
 
     // Messages
     'msg.error' => 'Error: %s',

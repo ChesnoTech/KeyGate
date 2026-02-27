@@ -230,7 +230,7 @@ function generateReport() {
     const reportType = document.getElementById('report_type').value;
     const reportContent = document.getElementById('report-content');
 
-    reportContent.innerHTML = '<div class="loading">Generating report...</div>';
+    reportContent.innerHTML = '<div class="loading">' + (LANG['keys.report_generating'] || 'Generating report...') + '</div>';
 
     fetch(`?action=generate_report&type=${reportType}`, {
         credentials: 'same-origin'

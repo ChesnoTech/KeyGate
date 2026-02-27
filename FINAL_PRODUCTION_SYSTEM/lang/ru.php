@@ -107,6 +107,16 @@ return [
     'keys.report_monthly_heading' => 'Ежемесячная статистика (за 12 месяцев)',
     'keys.report_total_attempts' => 'Всего попыток',
     'keys.report_technicians' => 'Техников',
+    'keys.report_tech_summary' => 'Сводка по техникам',
+    'keys.report_failures' => 'Неудачных',
+    'keys.report_success_rate' => 'Процент успеха',
+    'keys.report_order' => 'Заказ',
+    'keys.report_month' => 'Месяц',
+    'keys.report_active_techs' => 'Активных техников',
+    'keys.report_generated' => 'Сформирован:',
+    'keys.report_admin' => 'Администратор:',
+    'keys.report_footer' => 'OEM Activation System v2.0 — Конфиденциально',
+    'keys.report_generating' => 'Формирование отчёта...',
 
     // Technicians
     'tech.search_placeholder' => 'Поиск по ID, имени или email...',
@@ -521,6 +531,7 @@ return [
     'common.count' => 'Количество',
     'common.total' => 'Итого',
     'common.description' => 'Описание',
+    'common.na' => 'Н/Д',
 
     // Messages
     'msg.error' => 'Ошибка: %s',
