@@ -45,12 +45,12 @@ function loadTechnicians(page = 1) {
                 renderPagination('techs-pagination', data.page, data.pages, loadTechnicians);
             } else {
                 console.error('Error in response:', data);
-                document.getElementById('techs-table').innerHTML = '<div class="loading">Error: ' + (data.error || 'Unknown error') + '</div>';
+                document.getElementById('techs-table').innerHTML = '<div class="loading">' + LANG['js.error_prefix'] + (data.error || LANG['js.unknown_error']) + '</div>';
             }
         })
         .catch(err => {
             console.error('Error loading technicians:', err);
-            document.getElementById('techs-table').innerHTML = '<div class="loading">Error: ' + err.message + '</div>';
+            document.getElementById('techs-table').innerHTML = '<div class="loading">' + LANG['js.error_prefix'] + err.message + '</div>';
         });
 }
 
@@ -119,7 +119,7 @@ function addTechnician(event) {
             form.reset();
             loadTechnicians();
         } else {
-            alert('Error: ' + data.error);
+            alert(LANG['js.error_prefix'] + data.error);
         }
     });
 
@@ -148,7 +148,7 @@ function editTech(techId) {
         }
     })
     .catch(err => {
-        alert('Error: ' + err.message);
+        alert(LANG['js.error_prefix'] + err.message);
     });
 }
 
@@ -176,11 +176,11 @@ function updateTechnician(event) {
             closeModal('editTechModal');
             loadTechnicians();
         } else {
-            alert('Error: ' + data.error);
+            alert(LANG['js.error_prefix'] + data.error);
         }
     })
     .catch(err => {
-        alert('Error: ' + err.message);
+        alert(LANG['js.error_prefix'] + err.message);
     });
 
     return false;
@@ -193,7 +193,7 @@ function toggleTech(id) {
         if (data.success) {
             loadTechnicians(currentTechPage);
         } else {
-            alert('Error: ' + data.error);
+            alert(LANG['js.error_prefix'] + data.error);
         }
     });
 }

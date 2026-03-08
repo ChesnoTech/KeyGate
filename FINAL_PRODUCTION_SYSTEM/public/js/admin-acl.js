@@ -180,10 +180,10 @@ function saveRole(event) {
                 loadRoles();
                 alert(data.message || LANG['roles.saved']);
             } else {
-                alert('Error: ' + (data.error || 'Unknown error'));
+                alert(LANG['js.error_prefix'] + (data.error || LANG['js.unknown_error']));
             }
         })
-        .catch(err => alert('Error: ' + err.message));
+        .catch(err => alert(LANG['js.error_prefix'] + err.message));
 
     return false;
 }
@@ -197,7 +197,7 @@ function deleteRole(roleId, nameOrEl) {
             if (data.success) {
                 loadRoles();
             } else {
-                alert('Error: ' + (data.error || 'Delete failed'));
+                alert(LANG['js.error_prefix'] + (data.error || LANG['js.delete_failed']));
             }
         });
 }
@@ -216,7 +216,7 @@ function cloneRole(roleId, nameOrEl) {
                 loadRoles();
                 alert(LANG['roles.clone_success']);
             } else {
-                alert('Error: ' + (data.error || 'Clone failed'));
+                alert(LANG['js.error_prefix'] + (data.error || LANG['js.clone_failed']));
             }
         });
 }

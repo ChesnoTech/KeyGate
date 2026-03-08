@@ -929,6 +929,14 @@ function Submit-HardwareInfo-v2 {
 function Activate-Key {
     param([string]$key)
 
+    # Result object captures slmgr output for error reporting
+    $activationResult = @{
+        Success = $false
+        IpkOutput = ''
+        AtoOutput = ''
+        ErrorDetails = ''
+    }
+
     Write-Host "`n⏳ Activating Windows..." -ForegroundColor Cyan
 
     # Clean up any existing product key before installing new one
@@ -941,11 +949,13 @@ function Activate-Key {
         # Install the key
         Write-Host "🔑 Installing product key..." -ForegroundColor Cyan
         $installResult = & cscript //NoLogo "C:\Windows\System32\slmgr.vbs" /ipk $key 2>&1
+        $activationResult.IpkOutput = ($installResult | Out-String).Trim()
         Start-Sleep -Seconds 5
 
         # Attempt online activation
         Write-Host "📞 Attempting activation..." -ForegroundColor Cyan
         $activateResult = & cscript //NoLogo "C:\Windows\System32\slmgr.vbs" /ato 2>&1
+        $activationResult.AtoOutput = ($activateResult | Out-String).Trim()
 
         # Initial countdown
         Write-Host "`n⏳ Waiting $ActivationDelaySeconds seconds before checking activation status..."
@@ -965,7 +975,8 @@ function Activate-Key {
                 foreach ($prod in $winProduct) {
                     if ($prod.LicenseStatus -eq 1) {
                         Write-Host "`n✅ Windows is permanently activated." -ForegroundColor Green
-                        return $true
+                        $activationResult.Success = $true
+                        return $activationResult
                     }
                 }
             } catch {
@@ -979,10 +990,11 @@ function Activate-Key {
         }
 
         Write-Host "`n❌ Activation failed." -ForegroundColor Red
-        return $false
+        return $activationResult
     } catch {
         Write-Host "❌ Activation error: $($_.Exception.Message)" -ForegroundColor Red
-        return $false
+        $activationResult.ErrorDetails = $_.Exception.Message
+        return $activationResult
     }
 }
 
@@ -999,8 +1011,18 @@ function Main-ActivationLoop {
         Write-Host "`n--- Attempt #$currentAttempt ---" -ForegroundColor Magenta
         Write-Host "Using key: $($productKey.Substring(0,5))..." -ForegroundColor Gray
 
-        $activationSuccess = Activate-Key -key $productKey
+        $activationData = Activate-Key -key $productKey
+        $activationSuccess = $activationData.Success
         $result = if ($activationSuccess) { "success" } else { "failed" }
+
+        # Build descriptive notes from slmgr output
+        $noteParts = @()
+        if ($activationData.IpkOutput) { $noteParts += "IPK: $($activationData.IpkOutput)" }
+        if ($activationData.AtoOutput) { $noteParts += "ATO: $($activationData.AtoOutput)" }
+        if ($activationData.ErrorDetails) { $noteParts += "Error: $($activationData.ErrorDetails)" }
+        $activationNotes = ($noteParts -join ' | ')
+        if (-not $activationNotes) { $activationNotes = "Attempt #$currentAttempt" }
+        if ($activationNotes.Length -gt 2000) { $activationNotes = $activationNotes.Substring(0, 2000) }
 
         # Report result to API
         $reportBody = @{
@@ -1009,7 +1031,7 @@ function Main-ActivationLoop {
             attempt_number = $currentAttempt
             activation_server = 'oem'
             activation_unique_id = $ActivationUniqueID
-            notes = "OEM activation attempt #$currentAttempt"
+            notes = $activationNotes
         }
 
         $reportResponse = Invoke-APICall -Endpoint "report-result.php" -Body $reportBody

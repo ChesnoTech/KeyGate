@@ -532,6 +532,7 @@ return [
     'common.total' => 'Total',
     'common.description' => 'Description',
     'common.na' => 'N/A',
+    'common.saved' => 'Saved!',
 
     // Messages
     'msg.error' => 'Error: %s',
@@ -918,4 +919,49 @@ return [
     'settings.select_file' => 'Please select a file first.',
     'settings.invalid_file_type' => 'Only .msi and .exe files are allowed.',
     'settings.delete_resource_confirm' => 'Are you sure you want to delete this resource?',
+
+    // JavaScript UI strings
+    'js.error_prefix' => 'Error: ',
+    'js.error_label' => '<strong>Error:</strong> ',
+    'js.unknown_error' => 'Unknown error',
+    'js.delete_failed' => 'Delete failed',
+    'js.clone_failed' => 'Clone failed',
+    'js.copied' => 'Copied!',
+
+    // USB Device Management
+    'js.error_loading_settings' => 'Error loading settings',
+    'js.error_loading_usb' => 'Error loading USB devices',
+    'js.failed_load_usb' => 'Failed to load USB devices',
+    'js.failed_register_usb' => 'Failed to register USB device',
+    'js.error_detecting_usb' => 'Error detecting USB devices',
+    'js.failed_detect_usb' => 'Failed to detect USB devices. This feature requires PowerShell access on the admin PC.',
+    'js.usb_manual_entry_hint' => 'You can still manually enter device information below.',
+    'js.usb_check_connected' => 'USB drive is physically connected',
+    'js.usb_check_recognized' => 'Device is recognized by Windows',
+    'js.usb_check_admin_pc' => "You're running this on the admin PC (not server)",
+    'js.usb_confirm_disable' => 'Disable this USB device? The technician will not be able to use it for authentication.',
+    'js.usb_reason_disable' => 'Optional: Enter reason for disabling this device',
+    'js.usb_confirm_lost' => 'Mark this USB device as LOST? This will disable authentication immediately.',
+    'js.usb_reason_lost' => 'Optional: Enter details about when/where device was lost',
+    'js.usb_confirm_stolen' => 'Mark this USB device as STOLEN? This will disable authentication immediately.',
+    'js.usb_reason_stolen' => 'Optional: Enter details about the theft',
+    'js.usb_confirm_enable' => 'Re-enable this USB device for authentication?',
+    'js.failed_update_usb_status' => 'Failed to update USB device status',
+    'js.usb_confirm_delete' => "PERMANENTLY DELETE USB device \"%s\"?\n\nThis action cannot be undone.\n\nThis will remove all records of this device from the database.",
+    'js.failed_delete_usb' => 'Failed to delete USB device',
+    'js.usb_fill_form' => 'Fill Form with This Device',
+    'js.usb_command_copied' => "Command copied!\n\nNow:\n1. Open PowerShell (Win+X → A)\n2. Paste and run\n3. Copy the SerialNumber",
+
+    // 2FA
+    'js.error_loading_2fa' => 'Error loading 2FA status',
+    'js.error_setup_2fa' => 'Error setting up 2FA',
+    'js.twofa_disable_todo' => '2FA disable: please use the totp-disable.php API directly for now.',
+    'js.twofa_regenerate_todo' => 'Backup code regeneration: please use the totp-regenerate-backup-codes.php API directly for now.',
+
+    // Trusted Networks
+    'js.error_loading_networks' => 'Error loading trusted networks',
+    'js.failed_load_networks' => 'Failed to load trusted networks',
+
+    // Backups
+    'js.error_loading_backups' => 'Error loading backup history',
 ];

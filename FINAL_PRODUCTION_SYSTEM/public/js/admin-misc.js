@@ -634,7 +634,7 @@ function loadAltServerSettings() {
 
                 toggleAltServerConfig();
             } else {
-                alert('Error loading settings: ' + data.error);
+                alert(LANG['js.error_loading_settings'] + ': ' + data.error);
             }
         })
         .catch(err => console.error('Error loading alt server settings:', err));
@@ -668,11 +668,11 @@ function saveAltServerSettings(event) {
         if (data.success) {
             alert(LANG['settings.save_success']);
         } else {
-            alert('Error: ' + data.error);
+            alert(LANG['js.error_prefix'] + data.error);
         }
     })
     .catch(err => {
-        alert('Error: ' + err.message);
+        alert(LANG['js.error_prefix'] + err.message);
     });
 }
 
@@ -766,7 +766,7 @@ function uploadClientResource(resourceKey) {
                 fileInput.value = '';
                 loadClientResources();
             } else {
-                alert((LANG['settings.upload_error'] || 'Upload failed: ') + (data.error || 'Unknown error'));
+                alert((LANG['settings.upload_error'] || 'Upload failed: ') + (data.error || LANG['js.unknown_error']));
             }
         } catch (e) {
             alert((LANG['settings.upload_error'] || 'Upload failed: ') + 'Invalid server response');
@@ -790,10 +790,10 @@ function deleteClientResource(resourceKey) {
             if (data.success) {
                 loadClientResources();
             } else {
-                alert('Error: ' + (data.error || 'Unknown error'));
+                alert(LANG['js.error_prefix'] + (data.error || LANG['js.unknown_error']));
             }
         })
-        .catch(err => alert('Error: ' + err.message));
+        .catch(err => alert(LANG['js.error_prefix'] + err.message));
 }
 
 // =============================================
@@ -812,12 +812,12 @@ function loadUSBDevices() {
                 renderUSBDevicesTable(data.devices);
                 populateUSBTechnicianFilter();
             } else {
-                alert('Error loading USB devices: ' + data.error);
+                alert(LANG['js.error_loading_usb'] + ': ' + data.error);
             }
         })
         .catch(err => {
             console.error('Error loading USB devices:', err);
-            alert('Failed to load USB devices');
+            alert(LANG['js.failed_load_usb']);
         });
 }
 
@@ -1050,7 +1050,7 @@ function registerUSBDevice(event) {
     })
     .catch(err => {
         console.error('Error registering USB device:', err);
-        alert('Failed to register USB device');
+        alert(LANG['js.failed_register_usb']);
     });
 }
 
@@ -1350,7 +1350,7 @@ function displayUSBDevice(deviceInfo) {
             </div>
 
             <button type="button" class="btn btn-primary" onclick="fillFormFromDetectedDevice()" style="width: 100%;">
-                ✨ Fill Form with This Device
+                ✨ ${LANG['js.usb_fill_form']}
             </button>
         </div>
     `;
@@ -1369,7 +1369,7 @@ function copyPowerShellCommand() {
     const command = "Get-WmiObject Win32_DiskDrive | Where-Object { $_.InterfaceType -eq 'USB' } | Select SerialNumber,Model,@{N='GB';E={[Math]::Round($_.Size/1GB,2)}} | FL";
 
     navigator.clipboard.writeText(command).then(() => {
-        alert('✅ Command copied!\n\nNow:\n1. Open PowerShell (Win+X → A)\n2. Paste and run\n3. Copy the SerialNumber');
+        alert('✅ ' + LANG['js.usb_command_copied']);
     }).catch(() => {
         prompt('Copy this command:', command);
     });
@@ -1474,9 +1474,9 @@ function detectUSBDevices() {
                             ⚠️ No USB devices detected. Please ensure:
                         </p>
                         <ul style="margin: 10px 0 0 20px; color: #856404; font-size: 13px;">
-                            <li>USB drive is physically connected</li>
-                            <li>Device is recognized by Windows</li>
-                            <li>You're running this on the admin PC (not server)</li>
+                            <li>${LANG['js.usb_check_connected']}</li>
+                            <li>${LANG['js.usb_check_recognized']}</li>
+                            <li>${LANG['js.usb_check_admin_pc']}</li>
                         </ul>
                     </div>
                 `;
@@ -1484,7 +1484,7 @@ function detectUSBDevices() {
                 resultsDiv.innerHTML = `
                     <div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 6px; padding: 12px; margin-top: 10px;">
                         <p style="margin: 0; color: #721c24;">
-                            ❌ Error detecting USB devices: ${data.error || 'Unknown error'}
+                            ❌ ${LANG['js.error_detecting_usb']}: ${data.error || LANG['js.unknown_error']}
                         </p>
                     </div>
                 `;
@@ -1495,10 +1495,10 @@ function detectUSBDevices() {
             resultsDiv.innerHTML = `
                 <div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 6px; padding: 12px; margin-top: 10px;">
                     <p style="margin: 0; color: #721c24;">
-                        ❌ Failed to detect USB devices. This feature requires PowerShell access on the admin PC.
+                        ❌ ${LANG['js.failed_detect_usb']}
                     </p>
                     <p style="margin: 10px 0 0 0; font-size: 13px; color: #721c24;">
-                        You can still manually enter device information below.
+                        ${LANG['js.usb_manual_entry_hint']}
                     </p>
                 </div>
             `;
@@ -1545,22 +1545,22 @@ function updateUSBDeviceStatus(deviceId, newStatus) {
 
     switch (newStatus) {
         case 'disabled':
-            confirmMessage = 'Disable this USB device? The technician will not be able to use it for authentication.';
-            reason = prompt('Optional: Enter reason for disabling this device');
+            confirmMessage = LANG['js.usb_confirm_disable'];
+            reason = prompt(LANG['js.usb_reason_disable']);
             if (reason === null) return;
             break;
         case 'lost':
-            confirmMessage = 'Mark this USB device as LOST? This will disable authentication immediately.';
-            reason = prompt('Optional: Enter details about when/where device was lost');
+            confirmMessage = LANG['js.usb_confirm_lost'];
+            reason = prompt(LANG['js.usb_reason_lost']);
             if (reason === null) return;
             break;
         case 'stolen':
-            confirmMessage = 'Mark this USB device as STOLEN? This will disable authentication immediately.';
-            reason = prompt('Optional: Enter details about the theft');
+            confirmMessage = LANG['js.usb_confirm_stolen'];
+            reason = prompt(LANG['js.usb_reason_stolen']);
             if (reason === null) return;
             break;
         case 'active':
-            confirmMessage = 'Re-enable this USB device for authentication?';
+            confirmMessage = LANG['js.usb_confirm_enable'];
             break;
     }
 
@@ -1580,17 +1580,17 @@ function updateUSBDeviceStatus(deviceId, newStatus) {
             alert(result.message);
             loadUSBDevices();
         } else {
-            alert('Error: ' + result.error);
+            alert(LANG['js.error_prefix'] + result.error);
         }
     })
     .catch(err => {
         console.error('Error updating USB device status:', err);
-        alert('Failed to update USB device status');
+        alert(LANG['js.failed_update_usb_status']);
     });
 }
 
 function deleteUSBDevice(deviceId, deviceName) {
-    if (!confirm(`PERMANENTLY DELETE USB device "${deviceName}"?\n\nThis action cannot be undone.\n\nThis will remove all records of this device from the database.`)) {
+    if (!confirm(LANG['js.usb_confirm_delete'].replace('%s', deviceName))) {
         return;
     }
 
@@ -1606,12 +1606,12 @@ function deleteUSBDevice(deviceId, deviceName) {
             alert(result.message);
             loadUSBDevices();
         } else {
-            alert('Error: ' + result.error);
+            alert(LANG['js.error_prefix'] + result.error);
         }
     })
     .catch(err => {
         console.error('Error deleting USB device:', err);
-        alert('Failed to delete USB device');
+        alert(LANG['js.failed_delete_usb']);
     });
 }
 
@@ -1637,7 +1637,7 @@ function load2FAStatus() {
         })
         .catch(err => {
             console.error('Error loading 2FA status:', err);
-            document.getElementById('2fa-loading').textContent = 'Error loading 2FA status';
+            document.getElementById('2fa-loading').textContent = LANG['js.error_loading_2fa'];
         });
 }
 
@@ -1649,7 +1649,7 @@ function enable2FA() {
     .then(r => r.json())
     .then(data => {
         if (data.error) {
-            alert('Error: ' + data.error + (data.message ? '\n' + data.message : ''));
+            alert(LANG['js.error_prefix'] + data.error + (data.message ? '\n' + data.message : ''));
             return;
         }
 
@@ -1720,7 +1720,7 @@ function enable2FA() {
     })
     .catch(err => {
         console.error('2FA setup error:', err);
-        alert('Error setting up 2FA: ' + err.message);
+        alert(LANG['js.error_setup_2fa'] + ': ' + err.message);
     });
 }
 
@@ -1757,7 +1757,7 @@ function verify2FASetup(adminId) {
     })
     .catch(err => {
         errorDiv.style.display = 'block';
-        errorDiv.textContent = 'Error: ' + err.message;
+        errorDiv.textContent = LANG['js.error_prefix'] + err.message;
     });
 }
 
@@ -1765,7 +1765,7 @@ function copy2FABackupCodes() {
     if (window._2faBackupCodes) {
         const text = window._2faBackupCodes.map((c, i) => (i+1) + '. ' + c).join('\n');
         navigator.clipboard.writeText(text).then(() => {
-            event.target.textContent = '✅ Copied!';
+            event.target.textContent = '✅ ' + LANG['js.copied'];
             setTimeout(() => event.target.textContent = '📋 ' + LANG['twofa.copy_codes'], 2000);
         });
     }
@@ -1775,14 +1775,14 @@ function disable2FA() {
     if (!confirm(LANG['twofa.disable_confirm'])) {
         return;
     }
-    alert('2FA disable will be implemented via the API endpoints. Please use the totp-disable.php API directly for now.');
+    alert(LANG['js.twofa_disable_todo']);
 }
 
 function regenerateBackupCodes() {
     if (!confirm(LANG['twofa.regenerate_confirm'])) {
         return;
     }
-    alert('Backup code regeneration will be implemented via the API endpoints. Please use the totp-regenerate-backup-codes.php API directly for now.');
+    alert(LANG['js.twofa_regenerate_todo']);
 }
 
 // ========================================
@@ -1800,13 +1800,13 @@ function loadTrustedNetworks() {
             if (data.success) {
                 renderTrustedNetworksTable(data.networks);
             } else {
-                alert('Error loading trusted networks: ' + data.error);
+                alert(LANG['js.error_loading_networks'] + ': ' + data.error);
             }
         })
         .catch(err => {
             console.error('Error loading trusted networks:', err);
             document.getElementById('trusted-networks-loading').style.display = 'none';
-            alert('Failed to load trusted networks');
+            alert(LANG['js.failed_load_networks']);
         });
 }
 
@@ -1912,7 +1912,7 @@ function addTrustedNetwork(event) {
             document.querySelector('.modal').remove();
             loadTrustedNetworks();
         } else {
-            alert('Error: ' + result.error);
+            alert(LANG['js.error_prefix'] + result.error);
         }
     })
     .catch(err => {
@@ -1933,7 +1933,7 @@ function deleteTrustedNetwork(networkId, networkName) {
             alert(LANG['network.delete_success']);
             loadTrustedNetworks();
         } else {
-            alert('Error: ' + data.error);
+            alert(LANG['js.error_prefix'] + data.error);
         }
     })
     .catch(err => {
@@ -1957,7 +1957,7 @@ function loadBackupHistory() {
             if (data.success) {
                 renderBackupHistoryTable(data.backups);
             } else {
-                alert('Error loading backup history: ' + data.error);
+                alert(LANG['js.error_loading_backups'] + ': ' + data.error);
             }
         })
         .catch(err => {
@@ -2027,6 +2027,6 @@ function triggerManualBackup() {
         btn.disabled = false;
         btn.textContent = originalText;
         console.error('Error triggering backup:', err);
-        alert('Error: ' + err.message);
+        alert(LANG['js.error_prefix'] + err.message);
     });
 }

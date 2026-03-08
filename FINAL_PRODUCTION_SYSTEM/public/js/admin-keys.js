@@ -173,7 +173,7 @@ function importKeys(event) {
             `;
             loadKeys(); // Reload keys table
         } else {
-            resultsDiv.innerHTML = `<p style="color: #dc3545;"><strong>Error:</strong> ${data.error}</p>`;
+            resultsDiv.innerHTML = `<p style="color: #dc3545;">${LANG['js.error_label']} ${data.error}</p>`;
         }
     })
     .catch(err => {
@@ -181,7 +181,7 @@ function importKeys(event) {
         submitBtn.textContent = LANG['keys.import_csv'];
         progressDiv.style.display = 'none';
         resultsDiv.style.display = 'block';
-        resultsDiv.innerHTML = `<p style="color: #dc3545;"><strong>Error:</strong> ${err.message}</p>`;
+        resultsDiv.innerHTML = `<p style="color: #dc3545;">${LANG['js.error_label']} ${err.message}</p>`;
     });
 
     return false;
@@ -240,11 +240,11 @@ function generateReport() {
         if (data.success) {
             reportContent.innerHTML = data.html;
         } else {
-            reportContent.innerHTML = `<p style="color: #dc3545;">Error: ${data.error}</p>`;
+            reportContent.innerHTML = `<p style="color: #dc3545;">${LANG['js.error_prefix']}${data.error}</p>`;
         }
     })
     .catch(err => {
-        reportContent.innerHTML = `<p style="color: #dc3545;">Error: ${err.message}</p>`;
+        reportContent.innerHTML = `<p style="color: #dc3545;">${LANG['js.error_prefix']}${err.message}</p>`;
     });
 }
 

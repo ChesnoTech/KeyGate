@@ -532,6 +532,7 @@ return [
     'common.total' => 'Итого',
     'common.description' => 'Описание',
     'common.na' => 'Н/Д',
+    'common.saved' => 'Сохранено!',
 
     // Messages
     'msg.error' => 'Ошибка: %s',
@@ -918,4 +919,49 @@ return [
     'settings.select_file' => 'Сначала выберите файл.',
     'settings.invalid_file_type' => 'Допускаются только файлы .msi и .exe.',
     'settings.delete_resource_confirm' => 'Вы уверены, что хотите удалить этот ресурс?',
+
+    // JavaScript UI strings
+    'js.error_prefix' => 'Ошибка: ',
+    'js.error_label' => '<strong>Ошибка:</strong> ',
+    'js.unknown_error' => 'Неизвестная ошибка',
+    'js.delete_failed' => 'Ошибка удаления',
+    'js.clone_failed' => 'Ошибка клонирования',
+    'js.copied' => 'Скопировано!',
+
+    // USB Device Management
+    'js.error_loading_settings' => 'Ошибка загрузки настроек',
+    'js.error_loading_usb' => 'Ошибка загрузки USB-устройств',
+    'js.failed_load_usb' => 'Не удалось загрузить USB-устройства',
+    'js.failed_register_usb' => 'Не удалось зарегистрировать USB-устройство',
+    'js.error_detecting_usb' => 'Ошибка обнаружения USB-устройств',
+    'js.failed_detect_usb' => 'Не удалось обнаружить USB-устройства. Для этой функции требуется доступ к PowerShell на ПК администратора.',
+    'js.usb_manual_entry_hint' => 'Вы можете ввести информацию об устройстве вручную ниже.',
+    'js.usb_check_connected' => 'USB-накопитель физически подключён',
+    'js.usb_check_recognized' => 'Устройство распознано Windows',
+    'js.usb_check_admin_pc' => 'Вы запускаете это на ПК администратора (не на сервере)',
+    'js.usb_confirm_disable' => 'Отключить это USB-устройство? Техник не сможет использовать его для авторизации.',
+    'js.usb_reason_disable' => 'Необязательно: укажите причину отключения устройства',
+    'js.usb_confirm_lost' => 'Отметить USB-устройство как УТЕРЯННОЕ? Авторизация будет немедленно отключена.',
+    'js.usb_reason_lost' => 'Необязательно: укажите детали о потере устройства',
+    'js.usb_confirm_stolen' => 'Отметить USB-устройство как УКРАДЕННОЕ? Авторизация будет немедленно отключена.',
+    'js.usb_reason_stolen' => 'Необязательно: укажите детали о краже',
+    'js.usb_confirm_enable' => 'Повторно включить это USB-устройство для авторизации?',
+    'js.failed_update_usb_status' => 'Не удалось обновить статус USB-устройства',
+    'js.usb_confirm_delete' => "НАВСЕГДА УДАЛИТЬ USB-устройство «%s»?\n\nЭто действие нельзя отменить.\n\nВсе записи об этом устройстве будут удалены из базы данных.",
+    'js.failed_delete_usb' => 'Не удалось удалить USB-устройство',
+    'js.usb_fill_form' => 'Заполнить форму этим устройством',
+    'js.usb_command_copied' => "Команда скопирована!\n\nТеперь:\n1. Откройте PowerShell (Win+X → A)\n2. Вставьте и выполните\n3. Скопируйте SerialNumber",
+
+    // 2FA
+    'js.error_loading_2fa' => 'Ошибка загрузки статуса 2FA',
+    'js.error_setup_2fa' => 'Ошибка настройки 2FA',
+    'js.twofa_disable_todo' => 'Отключение 2FA: пока используйте API totp-disable.php напрямую.',
+    'js.twofa_regenerate_todo' => 'Перегенерация резервных кодов: пока используйте API totp-regenerate-backup-codes.php напрямую.',
+
+    // Trusted Networks
+    'js.error_loading_networks' => 'Ошибка загрузки доверенных сетей',
+    'js.failed_load_networks' => 'Не удалось загрузить доверенные сети',
+
+    // Backups
+    'js.error_loading_backups' => 'Ошибка загрузки истории резервных копий',
 ];
