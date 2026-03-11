@@ -98,6 +98,14 @@ jobs:
           echo "--- .env contents ---"
           cat .env
 
+      - name: Generate self-signed SSL cert for CI
+        run: |
+          mkdir -p ssl
+          openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+            -keyout ssl/server.key -out ssl/server.crt \
+            -subj "/CN=localhost" 2>/dev/null
+          echo "✅ SSL cert generated"
+
       - name: Build Docker images
         run: docker compose build
 
