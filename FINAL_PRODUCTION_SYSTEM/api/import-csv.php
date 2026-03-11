@@ -1,6 +1,6 @@
 <?php
 // API endpoint to import keys from CSV file (for migration)
-require_once '../config.php';
+require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/middleware/ApiMiddleware.php';
 
 ApiMiddleware::requirePowerShell();
@@ -49,7 +49,7 @@ try {
         $usage_status = trim($row[3]);
         
         // Validate product key format
-        if (!preg_match('/^[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}$/', $product_key)) {
+        if (!preg_match(PRODUCT_KEY_PATTERN, $product_key)) {
             $skipped++;
             $errors[] = "Invalid key format: {$product_key}";
             continue;
@@ -96,7 +96,7 @@ try {
         fclose($handle);
     }
     $pdo->rollback();
-    error_log("CSV import error: " . $e->getMessage());
-    jsonResponse(['error' => 'Import failed: ' . $e->getMessage()], 500);
+    error_log("CSV import error: " . $e->getMessage() . "\n" . $e->getTraceAsString());
+    jsonResponse(['error' => 'Import failed due to a server error. Check server logs for details.'], 500);
 }
 ?>

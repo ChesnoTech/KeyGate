@@ -56,7 +56,7 @@ if (!validateAPIAccess()) {
     ]));
 }
 
-require_once '../config.php';
+require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/middleware/ApiMiddleware.php';
 
 $input = ApiMiddleware::bootstrap('report-result', ['session_token', 'result'], [

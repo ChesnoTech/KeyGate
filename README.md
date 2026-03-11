@@ -1,4 +1,4 @@
-# OEM Activation System v2.0
+# OEM Activation System v3.0
 
 **Professional Windows OEM license management for computer assembly operations.**
 
@@ -12,9 +12,9 @@ Secure, database-driven system that automates Windows OEM key distribution, acti
  Technician Workstation                     Production Server (Docker)
 +-------------------------+          +------------------------------------------+
 |                         |          |                                          |
-|  OEM_Activator_v2.cmd   |          |  +------------+    +----------------+   |
+|  OEM_Activator.cmd      |          |  +------------+    +----------------+   |
 |    |                    |   HTTPS  |  |            |    |                |   |
-|    +-> PowerShell v2/v3 |--------->|  |  PHP 8.3   |--->|  MariaDB 10.11 |   |
+|    +-> PowerShell v3    |--------->|  |  PHP 8.3   |--->|  MariaDB 10.11 |   |
 |        (slmgr /ipk/ato) |<---------|  |  (Apache)  |    |  (oem_keys,    |   |
 |                         |   JSON   |  |            |    |   technicians, |   |
 +-------------------------+          |  +-----+------+    |   audit_log)   |   |
@@ -31,7 +31,7 @@ Secure, database-driven system that automates Windows OEM key distribution, acti
 
 ### How It Works
 
-1. Technician runs `OEM_Activator_v2.cmd` on a fresh Windows PC
+1. Technician runs `OEM_Activator.cmd` on a fresh Windows PC
 2. CMD launcher installs PowerShell 7 (if needed), runs pre-activation tasks (WSUS cleanup, security hardening)
 3. PowerShell script authenticates via REST API, requests an OEM key
 4. Key is installed and activated using `slmgr.vbs` with progressive verification (6 checks over ~55 seconds)
@@ -105,8 +105,7 @@ OEM_Activation_System/
 |   |   |-- report-result.php    #     Activation result reporting
 |   |   +-- middleware/           #     Rate limiting, validation
 |   |-- activation/              #   PowerShell client scripts
-|   |   |-- main_v2.PS1          #     v2 client (API + i18n)
-|   |   |-- main_v3.PS1          #     v3 client (USB auth + hardware)
+|   |   |-- main_v3.PS1          #     Activation client (USB auth, hardware QC, adaptive timing)
 |   |   +-- lang/                #     Localization (en, ru)
 |   |-- controllers/admin/       #   MVC controllers (12 modules)
 |   |-- views/                   #   Admin panel templates
@@ -157,7 +156,9 @@ OEM_Activation_System/
 - Pre-activation tasks: WSUS cleanup, SMB hardening, BIOS drive format
 - Progressive verification timing (legacy-proven, ~55s window)
 - Key cleanup between attempts to prevent false negatives
-- Bilingual interface (English / Russian)
+- Adaptive network-based timing (measures Microsoft activation server latency)
+- USB-based technician authentication
+- Hardware QC data collection (HackBGRT detection, component inventory)
 
 **Admin Dashboard**
 - Real-time statistics and charts

@@ -40,6 +40,8 @@ function handle_list_history(PDO $pdo, array $admin_session): void {
     $total = $stmt->fetchColumn();
 
     // Get history
+    $params[] = (int)$limit;
+    $params[] = (int)$offset;
     $stmt = $pdo->prepare("
         SELECT
             aa.id, aa.attempted_date, aa.attempted_time, aa.technician_id,
@@ -49,7 +51,7 @@ function handle_list_history(PDO $pdo, array $admin_session): void {
         LEFT JOIN oem_keys k ON aa.key_id = k.id
         $whereClause
         ORDER BY aa.attempted_date DESC, aa.attempted_time DESC
-        LIMIT $limit OFFSET $offset
+        LIMIT ? OFFSET ?
     ");
     $stmt->execute($params);
     $history = $stmt->fetchAll(PDO::FETCH_ASSOC);

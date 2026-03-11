@@ -25,7 +25,8 @@ function validateAdminSession() {
         $stmt = $pdo->prepare("
             SELECT
                 s.id, s.admin_id, s.expires_at, s.last_activity,
-                u.username, u.full_name, u.role, u.is_active, u.preferred_language
+                u.username, u.full_name, u.role, u.is_active, u.preferred_language,
+                u.password_changed_at, u.must_change_password
             FROM admin_sessions s
             JOIN admin_users u ON s.admin_id = u.id
             WHERE s.session_token = ? AND s.is_active = 1
@@ -37,19 +38,35 @@ function validateAdminSession() {
             return false;
         }
 
-        // Check if session expired
+        // Check if session expired (hard expiry set at creation time)
         if (strtotime($session['expires_at']) < time()) {
+            $stmt = $pdo->prepare("UPDATE admin_sessions SET is_active = 0 WHERE id = ?");
+            $stmt->execute([$session['id']]);
             return false;
         }
 
-        // Check inactivity timeout
-        if (strtotime($session['last_activity']) < (time() - SESSION_INACTIVITY_SECONDS)) {
+        // Check inactivity timeout (configurable via system_config, fallback to constant)
+        $timeoutMinutes = (int) getConfigWithDefault('admin_session_timeout_minutes', DEFAULT_ADMIN_SESSION_TIMEOUT_MINUTES);
+        $timeoutSeconds = $timeoutMinutes * 60;
+        if (strtotime($session['last_activity']) < (time() - $timeoutSeconds)) {
+            $stmt = $pdo->prepare("UPDATE admin_sessions SET is_active = 0 WHERE id = ?");
+            $stmt->execute([$session['id']]);
             return false;
         }
 
         // Check if user is active
         if (!$session['is_active']) {
             return false;
+        }
+
+        // Check password age if force-change is configured
+        $forceChangeDays = (int) getConfigWithDefault('admin_force_password_change_days', DEFAULT_ADMIN_PASSWORD_CHANGE_DAYS);
+        if (!empty($session['password_changed_at'])) {
+            $passwordAge = time() - strtotime($session['password_changed_at']);
+            $maxAge = $forceChangeDays * 24 * 3600;
+            if ($passwordAge > $maxAge) {
+                $session['must_change_password'] = true;
+            }
         }
 
         // Update last activity
@@ -89,6 +106,94 @@ function logAdminActivity($admin_id, $session_id, $action, $description = '') {
     } catch (Exception $e) {
         error_log("Failed to log admin activity: " . $e->getMessage());
     }
+}
+
+/**
+ * Authenticate an admin user by username and password.
+ * Handles lockout checking, failed-attempt tracking, session creation.
+ *
+ * @param string $username
+ * @param string $password
+ * @return array|false|array{error:string} Admin user row on success, false on invalid credentials, ['error'=>...] on lockout
+ */
+function authenticateAdmin($username, $password) {
+    global $pdo;
+
+    // Load configurable lockout settings from system_config, with constant fallbacks
+    $maxFailedLogins = (int) getConfigWithDefault('admin_max_failed_logins', DEFAULT_ADMIN_MAX_FAILED_LOGINS);
+    $lockoutMinutes  = (int) getConfigWithDefault('admin_lockout_duration_minutes', DEFAULT_ADMIN_LOCKOUT_MINUTES);
+    $sessionTimeout  = (int) getConfigWithDefault('admin_session_timeout_minutes', DEFAULT_ADMIN_SESSION_TIMEOUT_MINUTES);
+
+    $stmt = $pdo->prepare("SELECT * FROM admin_users WHERE username = ? AND is_active = 1");
+    $stmt->execute([$username]);
+    $admin = $stmt->fetch();
+
+    if (!$admin) {
+        appLog('warning', 'Admin login failed: invalid username', [
+            'event' => 'auth_failure', 'username' => $username,
+        ]);
+        logAdminActivity(null, null, 'LOGIN_FAILED', "Invalid username: $username");
+        return false;
+    }
+
+    // Check lockout
+    if ($admin['locked_until'] && $admin['locked_until'] > date('Y-m-d H:i:s')) {
+        logAdminActivity($admin['id'], null, 'LOGIN_BLOCKED', 'Account locked');
+        return ['error' => 'Account locked until ' . $admin['locked_until']];
+    }
+
+    // Verify password
+    if (!password_verify($password, $admin['password_hash'])) {
+        $failed_attempts = $admin['failed_login_attempts'] + 1;
+        $locked_until = null;
+
+        if ($failed_attempts >= $maxFailedLogins) {
+            $locked_until = date('Y-m-d H:i:s', time() + ($lockoutMinutes * 60));
+        }
+
+        $stmt = $pdo->prepare("
+            UPDATE admin_users
+            SET failed_login_attempts = ?, locked_until = ?
+            WHERE id = ?
+        ");
+        $stmt->execute([$failed_attempts, $locked_until, $admin['id']]);
+
+        appLog('warning', 'Admin login failed: wrong password', [
+            'event' => 'auth_failure', 'username' => $username,
+            'attempt' => $failed_attempts, 'locked' => $locked_until !== null,
+        ]);
+        logAdminActivity($admin['id'], null, 'LOGIN_FAILED', "Failed password attempt #$failed_attempts");
+        return false;
+    }
+
+    // Create session
+    $session_token = bin2hex(random_bytes(SESSION_TOKEN_BYTES));
+    $expires_at = date('Y-m-d H:i:s', time() + ($sessionTimeout * 60));
+
+    $stmt = $pdo->prepare("
+        INSERT INTO admin_sessions (admin_id, session_token, ip_address, user_agent, expires_at)
+        VALUES (?, ?, ?, ?, ?)
+    ");
+    $stmt->execute([
+        $admin['id'], $session_token, getClientIP(), $_SERVER['HTTP_USER_AGENT'] ?? '', $expires_at
+    ]);
+    $session_id = $pdo->lastInsertId();
+
+    // Reset failed attempts
+    $stmt = $pdo->prepare("
+        UPDATE admin_users
+        SET failed_login_attempts = 0, locked_until = NULL, last_login = NOW(), last_login_ip = ?
+        WHERE id = ?
+    ");
+    $stmt->execute([getClientIP(), $admin['id']]);
+
+    $_SESSION['admin_token'] = $session_token;
+    $_SESSION['admin_id'] = $admin['id'];
+    $_SESSION['session_id'] = $session_id;
+
+    logAdminActivity($admin['id'], $session_id, 'LOGIN_SUCCESS', 'Successful login');
+
+    return $admin;
 }
 
 /**

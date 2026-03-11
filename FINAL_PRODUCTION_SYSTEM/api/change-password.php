@@ -1,6 +1,6 @@
 <?php
 // API endpoint for changing password
-require_once '../config.php';
+require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/middleware/ApiMiddleware.php';
 
 $input = ApiMiddleware::bootstrap('change-password', ['technician_id', 'current_password', 'new_password', 'confirm_password'], [
@@ -17,12 +17,12 @@ if ($new_password !== $confirm_password) {
 }
 
 // Validate password strength
-$min_length = (int)getConfig('password_min_length') ?: PASSWORD_MIN_LENGTH;
+$min_length = (int) getConfigWithDefault('password_min_length', PASSWORD_MIN_LENGTH);
 if (strlen($new_password) < $min_length) {
     jsonResponse(['error' => "Password must be at least {$min_length} characters long", 'error_code' => 'PASSWORD_TOO_SHORT'], 400);
 }
 
-if (!preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/', $new_password)) {
+if (!preg_match(PASSWORD_STRENGTH_PATTERN, $new_password)) {
     jsonResponse(['error' => 'Password must contain uppercase, lowercase, and numbers', 'error_code' => 'PASSWORD_WEAK'], 400);
 }
 

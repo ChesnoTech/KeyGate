@@ -4,7 +4,7 @@
 
 require_once 'security-headers.php';
 require_once 'config.php';
-require_once 'functions/rbac.php';
+require_once 'functions/acl.php';
 require_once 'functions/network-utils.php';
 require_once 'functions/i18n.php';
 require_once 'functions/admin-helpers.php';
@@ -13,9 +13,126 @@ require_once 'functions/push-helpers.php';
 // Start secure session
 session_start();
 
+// Handle SPA session/CSRF checks (pre-auth — must work for unauthenticated users too)
+$pre_auth_action = $_GET['action'] ?? '';
+if ($pre_auth_action === 'check_session') {
+    header('Content-Type: application/json');
+    $admin_session = validateAdminSession();
+    if ($admin_session) {
+        // Load effective permissions via ACL
+        require_once __DIR__ . '/functions/acl.php';
+        $permsRaw = aclGetEffectivePermissions('admin', $admin_session['admin_id']);
+        $perms = [];
+        foreach ($permsRaw as $key => $info) {
+            $perms[$key] = !empty($info['granted']);
+        }
+        echo json_encode([
+            'authenticated' => true,
+            'user' => [
+                'id'             => (int) $admin_session['admin_id'],
+                'username'       => $admin_session['username'],
+                'full_name'      => $admin_session['full_name'],
+                'role'           => $admin_session['role'],
+                'preferred_language' => $admin_session['preferred_language'] ?? 'en',
+            ],
+            'permissions' => $perms,
+            'csrf_token'  => $_SESSION['csrf_token'] ?? bin2hex(random_bytes(CSRF_TOKEN_BYTES)),
+        ]);
+    } else {
+        echo json_encode(['authenticated' => false]);
+    }
+    exit;
+}
+
+if ($pre_auth_action === 'get_csrf') {
+    header('Content-Type: application/json');
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(CSRF_TOKEN_BYTES));
+    }
+    echo json_encode(['csrf_token' => $_SESSION['csrf_token']]);
+    exit;
+}
+
+// JSON login endpoint (replaces HTML-parsing login via secure-admin.php)
+if ($pre_auth_action === 'admin_login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json');
+    $json_login = json_decode(file_get_contents('php://input'), true);
+    $username = trim($json_login['username'] ?? '');
+    $password = $json_login['password'] ?? '';
+
+    if (empty($username) || empty($password)) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'Username and password are required', 'error_code' => 'MISSING_CREDENTIALS']);
+        exit;
+    }
+
+    $result = authenticateAdmin($username, $password);
+    if ($result === false) {
+        http_response_code(401);
+        echo json_encode(['success' => false, 'error' => 'Invalid credentials', 'error_code' => 'INVALID_CREDENTIALS']);
+        exit;
+    }
+    if (is_array($result) && isset($result['error'])) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => $result['error'], 'error_code' => 'ACCOUNT_LOCKED']);
+        exit;
+    }
+
+    // Login succeeded — build session response
+    require_once __DIR__ . '/functions/acl.php';
+    $permsRaw = aclGetEffectivePermissions('admin', $result['id']);
+    $perms = [];
+    foreach ($permsRaw as $key => $info) {
+        $perms[$key] = !empty($info['granted']);
+    }
+
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(CSRF_TOKEN_BYTES));
+    }
+
+    echo json_encode([
+        'success' => true,
+        'user' => [
+            'id'                 => (int) $result['id'],
+            'username'           => $result['username'],
+            'full_name'          => $result['full_name'],
+            'role'               => $result['role'],
+            'preferred_language' => $result['preferred_language'] ?? 'en',
+        ],
+        'permissions' => $perms,
+        'csrf_token'  => $_SESSION['csrf_token'],
+    ]);
+    exit;
+}
+
+// Public branding — no auth required so login page can display custom branding
+if ($pre_auth_action === 'get_public_branding') {
+    header('Content-Type: application/json');
+    $config = [
+        'brand_company_name'   => getConfig('brand_company_name') ?? 'OEM Activation',
+        'brand_app_version'    => getConfig('brand_app_version') ?? 'System v2.0',
+        'brand_logo_path'      => getConfig('brand_logo_path') ?? '',
+        'brand_favicon_path'   => getConfig('brand_favicon_path') ?? '',
+        'brand_login_title'    => getConfig('brand_login_title') ?? '',
+        'brand_login_subtitle' => getConfig('brand_login_subtitle') ?? '',
+        'brand_primary_color'  => getConfig('brand_primary_color') ?? '',
+        'brand_sidebar_color'  => getConfig('brand_sidebar_color') ?? '',
+        'brand_accent_color'   => getConfig('brand_accent_color') ?? '',
+    ];
+    echo json_encode(['success' => true, 'config' => $config]);
+    exit;
+}
+
 // Validate session or redirect
 $admin_session = validateAdminSession();
 if (!$admin_session) {
+    // For AJAX requests, return 401 JSON instead of redirect
+    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) || (isset($_GET['action']) || isset($_POST['action']))) {
+        header('Content-Type: application/json');
+        http_response_code(401);
+        echo json_encode(['authenticated' => false, 'error' => 'Session expired']);
+        exit;
+    }
     header('Location: secure-admin.php');
     exit;
 }
@@ -46,29 +163,134 @@ if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(CSRF_TOKEN_BYTES));
 }
 
-// State-changing actions that require CSRF validation
-$csrf_write_actions = [
-    'acl_create_role', 'acl_update_role', 'acl_delete_role', 'acl_clone_role',
-    'acl_set_user_override', 'acl_remove_user_override',
-    'add_tech', 'update_tech', 'delete_tech', 'reset_password', 'toggle_tech',
-    'recycle_key', 'delete_key', 'import_keys',
-    'save_alt_server_settings',
-    'add_trusted_network', 'delete_trusted_network',
-    'register_usb_device', 'update_usb_device_status', 'delete_usb_device',
-    'trigger_manual_backup',
-    'push_subscribe', 'push_unsubscribe', 'save_push_preferences', 'mark_notifications_read',
-    'send_test_notification',
-    'upload_client_resource', 'delete_client_resource'
+// ── Action Registry ──────────────────────────────────────────
+// Each entry: 'action_name' => [controller_file, handler_function, requires_csrf, accepts_json]
+// Controller files are loaded lazily — only the needed controller is included.
+
+$action_registry = [
+    // dashboard
+    'get_stats'            => ['DashboardController.php',      'handle_get_stats',                false, false],
+    'generate_report'      => ['DashboardController.php',      'handle_generate_report',          false, false],
+    'download_report'      => ['DashboardController.php',      'handle_download_report',          false, false],
+
+    // keys
+    'list_keys'            => ['KeysController.php',           'handle_list_keys',                false, false],
+    'recycle_key'          => ['KeysController.php',           'handle_recycle_key',              true,  false],
+    'delete_key'           => ['KeysController.php',           'handle_delete_key',               true,  false],
+    'import_keys'          => ['KeysController.php',           'handle_import_keys',              true,  false],
+    'export_keys'          => ['KeysController.php',           'handle_export_keys',              false, false],
+    'add_keys'             => ['KeysController.php',           'handle_add_keys',                 true,  true],
+
+    // technicians
+    'list_techs'           => ['TechniciansController.php',    'handle_list_techs',               false, false],
+    'list_technicians'     => ['TechniciansController.php',    'handle_list_technicians',         false, false],
+    'add_tech'             => ['TechniciansController.php',    'handle_add_tech',                 true,  false],
+    'edit_tech'            => ['TechniciansController.php',    'handle_edit_tech',                false, false],
+    'get_tech'             => ['TechniciansController.php',    'handle_get_tech',                 false, false],
+    'update_tech'          => ['TechniciansController.php',    'handle_update_tech',              true,  true],
+    'reset_password'       => ['TechniciansController.php',    'handle_reset_password',           true,  false],
+    'toggle_tech'          => ['TechniciansController.php',    'handle_toggle_tech',              true,  false],
+    'delete_tech'          => ['TechniciansController.php',    'handle_delete_tech',              true,  false],
+
+    // history
+    'list_history'         => ['HistoryController.php',        'handle_list_history',             false, false],
+    'get_hardware'         => ['HistoryController.php',        'handle_get_hardware',             false, false],
+    'get_hardware_by_order'=> ['HistoryController.php',        'handle_get_hardware_by_order',    false, false],
+
+    // logs
+    'list_logs'            => ['LogsController.php',           'handle_list_logs',                false, false],
+
+    // settings
+    'get_alt_server_settings'  => ['SettingsController.php',   'handle_get_alt_server_settings',  false, false],
+    'save_alt_server_settings' => ['SettingsController.php',   'handle_save_alt_server_settings', true,  true],
+    'get_order_field_settings' => ['SettingsController.php',   'handle_get_order_field_settings', false, false],
+    'save_order_field_settings'=> ['SettingsController.php',   'handle_save_order_field_settings',true,  true],
+
+    // usb devices
+    'list_usb_devices'         => ['UsbDevicesController.php', 'handle_list_usb_devices',         false, false],
+    'register_usb_device'      => ['UsbDevicesController.php', 'handle_register_usb_device',      true,  true],
+    'update_usb_device_status' => ['UsbDevicesController.php', 'handle_update_usb_device_status', true,  true],
+    'delete_usb_device'        => ['UsbDevicesController.php', 'handle_delete_usb_device',        true,  true],
+
+    // 2fa & security
+    'get_2fa_status'           => ['SecurityController.php',   'handle_get_2fa_status',           false, false],
+    'list_trusted_networks'    => ['SecurityController.php',   'handle_list_trusted_networks',    false, false],
+    'add_trusted_network'      => ['SecurityController.php',   'handle_add_trusted_network',      true,  true],
+    'delete_trusted_network'   => ['SecurityController.php',   'handle_delete_trusted_network',   true,  true],
+
+    // backups
+    'list_backups'             => ['BackupsController.php',    'handle_list_backups',             false, false],
+    'trigger_manual_backup'    => ['BackupsController.php',    'handle_trigger_manual_backup',    true,  false],
+
+    // push notifications
+    'push_get_vapid_key'       => ['NotificationsController.php', 'handle_push_get_vapid_key',   false, false],
+    'push_subscribe'           => ['NotificationsController.php', 'handle_push_subscribe',       true,  true],
+    'push_unsubscribe'         => ['NotificationsController.php', 'handle_push_unsubscribe',     true,  true],
+    'get_push_preferences'     => ['NotificationsController.php', 'handle_get_push_preferences', false, false],
+    'save_push_preferences'    => ['NotificationsController.php', 'handle_save_push_preferences',true,  true],
+    'get_notifications'        => ['NotificationsController.php', 'handle_get_notifications',    false, false],
+    'mark_notifications_read'  => ['NotificationsController.php', 'handle_mark_notifications_read', true, true],
+    'send_test_notification'   => ['NotificationsController.php', 'handle_send_test_notification',  true, true],
+
+    // client resources
+    'list_client_resources'    => ['ClientResourcesController.php', 'handle_list_client_resources',  false, false],
+    'upload_client_resource'   => ['ClientResourcesController.php', 'handle_upload_client_resource', true,  false],
+    'delete_client_resource'   => ['ClientResourcesController.php', 'handle_delete_client_resource', true,  true],
+
+    // acl / roles
+    'acl_list_roles'           => ['AclController.php',        'handle_acl_list_roles',           false, false],
+    'acl_get_role'             => ['AclController.php',        'handle_acl_get_role',             false, false],
+    'acl_list_permissions'     => ['AclController.php',        'handle_acl_list_permissions',     false, false],
+    'acl_create_role'          => ['AclController.php',        'handle_acl_create_role',          true,  true],
+    'acl_update_role'          => ['AclController.php',        'handle_acl_update_role',          true,  true],
+    'acl_delete_role'          => ['AclController.php',        'handle_acl_delete_role',          true,  false],
+    'acl_clone_role'           => ['AclController.php',        'handle_acl_clone_role',           true,  true],
+    'acl_get_user_effective'   => ['AclController.php',        'handle_acl_get_user_effective',   false, false],
+    'acl_set_user_override'    => ['AclController.php',        'handle_acl_set_user_override',    true,  true],
+    'acl_remove_user_override' => ['AclController.php',        'handle_acl_remove_user_override', true,  true],
+    'acl_get_changelog'        => ['AclController.php',        'handle_acl_get_changelog',        false, false],
+
+    // branding
+    'get_branding'             => ['BrandingController.php',   'handle_get_branding',             false, false],
+    'save_branding'            => ['BrandingController.php',   'handle_save_branding',            true,  true],
+    'upload_brand_asset'       => ['BrandingController.php',   'handle_upload_brand_asset',       true,  false],
+    'delete_brand_asset'       => ['BrandingController.php',   'handle_delete_brand_asset',       true,  true],
+
+    // integrations
+    'list_integrations'        => ['IntegrationController.php', 'handle_list_integrations',       false, false],
+    'get_integration'          => ['IntegrationController.php', 'handle_get_integration',         false, false],
+    'save_integration'         => ['IntegrationController.php', 'handle_save_integration',        true,  true],
+    'test_integration'         => ['IntegrationController.php', 'handle_test_integration',        true,  true],
+    'retry_integration_events' => ['IntegrationController.php', 'handle_retry_integration_events',true,  true],
+
+    // quality control / compliance
+    'qc_get_settings'          => ['ComplianceController.php', 'handle_qc_get_settings',          false, true],
+    'qc_save_settings'         => ['ComplianceController.php', 'handle_qc_save_settings',         true,  true],
+    'qc_list_motherboards'     => ['ComplianceController.php', 'handle_qc_list_motherboards',     false, true],
+    'qc_get_motherboard'       => ['ComplianceController.php', 'handle_qc_get_motherboard',       false, true],
+    'qc_update_motherboard'    => ['ComplianceController.php', 'handle_qc_update_motherboard',    true,  true],
+    'qc_list_manufacturers'    => ['ComplianceController.php', 'handle_qc_list_manufacturers',    false, true],
+    'qc_update_manufacturer'   => ['ComplianceController.php', 'handle_qc_update_manufacturer',   true,  true],
+    'qc_list_compliance_results' => ['ComplianceController.php', 'handle_qc_list_compliance_results', false, true],
+    'qc_recheck_historical'    => ['ComplianceController.php', 'handle_qc_recheck_historical',    true,  true],
+    'qc_get_stats'             => ['ComplianceController.php', 'handle_qc_get_stats',             false, true],
 ];
 
-// Handle AJAX requests
+// ── Action Dispatcher ────────────────────────────────────────
 $json_input = json_decode(file_get_contents('php://input'), true);
 if (isset($_GET['action']) || isset($_POST['action']) || isset($json_input['action'])) {
     header('Content-Type: application/json');
     $action = $_GET['action'] ?? $_POST['action'] ?? $json_input['action'] ?? '';
 
+    if (!isset($action_registry[$action])) {
+        echo json_encode(['success' => false, 'error' => 'Unknown action']);
+        exit;
+    }
+
+    [$controller_file, $handler_fn, $requires_csrf, $accepts_json] = $action_registry[$action];
+
     // CSRF validation for state-changing actions
-    if (in_array($action, $csrf_write_actions)) {
+    if ($requires_csrf) {
         $csrf = $_SERVER['HTTP_X_CSRF_TOKEN']
             ?? $json_input['csrf_token']
             ?? $_POST['csrf_token']
@@ -82,256 +304,17 @@ if (isset($_GET['action']) || isset($_POST['action']) || isset($json_input['acti
     }
 
     try {
-        switch ($action) {
-            // dashboard
-            case 'get_stats':
-                require_once __DIR__ . '/controllers/admin/DashboardController.php';
-                handle_get_stats($pdo, $admin_session);
-                break;
-            case 'generate_report':
-                require_once __DIR__ . '/controllers/admin/DashboardController.php';
-                handle_generate_report($pdo, $admin_session);
-                break;
-            case 'download_report':
-                require_once __DIR__ . '/controllers/admin/DashboardController.php';
-                handle_download_report($pdo, $admin_session);
-                break;
+        require_once __DIR__ . '/controllers/admin/' . $controller_file;
 
-            // keys
-            case 'list_keys':
-                require_once __DIR__ . '/controllers/admin/KeysController.php';
-                handle_list_keys($pdo, $admin_session);
-                break;
-            case 'recycle_key':
-                require_once __DIR__ . '/controllers/admin/KeysController.php';
-                handle_recycle_key($pdo, $admin_session);
-                break;
-            case 'delete_key':
-                require_once __DIR__ . '/controllers/admin/KeysController.php';
-                handle_delete_key($pdo, $admin_session);
-                break;
-            case 'import_keys':
-                require_once __DIR__ . '/controllers/admin/KeysController.php';
-                handle_import_keys($pdo, $admin_session);
-                break;
-            case 'export_keys':
-                require_once __DIR__ . '/controllers/admin/KeysController.php';
-                handle_export_keys($pdo, $admin_session);
-                break;
-
-            // technicians
-            case 'list_techs':
-                require_once __DIR__ . '/controllers/admin/TechniciansController.php';
-                handle_list_techs($pdo, $admin_session);
-                break;
-            case 'list_technicians':
-                require_once __DIR__ . '/controllers/admin/TechniciansController.php';
-                handle_list_technicians($pdo, $admin_session);
-                break;
-            case 'add_tech':
-                require_once __DIR__ . '/controllers/admin/TechniciansController.php';
-                handle_add_tech($pdo, $admin_session);
-                break;
-            case 'edit_tech':
-                require_once __DIR__ . '/controllers/admin/TechniciansController.php';
-                handle_edit_tech($pdo, $admin_session);
-                break;
-            case 'get_tech':
-                require_once __DIR__ . '/controllers/admin/TechniciansController.php';
-                handle_get_tech($pdo, $admin_session);
-                break;
-            case 'update_tech':
-                require_once __DIR__ . '/controllers/admin/TechniciansController.php';
-                handle_update_tech($pdo, $admin_session, $json_input);
-                break;
-            case 'reset_password':
-                require_once __DIR__ . '/controllers/admin/TechniciansController.php';
-                handle_reset_password($pdo, $admin_session);
-                break;
-            case 'toggle_tech':
-                require_once __DIR__ . '/controllers/admin/TechniciansController.php';
-                handle_toggle_tech($pdo, $admin_session);
-                break;
-            case 'delete_tech':
-                require_once __DIR__ . '/controllers/admin/TechniciansController.php';
-                handle_delete_tech($pdo, $admin_session);
-                break;
-
-            // history
-            case 'list_history':
-                require_once __DIR__ . '/controllers/admin/HistoryController.php';
-                handle_list_history($pdo, $admin_session);
-                break;
-            case 'get_hardware':
-                require_once __DIR__ . '/controllers/admin/HistoryController.php';
-                handle_get_hardware($pdo, $admin_session);
-                break;
-            case 'get_hardware_by_order':
-                require_once __DIR__ . '/controllers/admin/HistoryController.php';
-                handle_get_hardware_by_order($pdo, $admin_session);
-                break;
-
-            // logs
-            case 'list_logs':
-                require_once __DIR__ . '/controllers/admin/LogsController.php';
-                handle_list_logs($pdo, $admin_session);
-                break;
-
-            // settings
-            case 'get_alt_server_settings':
-                require_once __DIR__ . '/controllers/admin/SettingsController.php';
-                handle_get_alt_server_settings($pdo, $admin_session);
-                break;
-            case 'save_alt_server_settings':
-                require_once __DIR__ . '/controllers/admin/SettingsController.php';
-                handle_save_alt_server_settings($pdo, $admin_session, $json_input);
-                break;
-
-            // usb devices
-            case 'list_usb_devices':
-                require_once __DIR__ . '/controllers/admin/UsbDevicesController.php';
-                handle_list_usb_devices($pdo, $admin_session);
-                break;
-            case 'register_usb_device':
-                require_once __DIR__ . '/controllers/admin/UsbDevicesController.php';
-                handle_register_usb_device($pdo, $admin_session, $json_input);
-                break;
-            case 'update_usb_device_status':
-                require_once __DIR__ . '/controllers/admin/UsbDevicesController.php';
-                handle_update_usb_device_status($pdo, $admin_session, $json_input);
-                break;
-            case 'delete_usb_device':
-                require_once __DIR__ . '/controllers/admin/UsbDevicesController.php';
-                handle_delete_usb_device($pdo, $admin_session, $json_input);
-                break;
-
-            // 2fa & security
-            case 'get_2fa_status':
-                require_once __DIR__ . '/controllers/admin/SecurityController.php';
-                handle_get_2fa_status($pdo, $admin_session);
-                break;
-            case 'list_trusted_networks':
-                require_once __DIR__ . '/controllers/admin/SecurityController.php';
-                handle_list_trusted_networks($pdo, $admin_session);
-                break;
-            case 'add_trusted_network':
-                require_once __DIR__ . '/controllers/admin/SecurityController.php';
-                handle_add_trusted_network($pdo, $admin_session, $json_input);
-                break;
-            case 'delete_trusted_network':
-                require_once __DIR__ . '/controllers/admin/SecurityController.php';
-                handle_delete_trusted_network($pdo, $admin_session, $json_input);
-                break;
-
-            // backups
-            case 'list_backups':
-                require_once __DIR__ . '/controllers/admin/BackupsController.php';
-                handle_list_backups($pdo, $admin_session);
-                break;
-            case 'trigger_manual_backup':
-                require_once __DIR__ . '/controllers/admin/BackupsController.php';
-                handle_trigger_manual_backup($pdo, $admin_session);
-                break;
-
-            // push notifications
-            case 'push_get_vapid_key':
-                require_once __DIR__ . '/controllers/admin/NotificationsController.php';
-                handle_push_get_vapid_key($pdo, $admin_session);
-                break;
-            case 'push_subscribe':
-                require_once __DIR__ . '/controllers/admin/NotificationsController.php';
-                handle_push_subscribe($pdo, $admin_session, $json_input);
-                break;
-            case 'push_unsubscribe':
-                require_once __DIR__ . '/controllers/admin/NotificationsController.php';
-                handle_push_unsubscribe($pdo, $admin_session, $json_input);
-                break;
-            case 'get_push_preferences':
-                require_once __DIR__ . '/controllers/admin/NotificationsController.php';
-                handle_get_push_preferences($pdo, $admin_session);
-                break;
-            case 'save_push_preferences':
-                require_once __DIR__ . '/controllers/admin/NotificationsController.php';
-                handle_save_push_preferences($pdo, $admin_session, $json_input);
-                break;
-            case 'get_notifications':
-                require_once __DIR__ . '/controllers/admin/NotificationsController.php';
-                handle_get_notifications($pdo, $admin_session);
-                break;
-            case 'mark_notifications_read':
-                require_once __DIR__ . '/controllers/admin/NotificationsController.php';
-                handle_mark_notifications_read($pdo, $admin_session, $json_input);
-                break;
-            case 'send_test_notification':
-                require_once __DIR__ . '/controllers/admin/NotificationsController.php';
-                handle_send_test_notification($pdo, $admin_session, $json_input);
-                break;
-
-            // client resources (Phase 9: PS7 migration)
-            case 'list_client_resources':
-                require_once __DIR__ . '/controllers/admin/ClientResourcesController.php';
-                handle_list_client_resources($pdo, $admin_session);
-                break;
-            case 'upload_client_resource':
-                require_once __DIR__ . '/controllers/admin/ClientResourcesController.php';
-                handle_upload_client_resource($pdo, $admin_session);
-                break;
-            case 'delete_client_resource':
-                require_once __DIR__ . '/controllers/admin/ClientResourcesController.php';
-                handle_delete_client_resource($pdo, $admin_session, $json_input);
-                break;
-            // acl / roles
-            case 'acl_list_roles':
-                require_once __DIR__ . '/controllers/admin/AclController.php';
-                handle_acl_list_roles($pdo, $admin_session);
-                break;
-            case 'acl_get_role':
-                require_once __DIR__ . '/controllers/admin/AclController.php';
-                handle_acl_get_role($pdo, $admin_session);
-                break;
-            case 'acl_list_permissions':
-                require_once __DIR__ . '/controllers/admin/AclController.php';
-                handle_acl_list_permissions($pdo, $admin_session);
-                break;
-            case 'acl_create_role':
-                require_once __DIR__ . '/controllers/admin/AclController.php';
-                handle_acl_create_role($pdo, $admin_session, $json_input);
-                break;
-            case 'acl_update_role':
-                require_once __DIR__ . '/controllers/admin/AclController.php';
-                handle_acl_update_role($pdo, $admin_session, $json_input);
-                break;
-            case 'acl_delete_role':
-                require_once __DIR__ . '/controllers/admin/AclController.php';
-                handle_acl_delete_role($pdo, $admin_session);
-                break;
-            case 'acl_clone_role':
-                require_once __DIR__ . '/controllers/admin/AclController.php';
-                handle_acl_clone_role($pdo, $admin_session, $json_input);
-                break;
-            case 'acl_get_user_effective':
-                require_once __DIR__ . '/controllers/admin/AclController.php';
-                handle_acl_get_user_effective($pdo, $admin_session);
-                break;
-            case 'acl_set_user_override':
-                require_once __DIR__ . '/controllers/admin/AclController.php';
-                handle_acl_set_user_override($pdo, $admin_session, $json_input);
-                break;
-            case 'acl_remove_user_override':
-                require_once __DIR__ . '/controllers/admin/AclController.php';
-                handle_acl_remove_user_override($pdo, $admin_session, $json_input);
-                break;
-            case 'acl_get_changelog':
-                require_once __DIR__ . '/controllers/admin/AclController.php';
-                handle_acl_get_changelog($pdo, $admin_session);
-                break;
-
-            default:
-                echo json_encode(['success' => false, 'error' => 'Unknown action']);
+        if ($accepts_json) {
+            $handler_fn($pdo, $admin_session, $json_input);
+        } else {
+            $handler_fn($pdo, $admin_session);
         }
     } catch (Exception $e) {
-        error_log("Admin action error: " . $e->getMessage());
-        echo json_encode(['success' => false, 'error' => 'An error occurred: ' . $e->getMessage()]);
+        error_log("Admin action error ($action): " . $e->getMessage() . "\n" . $e->getTraceAsString());
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'An internal server error occurred. Please try again or contact support.']);
     }
 
     exit;

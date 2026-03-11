@@ -1,28 +1,34 @@
 <?php
 /**
- * Production Database Configuration
+ * Application Bootstrap & Database Configuration
  * OEM Activation System v2.0
- * 
- * IMPORTANT: Update these settings for your production server
- * Then rename this file to config.php to use it
+ *
+ * This file:
+ *  1. Loads constants
+ *  2. Creates the PDO database connection (with retry logic)
+ *  3. Provides getConfig() for reading system_config rows
+ *  4. Includes helper modules (http, session, key, order-field)
+ *
+ * All utility functions live in functions/*.php — this file is
+ * intentionally kept small so that "require config.php" is cheap
+ * and easy to reason about.
  */
 
 require_once __DIR__ . '/constants.php';
 
-// Environment detection
+// ── Environment Detection ───────────────────────────────────────
 $isProduction = !in_array($_SERVER['HTTP_HOST'] ?? 'localhost', ['localhost', '127.0.0.1', 'activate.local']);
 
-// Database Configuration with Environment Variable Support
+// ── Database Configuration ──────────────────────────────────────
 $db_config = [
-    'host' => $_ENV['DB_HOST'] ?? getenv('DB_HOST') ?? 'localhost',
-    'dbname' => $_ENV['DB_NAME'] ?? getenv('DB_NAME') ?? 'oem_activation_prod',
+    'host'     => $_ENV['DB_HOST'] ?? getenv('DB_HOST') ?? 'localhost',
+    'dbname'   => $_ENV['DB_NAME'] ?? getenv('DB_NAME') ?? 'oem_activation_prod',
     'username' => $_ENV['DB_USER'] ?? getenv('DB_USER') ?? 'oem_user',
     'password' => $_ENV['DB_PASS'] ?? getenv('DB_PASS') ?? 'CHANGE_THIS_PASSWORD',
-    'charset' => 'utf8mb4',
-    'port' => $_ENV['DB_PORT'] ?? getenv('DB_PORT') ?? DB_DEFAULT_PORT
+    'charset'  => 'utf8mb4',
+    'port'     => $_ENV['DB_PORT'] ?? getenv('DB_PORT') ?? DB_DEFAULT_PORT,
 ];
 
-// Validate critical configuration
 if ($isProduction) {
     if ($db_config['password'] === 'CHANGE_THIS_PASSWORD' || empty($db_config['password'])) {
         error_log("SECURITY WARNING: Default database password detected in production!");
@@ -33,73 +39,82 @@ if ($isProduction) {
     }
 }
 
-// Enhanced PDO connection with retry logic
+// ── Database Connection with Retry Logic ────────────────────────
 function createDatabaseConnection($config, $maxRetries = DB_MAX_RETRIES) {
     $attempts = 0;
     $lastException = null;
-    
+
     while ($attempts < $maxRetries) {
         try {
             $dsn = "mysql:host={$config['host']};port={$config['port']};dbname={$config['dbname']};charset={$config['charset']}";
             $pdo = new PDO($dsn, $config['username'], $config['password'], [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                PDO::ATTR_EMULATE_PREPARES => false,
-                PDO::ATTR_PERSISTENT => false, // Disable persistent connections for better reliability
-                PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES {$config['charset']} COLLATE {$config['charset']}_unicode_ci"
+                PDO::ATTR_EMULATE_PREPARES   => false,
+                PDO::ATTR_PERSISTENT         => false,
+                PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES {$config['charset']} COLLATE {$config['charset']}_unicode_ci",
             ]);
-            
-            // Test connection with a simple query
+
             $pdo->query("SELECT 1");
             return $pdo;
-            
         } catch (PDOException $e) {
             $lastException = $e;
             $attempts++;
-            
             if ($attempts < $maxRetries) {
                 error_log("Database connection attempt $attempts failed, retrying... Error: " . $e->getMessage());
                 usleep(DB_RETRY_DELAY_US);
             }
         }
     }
-    
-    // All attempts failed
+
     error_log("Database connection failed after $maxRetries attempts. Last error: " . $lastException->getMessage());
-    
+
     if (php_sapi_name() !== 'cli') {
         http_response_code(503);
         die(json_encode([
-            'error' => 'Database service temporarily unavailable',
-            'support' => 'Please check server configuration and try again'
+            'error'   => 'Database service temporarily unavailable',
+            'support' => 'Please check server configuration and try again',
         ]));
     } else {
         throw $lastException;
     }
 }
 
-// Create database connection
 $pdo = createDatabaseConnection($db_config);
 
-// Helper function to get configuration values with caching
+// ── System Config Cache ─────────────────────────────────────────
+// Config precedence (highest → lowest):
+//   1. .env / environment variables  — infrastructure secrets (DB_HOST, REDIS_PASSWORD, etc.)
+//   2. system_config table           — admin-configurable at runtime (session timeout, rate limits, branding)
+//   3. constants.php                 — immutable defaults, used as fallback when DB value is absent
+//
+// Use getConfig() for raw DB lookups.
+// Use getConfigWithDefault() when a constant fallback is needed (most common case).
 $configCache = [];
+
+/**
+ * Read a value from the system_config table (cached per request).
+ *
+ * @param string $key       Config key name
+ * @param bool   $useCache  Whether to use per-request cache (default true)
+ * @return string|null       Config value or null if not set
+ */
 function getConfig($key, $useCache = true) {
     global $pdo, $configCache;
-    
+
     if ($useCache && isset($configCache[$key])) {
         return $configCache[$key];
     }
-    
+
     try {
         $stmt = $pdo->prepare("SELECT config_value FROM system_config WHERE config_key = ?");
         $stmt->execute([$key]);
         $result = $stmt->fetch();
-        $value = $result ? $result['config_value'] : null;
-        
+        $value  = $result ? $result['config_value'] : null;
+
         if ($useCache) {
             $configCache[$key] = $value;
         }
-        
         return $value;
     } catch (PDOException $e) {
         error_log("Failed to get config for key '$key': " . $e->getMessage());
@@ -107,255 +122,75 @@ function getConfig($key, $useCache = true) {
     }
 }
 
-// Helper function to generate secure random token
-function generateToken($length = SESSION_TOKEN_BYTES) {
-    if (function_exists('random_bytes')) {
-        return bin2hex(random_bytes($length));
-    } else {
-        // Fallback for older PHP versions
-        return bin2hex(openssl_random_pseudo_bytes($length));
+/**
+ * Read a config value from system_config with a constant/default fallback.
+ *
+ * Replaces the widespread pattern: getConfig('key') ?: SOME_CONSTANT
+ * Treats empty strings as missing (falls back to default).
+ *
+ * @param string $key      Config key in system_config
+ * @param mixed  $default  Fallback value (typically a constant from constants.php)
+ * @return mixed           DB value if non-empty, otherwise $default
+ */
+function getConfigWithDefault($key, $default) {
+    $value = getConfig($key);
+    // Treat null and empty string as "not configured"
+    if ($value === null || $value === '') {
+        return $default;
     }
+    return $value;
 }
 
-// Enhanced JSON response function with security headers
-function jsonResponse($data, $status = 200) {
-    // Security headers
-    header('Content-Type: application/json; charset=utf-8');
-    header('X-Content-Type-Options: nosniff');
-    header('X-Frame-Options: DENY');
-    header('X-XSS-Protection: 1; mode=block');
-    
-    // CORS headers (restrict to your domain in production)
-    $allowedOrigins = array_filter(array_map('trim', explode(',', getenv('CORS_ORIGINS') ?: '')));
-
-    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-    if (!empty($allowedOrigins) && in_array($origin, $allowedOrigins)) {
-        header("Access-Control-Allow-Origin: $origin");
-    }
-    
-    http_response_code($status);
-    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    exit;
-}
-
-// Enhanced client IP detection
-// In Docker/local network environments, client IPs are private (192.168.x, 172.x, 10.x).
-// We first check proxy headers for a public IP, then fall back to accepting private IPs
-// from those same headers, since Docker routing uses private addresses.
-function getClientIP() {
-    $proxyHeaders = [
-        'HTTP_X_FORWARDED_FOR',    // Most common proxy header
-        'HTTP_X_REAL_IP',          // Nginx proxy
-        'HTTP_CLIENT_IP',          // Proxy
-        'HTTP_X_CLUSTER_CLIENT_IP', // Cluster
-        'HTTP_FORWARDED_FOR',      // RFC 7239
-        'HTTP_FORWARDED',          // RFC 7239
+// ── Order-field config helpers (used by ApiMiddleware + login) ───
+function getOrderFieldConfig() {
+    $defaults = [
+        'order_field_label_en'     => 'Order Number',
+        'order_field_label_ru'     => 'Номер заказа',
+        'order_field_prompt_en'    => 'Enter order number',
+        'order_field_prompt_ru'    => 'Введите номер заказа',
+        'order_field_min_length'   => '5',
+        'order_field_max_length'   => '10',
+        'order_field_char_type'    => 'alphanumeric',
+        'order_field_custom_regex' => '',
     ];
 
-    // Priority 1: Check proxy headers for public IPs
-    foreach ($proxyHeaders as $key) {
-        if (!empty($_SERVER[$key])) {
-            $ips = explode(',', $_SERVER[$key]);
-            $ip = trim($ips[0]);
+    $config = [];
+    foreach ($defaults as $key => $default) {
+        $config[$key] = getConfig($key) ?? $default;
+    }
+    return $config;
+}
 
-            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
-                return $ip;
+function buildOrderNumberPattern(array $config): string {
+    $min      = max(1, (int) $config['order_field_min_length']);
+    $max      = max($min, (int) $config['order_field_max_length']);
+    $charType = $config['order_field_char_type'] ?? 'alphanumeric';
+
+    switch ($charType) {
+        case 'digits_only':
+            return '/^[0-9]{' . $min . ',' . $max . '}$/';
+        case 'alphanumeric':
+            return '/^[A-Za-z0-9]{' . $min . ',' . $max . '}$/';
+        case 'alphanumeric_dash':
+            return '/^[A-Za-z0-9_-]{' . $min . ',' . $max . '}$/';
+        case 'custom':
+            $regex = $config['order_field_custom_regex'] ?? '';
+            if ($regex !== '' && @preg_match($regex, '') !== false) {
+                return $regex;
             }
-        }
-    }
-
-    // Priority 2: Accept private IPs from proxy headers (Docker/local network)
-    foreach ($proxyHeaders as $key) {
-        if (!empty($_SERVER[$key])) {
-            $ips = explode(',', $_SERVER[$key]);
-            $ip = trim($ips[0]);
-
-            if (filter_var($ip, FILTER_VALIDATE_IP)) {
-                return $ip;
-            }
-        }
-    }
-
-    // Priority 3: Fallback to REMOTE_ADDR (works for direct connections)
-    return $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-}
-
-// Helper function to display product key securely
-function formatProductKeySecure($product_key, $context = 'email') {
-    if ($context === 'email') {
-        $hide_keys = (bool)getConfig('hide_product_keys_in_emails');
-        if ($hide_keys) {
-            return "***" . substr($product_key, -KEY_MASK_SUFFIX_LEN);
-        }
-    } elseif ($context === 'admin') {
-        $show_keys = (bool)getConfig('show_full_keys_in_admin');
-        if (!$show_keys) {
-            return substr($product_key, 0, KEY_MASK_PREFIX_LEN) . "-*****-*****-*****-" . substr($product_key, -KEY_MASK_SUFFIX_LEN);
-        }
-    }
-    
-    return $product_key;
-}
-
-// Enhanced session validation with additional security checks
-function validateSession($token) {
-    global $pdo;
-    
-    if (empty($token) || !is_string($token)) {
-        return false;
-    }
-    
-    try {
-        $stmt = $pdo->prepare("
-            SELECT s.*, k.product_key, k.key_status, t.is_active as tech_active
-            FROM active_sessions s 
-            LEFT JOIN oem_keys k ON s.key_id = k.id
-            LEFT JOIN technicians t ON s.technician_id = t.technician_id
-            WHERE s.session_token = ? 
-            AND s.is_active = 1 
-            AND s.expires_at > NOW()
-            AND t.is_active = 1
-        ");
-        $stmt->execute([$token]);
-        return $stmt->fetch();
-    } catch (PDOException $e) {
-        error_log("Session validation error: " . $e->getMessage());
-        return false;
+            return '/^[A-Za-z0-9]{' . $min . ',' . $max . '}$/';
+        default:
+            return '/^[A-Za-z0-9]{' . $min . ',' . $max . '}$/';
     }
 }
 
-// CRITICAL: Atomic key allocation with enhanced concurrency protection
-function allocateKeyAtomically($pdo, $technician_id, $order_number) {
-    $lockName = "key_allocation_" . md5($technician_id . $order_number);
-    $needsCommit = false;
+// ── Include helper modules ──────────────────────────────────────
+require_once __DIR__ . '/functions/logger.php';
+require_once __DIR__ . '/functions/http-helpers.php';
+require_once __DIR__ . '/functions/session-helpers.php';
+require_once __DIR__ . '/functions/key-helpers.php';
 
-    try {
-        // Only start transaction if one isn't already active
-        if (!$pdo->inTransaction()) {
-            $pdo->beginTransaction();
-            $needsCommit = true;
-        }
-
-        // Get lock with timeout to prevent deadlocks
-        $stmt = $pdo->prepare("SELECT GET_LOCK(?, " . DB_LOCK_TIMEOUT . ") as lock_acquired");
-        $stmt->execute([$lockName]);
-        $lockResult = $stmt->fetch();
-        
-        if ($lockResult['lock_acquired'] != 1) {
-            $pdo->rollback();
-            error_log("Could not acquire lock for key allocation: $technician_id");
-            return null;
-        }
-        
-        // Select and lock the best available key
-        $stmt = $pdo->prepare("
-            SELECT * FROM oem_keys 
-            WHERE key_status IN ('unused', 'retry') 
-            AND (fail_counter < " . MAX_KEY_FAIL_COUNTER . " OR key_status = 'unused')
-            ORDER BY 
-                CASE WHEN key_status = 'unused' THEN 0 ELSE 1 END,
-                fail_counter ASC,
-                COALESCE(last_use_date, '1970-01-01') ASC,
-                id ASC
-            LIMIT 1
-            FOR UPDATE
-        ");
-        $stmt->execute();
-        $key = $stmt->fetch();
-        
-        if ($key) {
-            // Mark key as in use immediately
-            $stmt = $pdo->prepare("
-                UPDATE oem_keys
-                SET key_status = 'allocated',
-                    last_use_date = CURDATE(),
-                    last_use_time = CURTIME(),
-                    updated_at = NOW()
-                WHERE id = ?
-            ");
-            $stmt->execute([$key['id']]);
-            
-            error_log("Key allocated atomically: Key ID {$key['id']} to {$technician_id} for order {$order_number}");
-        }
-        
-        // Release lock
-        $stmt = $pdo->prepare("SELECT RELEASE_LOCK(?)");
-        $stmt->execute([$lockName]);
-
-        // Only commit if we started the transaction
-        if ($needsCommit) {
-            $pdo->commit();
-        }
-        return $key;
-
-    } catch (Exception $e) {
-        // Only rollback if we started the transaction
-        if ($needsCommit && $pdo->inTransaction()) {
-            $pdo->rollback();
-        }
-        error_log("Atomic key allocation failed: " . $e->getMessage());
-        
-        // Try to release lock even on failure
-        try {
-            $stmt = $pdo->prepare("SELECT RELEASE_LOCK(?)");
-            $stmt->execute([$lockName]);
-        } catch (Exception $lockError) {
-            error_log("Failed to release lock: " . $lockError->getMessage());
-        }
-        
-        throw $e;
-    }
-}
-
-// Enhanced session cleanup with performance optimization
-function cleanupExpiredSessions($pdo) {
-    try {
-        $stmt = $pdo->prepare("
-            UPDATE active_sessions 
-            SET is_active = 0 
-            WHERE expires_at < NOW() AND is_active = 1
-            LIMIT " . SESSION_CLEANUP_BATCH . "
-        ");
-        $stmt->execute();
-        $cleaned = $stmt->rowCount();
-        
-        if ($cleaned > 0) {
-            error_log("Cleaned up {$cleaned} expired sessions");
-        }
-        
-        return $cleaned;
-    } catch (Exception $e) {
-        error_log("Session cleanup failed: " . $e->getMessage());
-        return 0;
-    }
-}
-
-// Enhanced active session retrieval with better locking
-function getActiveSession($pdo, $technician_id) {
-    try {
-        cleanupExpiredSessions($pdo);
-        
-        $stmt = $pdo->prepare("
-            SELECT s.*, k.product_key, k.oem_identifier, k.key_status, k.fail_counter
-            FROM active_sessions s 
-            LEFT JOIN oem_keys k ON s.key_id = k.id
-            WHERE s.technician_id = ? 
-            AND s.is_active = 1 
-            AND s.expires_at > NOW()
-            ORDER BY s.created_at DESC
-            LIMIT 1
-            FOR UPDATE
-        ");
-        $stmt->execute([$technician_id]);
-        return $stmt->fetch();
-        
-    } catch (Exception $e) {
-        error_log("Get active session failed: " . $e->getMessage());
-        return null;
-    }
-}
-
-// Set timezone with environment variable support
+// ── Timezone ────────────────────────────────────────────────────
 $timezone = $_ENV['APP_TIMEZONE'] ?? getenv('APP_TIMEZONE') ?? 'UTC';
 if (!in_array($timezone, timezone_identifiers_list())) {
     error_log("Invalid timezone '$timezone', falling back to UTC");
@@ -363,7 +198,7 @@ if (!in_array($timezone, timezone_identifiers_list())) {
 }
 date_default_timezone_set($timezone);
 
-// Log successful configuration load
-error_log("OEM Activation System configuration loaded successfully. Environment: " . 
-         ($isProduction ? "Production" : "Development"));
+// ── Startup log ─────────────────────────────────────────────────
+error_log("OEM Activation System configuration loaded successfully. Environment: " .
+    ($isProduction ? "Production" : "Development"));
 ?>

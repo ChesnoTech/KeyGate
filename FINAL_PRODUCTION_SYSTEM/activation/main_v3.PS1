@@ -8,6 +8,145 @@ param(
 $ActivationDelaySeconds = 10
 $MaxRetryAttempts = 3
 
+# === Adaptive Network Timing ===
+# Activation delays exist because Microsoft's servers (not our LAN API) need time to
+# process and confirm the license. We measure latency to Microsoft endpoints and scale
+# all wait times accordingly. Fast internet → shorter waits, slow internet → longer waits.
+$script:NetworkMultiplier = 1.0  # Default: assume medium speed until measured
+$script:NetworkLatencyMs = -1    # -1 = not yet measured
+
+function Test-NetworkLatency {
+    <#
+    .SYNOPSIS
+        Measures round-trip latency to Microsoft activation servers to determine how long
+        the system should wait for activation confirmation. The API server (LAN) is tested
+        only as a connectivity check — activation timing depends on Microsoft, not LAN speed.
+    #>
+    Write-Host ("`n" + "🌐 Testing network speed to Microsoft activation servers...") -ForegroundColor Cyan
+
+    # Microsoft endpoints that matter for activation timing
+    # These are the servers slmgr /ato actually talks to
+    $msEndpoints = @(
+        @{ Name = "Microsoft Activation (SLS)"; Uri = "https://activation.sls.microsoft.com" }
+        @{ Name = "Microsoft Licensing"; Uri = "https://go.microsoft.com" }
+        @{ Name = "Microsoft DNS Check"; Uri = "https://dns.msftncsi.com" }
+    )
+
+    $pingCount = 3  # Multiple samples per endpoint for reliability
+
+    # Quick connectivity check to our API server (informational only, not used for timing)
+    try {
+        $sw = [System.Diagnostics.Stopwatch]::StartNew()
+        $null = Invoke-WebRequest -Uri "$APIBaseURL/health.php" -Method Head -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
+        $sw.Stop()
+        Write-Host ("  API Server (LAN): $($sw.ElapsedMilliseconds)ms ✓") -ForegroundColor Green
+    } catch {
+        try {
+            $sw = [System.Diagnostics.Stopwatch]::StartNew()
+            $null = Invoke-WebRequest -Uri "$APIBaseURL/health.php" -Method Get -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
+            $sw.Stop()
+            Write-Host ("  API Server (LAN): $($sw.ElapsedMilliseconds)ms ✓") -ForegroundColor Green
+        } catch {
+            Write-Host ("  API Server (LAN): reachable (auth required)") -ForegroundColor DarkGray
+        }
+    }
+
+    # Measure latency to Microsoft activation infrastructure
+    $msLatencies = @()
+
+    foreach ($ep in $msEndpoints) {
+        $epLatencies = @()
+        for ($i = 0; $i -lt $pingCount; $i++) {
+            try {
+                $sw = [System.Diagnostics.Stopwatch]::StartNew()
+                $null = Invoke-WebRequest -Uri $ep.Uri -Method Head -TimeoutSec 8 -UseBasicParsing -ErrorAction Stop
+                $sw.Stop()
+                $epLatencies += $sw.ElapsedMilliseconds
+            } catch {
+                try {
+                    # HEAD may not be supported — fall back to GET with minimal download
+                    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+                    $null = Invoke-WebRequest -Uri $ep.Uri -Method Get -TimeoutSec 8 -UseBasicParsing -MaximumRedirection 1 -ErrorAction Stop
+                    $sw.Stop()
+                    $epLatencies += $sw.ElapsedMilliseconds
+                } catch {
+                    # Even a failed/redirected request with a TCP handshake tells us about latency
+                    if ($sw -and $sw.IsRunning) { $sw.Stop() }
+                    if ($sw -and $sw.ElapsedMilliseconds -gt 0 -and $sw.ElapsedMilliseconds -lt 8000) {
+                        $epLatencies += $sw.ElapsedMilliseconds
+                    }
+                }
+            }
+        }
+
+        if ($epLatencies.Count -gt 0) {
+            $avg = [math]::Round(($epLatencies | Measure-Object -Average).Average)
+            $msLatencies += $avg
+            $statusColor = if ($avg -lt 100) { "Green" } elseif ($avg -lt 300) { "Yellow" } else { "Red" }
+            Write-Host ("  $($ep.Name): ${avg}ms avg ($($epLatencies.Count)/$pingCount samples)") -ForegroundColor $statusColor
+        } else {
+            Write-Host ("  $($ep.Name): unreachable") -ForegroundColor Red
+        }
+    }
+
+    if ($msLatencies.Count -eq 0) {
+        # No Microsoft endpoints reachable — activation will likely fail, but use max delays to give it best shot
+        Write-Host "  ⚠ Microsoft servers unreachable — using maximum wait times" -ForegroundColor Yellow
+        $script:NetworkMultiplier = 2.5
+        $script:NetworkLatencyMs = 9999
+        return
+    }
+
+    # Use the WORST Microsoft endpoint latency, not the average
+    # Activation talks to multiple MS servers — the slowest one bottlenecks the process
+    $worstMs = ($msLatencies | Measure-Object -Maximum).Maximum
+    $avgMs = [math]::Round(($msLatencies | Measure-Object -Average).Average)
+    $script:NetworkLatencyMs = $worstMs
+
+    # Scaling based on worst-case Microsoft latency
+    # These thresholds are tuned for real-world activation behavior:
+    #   - <100ms: Fast corporate/fiber internet → can reduce waits
+    #   - 100-200ms: Typical broadband → use default timing
+    #   - 200-400ms: Slow broadband or distant region → extend waits
+    #   - 400ms+: Very slow or congested → max extension
+    if ($worstMs -le 60) {
+        $script:NetworkMultiplier = 0.6
+    } elseif ($worstMs -le 100) {
+        # Linear interpolation: 60ms→0.6, 100ms→0.8
+        $script:NetworkMultiplier = 0.6 + (($worstMs - 60) / 40) * 0.2
+    } elseif ($worstMs -le 200) {
+        # Linear interpolation: 100ms→0.8, 200ms→1.0 (baseline)
+        $script:NetworkMultiplier = 0.8 + (($worstMs - 100) / 100) * 0.2
+    } elseif ($worstMs -le 400) {
+        # Linear interpolation: 200ms→1.0, 400ms→1.6
+        $script:NetworkMultiplier = 1.0 + (($worstMs - 200) / 200) * 0.6
+    } elseif ($worstMs -le 800) {
+        # Linear interpolation: 400ms→1.6, 800ms→2.2
+        $script:NetworkMultiplier = 1.6 + (($worstMs - 400) / 400) * 0.6
+    } else {
+        $script:NetworkMultiplier = 2.5
+    }
+
+    $script:NetworkMultiplier = [math]::Round($script:NetworkMultiplier, 2)
+    $speed = if ($worstMs -le 100) { "FAST ⚡" } elseif ($worstMs -le 300) { "NORMAL 📶" } else { "SLOW 🐢" }
+    Write-Host ("  Microsoft worst-case: ${worstMs}ms | avg: ${avgMs}ms — $speed") -ForegroundColor Cyan
+    Write-Host ("  Activation delay multiplier: $($script:NetworkMultiplier)x") -ForegroundColor Cyan
+}
+
+function Get-AdaptiveDelay {
+    <#
+    .SYNOPSIS
+        Scales a base delay value by the network multiplier.
+        Enforces a minimum floor (activation needs processing time even on fast networks).
+    #>
+    param(
+        [int]$BaseSeconds,
+        [int]$MinSeconds = 2
+    )
+    $scaled = [math]::Max($MinSeconds, [math]::Round($BaseSeconds * $script:NetworkMultiplier))
+    return [int]$scaled
+}
+
 # === PowerShell 7 Self-Restart (Safety Net) ===
 # If running under PS5 and pwsh.exe is available, restart in PS7 for better compatibility
 if ($PSVersionTable.PSVersion.Major -lt 7) {
@@ -49,10 +188,16 @@ function Get-Valid-TechnicianID {
 }
 
 function Get-Valid-OrderNumber {
+    param(
+        [string]$Prompt = "Enter the last 5 characters of the order number",
+        [string]$Pattern = '^[A-Za-z0-9]{5}$',
+        [int]$MinLen = 5,
+        [int]$MaxLen = 10
+    )
     while ($true) {
-        $o = Read-Host "Enter the last 5 characters of the order number"
-        if ($o -match '^[A-Za-z0-9]{5}$') { return $o }
-        Write-Host "⚠️ Order number must be exactly 5 alphanumeric characters" -ForegroundColor Yellow
+        $o = Read-Host $Prompt
+        if ($o -match $Pattern) { return $o }
+        Write-Host "⚠️ Invalid format. Expected $MinLen-$MaxLen characters matching the required pattern." -ForegroundColor Yellow
     }
 }
 
@@ -775,6 +920,74 @@ function Collect-HardwareInfo {
             Write-Host "    ℹ️ Secure Boot status unavailable (legacy BIOS or access denied)" -ForegroundColor DarkGray
         }
 
+        # === Boot Order (UEFI Firmware Entries) ===
+        Write-Host "  • Boot order..." -ForegroundColor Gray
+        try {
+            $bcdeditOutput = & bcdedit /enum firmware 2>&1 | Out-String
+            $bootEntries = @()
+            $currentEntry = @{}
+            foreach ($line in ($bcdeditOutput -split "`n")) {
+                $trimmed = $line.Trim()
+                if ($trimmed -match '^-+$' -or $trimmed -eq '') {
+                    if ($currentEntry.Count -gt 0) {
+                        $bootEntries += [PSCustomObject]$currentEntry
+                        $currentEntry = @{}
+                    }
+                    continue
+                }
+                if ($trimmed -match '^(.+?)\s{2,}(.+)$') {
+                    $currentEntry[$Matches[1].Trim()] = $Matches[2].Trim()
+                }
+            }
+            if ($currentEntry.Count -gt 0) { $bootEntries += [PSCustomObject]$currentEntry }
+            $hardwareInfo['boot_order'] = ($bootEntries | ConvertTo-Json -Compress -Depth 5)
+        } catch {
+            $hardwareInfo['boot_order'] = $null
+            Write-Host "    ℹ️ Boot order unavailable" -ForegroundColor DarkGray
+        }
+
+        # === HackBGRT Detection ===
+        Write-Host "  • HackBGRT..." -ForegroundColor Gray
+        try {
+            $hackbgrtInstalled = $false
+            $hackbgrtFirstBoot = $false
+
+            # Check EFI partition for HackBGRT files across all drive letters
+            foreach ($driveLetter in [char[]]([int][char]'A'..[int][char]'Z')) {
+                $testPath = "${driveLetter}:\EFI\HackBGRT"
+                if (Test-Path $testPath -ErrorAction SilentlyContinue) {
+                    $hackbgrtInstalled = $true
+                    break
+                }
+            }
+
+            # Fallback: check bcdedit entries for HackBGRT reference
+            if (-not $hackbgrtInstalled -and $bootEntries) {
+                foreach ($entry in $bootEntries) {
+                    $entryStr = ($entry | Out-String)
+                    if ($entryStr -match 'HackBGRT' -or $entryStr -match 'hackbgrt') {
+                        $hackbgrtInstalled = $true
+                        break
+                    }
+                }
+            }
+
+            # Check if HackBGRT is the first boot entry
+            if ($hackbgrtInstalled -and $bootEntries.Count -gt 0) {
+                $firstEntryStr = ($bootEntries[0] | Out-String)
+                if ($firstEntryStr -match 'HackBGRT' -or $firstEntryStr -match 'hackbgrt') {
+                    $hackbgrtFirstBoot = $true
+                }
+            }
+
+            $hardwareInfo['hackbgrt_installed'] = if ($hackbgrtInstalled) { 1 } else { 0 }
+            $hardwareInfo['hackbgrt_first_boot'] = if ($hackbgrtFirstBoot) { 1 } else { 0 }
+        } catch {
+            $hardwareInfo['hackbgrt_installed'] = $null
+            $hardwareInfo['hackbgrt_first_boot'] = $null
+            Write-Host "    ℹ️ HackBGRT detection unavailable" -ForegroundColor DarkGray
+        }
+
         # === CPU Information ===
         Write-Host "  • CPU..." -ForegroundColor Gray
         $cpu = Get-WmiObject Win32_Processor -ErrorAction Stop | Select-Object -First 1
@@ -912,6 +1125,35 @@ function Submit-HardwareInfo-v2 {
             } else {
                 Write-Host "✅ Hardware information submitted successfully" -ForegroundColor Green
             }
+
+            # Display QC compliance results if present
+            if ($response.compliance -and $response.compliance.checks) {
+                Write-Host "`n--- QC Compliance Check ---" -ForegroundColor Cyan
+                foreach ($check in $response.compliance.checks) {
+                    $icon = switch ($check.check_result) {
+                        'pass'    { '✅' }
+                        'info'    { 'ℹ️' }
+                        'warning' { '⚠️' }
+                        'fail'    { '❌' }
+                    }
+                    $color = switch ($check.check_result) {
+                        'pass'    { 'Green' }
+                        'info'    { 'Cyan' }
+                        'warning' { 'Yellow' }
+                        'fail'    { 'Red' }
+                    }
+                    Write-Host "  $icon $($check.check_type): $($check.message)" -ForegroundColor $color
+                }
+
+                if ($response.compliance.has_blocking) {
+                    Write-Host "`n❌ BLOCKING compliance issues detected!" -ForegroundColor Red
+                    Write-Host "   Key distribution will be denied until issues are resolved." -ForegroundColor Red
+                } elseif ($response.compliance.has_warnings) {
+                    Write-Host "`n⚠️ Compliance warnings detected — activation will continue." -ForegroundColor Yellow
+                }
+                Write-Host "---`n" -ForegroundColor Cyan
+            }
+
             return $true
         } else {
             $errorMsg = if ($response -and $response.error) { $response.error } else { "Unknown error" }
@@ -943,32 +1185,35 @@ function Activate-Key {
     Write-Host "🔑 Cleaning up existing key..." -ForegroundColor Cyan
     & cscript //B "C:\Windows\System32\slmgr.vbs" /upk 2>&1 | Out-Null
     & cscript //B "C:\Windows\System32\slmgr.vbs" /cpky 2>&1 | Out-Null
-    Start-Sleep -Seconds 5
+    Start-Sleep -Seconds (Get-AdaptiveDelay -BaseSeconds 5 -MinSeconds 2)
 
     try {
         # Install the key
         Write-Host "🔑 Installing product key..." -ForegroundColor Cyan
         $installResult = & cscript //NoLogo "C:\Windows\System32\slmgr.vbs" /ipk $key 2>&1
         $activationResult.IpkOutput = ($installResult | Out-String).Trim()
-        Start-Sleep -Seconds 5
+        Start-Sleep -Seconds (Get-AdaptiveDelay -BaseSeconds 5 -MinSeconds 2)
 
         # Attempt online activation
         Write-Host "📞 Attempting activation..." -ForegroundColor Cyan
         $activateResult = & cscript //NoLogo "C:\Windows\System32\slmgr.vbs" /ato 2>&1
         $activationResult.AtoOutput = ($activateResult | Out-String).Trim()
 
-        # Initial countdown
-        Write-Host "`n⏳ Waiting $ActivationDelaySeconds seconds before checking activation status..."
-        for ($i = $ActivationDelaySeconds; $i -ge 1; $i--) {
+        # Adaptive initial countdown — scales with Microsoft server latency
+        $adaptiveActivationDelay = Get-AdaptiveDelay -BaseSeconds $ActivationDelaySeconds -MinSeconds 4
+        Write-Host "`n⏳ Waiting $adaptiveActivationDelay seconds before checking activation status..."
+        for ($i = $adaptiveActivationDelay; $i -ge 1; $i--) {
             Write-Host -NoNewline "`r⏳ Checking in $i... "
             Start-Sleep -Seconds 1
         }
         Write-Host "`r⏳ Checking now...         "
 
-        # Verify activation status with progressive delays (legacy timing strategy)
-        # Gives Microsoft servers up to ~55 seconds total to confirm activation
+        # Verify activation status with adaptive progressive delays
+        # Base: 6 checks starting at 5s, incrementing by 2s each = ~55s total on normal network
+        # Fast internet: shorter waits, slow internet: longer waits for Microsoft to respond
         $maxChecks = 6
-        $checkDelay = 5
+        $checkDelay = Get-AdaptiveDelay -BaseSeconds 5 -MinSeconds 3
+        $checkIncrement = [math]::Max(1, [math]::Round(2 * $script:NetworkMultiplier))
         for ($i = 0; $i -lt $maxChecks; $i++) {
             try {
                 $winProduct = Get-CimInstance -Query "SELECT LicenseStatus FROM SoftwareLicensingProduct WHERE Name LIKE 'Windows%' AND PartialProductKey IS NOT NULL"
@@ -985,7 +1230,7 @@ function Activate-Key {
             if ($i -lt $maxChecks - 1) {
                 Write-Host -NoNewline "`r⏳ Still waiting... ($([math]::Floor(($maxChecks-$i-1)*$checkDelay))s remaining) "
                 Start-Sleep -Seconds $checkDelay
-                $checkDelay += 2
+                $checkDelay += $checkIncrement
             }
         }
 
@@ -1053,8 +1298,9 @@ function Main-ActivationLoop {
                     $retry = Read-Host "`nRetry with same key? (Y/N)"
                     if ($retry -in @('Y', 'y', 'yes', 'Yes')) {
                         $currentAttempt++
-                        Write-Host "⏳ Waiting 5 seconds before retry..." -ForegroundColor Yellow
-                        Start-Sleep -Seconds 5
+                        $retryDelay = Get-AdaptiveDelay -BaseSeconds 5 -MinSeconds 2
+                        Write-Host "⏳ Waiting $retryDelay seconds before retry..." -ForegroundColor Yellow
+                        Start-Sleep -Seconds $retryDelay
                         continue
                     } else {
                         Write-Host "🔄 Getting next available key..." -ForegroundColor Yellow
@@ -1102,8 +1348,19 @@ if (-not $SessionInfo) {
     exit 1
 }
 
-# Get order number
-$OrderNumber = Get-Valid-OrderNumber
+# Measure network latency to Microsoft servers and configure adaptive timing
+Test-NetworkLatency
+
+# Get order number (use server-configured field settings if available)
+$orderFieldParams = @{}
+if ($SessionInfo.order_field) {
+    $of = $SessionInfo.order_field
+    if ($of.prompt)     { $orderFieldParams['Prompt']  = $of.prompt }
+    if ($of.pattern)    { $orderFieldParams['Pattern'] = "^$($of.pattern)$" -replace '\^\^', '^' -replace '\$\$', '$' }
+    if ($of.min_length) { $orderFieldParams['MinLen']  = [int]$of.min_length }
+    if ($of.max_length) { $orderFieldParams['MaxLen']  = [int]$of.max_length }
+}
+$OrderNumber = Get-Valid-OrderNumber @orderFieldParams
 
 # === COLLECT HARDWARE IMMEDIATELY (Regardless of activation status) ===
 Write-Host "`n🔧 Starting hardware collection..." -ForegroundColor Cyan
@@ -1219,6 +1476,24 @@ while (-not $activationComplete -and $keyAttempts -lt $maxKeyAttempts) {
     $keyResponse = Invoke-APICall -Endpoint "get-key.php" -Body $keyBody
 
     if (-not $keyResponse -or -not $keyResponse.success) {
+        # QC Compliance blocked — technician must resolve hardware issues first
+        if ($keyResponse.error_code -eq 'QC_COMPLIANCE_BLOCKED') {
+            Write-Host ""
+            Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Red
+            Write-Host "║  ❌  ACTIVATION BLOCKED — QC COMPLIANCE FAILURE             ║" -ForegroundColor Red
+            Write-Host "╠══════════════════════════════════════════════════════════════╣" -ForegroundColor Red
+            Write-Host "║  Hardware compliance checks found blocking issues.          ║" -ForegroundColor Red
+            Write-Host "║  Resolve all blocking issues before activation can proceed. ║" -ForegroundColor Red
+            Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Red
+            Write-Host ""
+            if ($keyResponse.error) {
+                Write-Host "  Details: $($keyResponse.error)" -ForegroundColor Yellow
+            }
+            Write-Host "  Contact your supervisor or check the admin panel for details." -ForegroundColor Yellow
+            Write-Host ""
+            exit 1
+        }
+
         # Check if automatic failover should occur
         if ($keyResponse.error_code -eq 'NO_KEYS_AVAILABLE' -and
             $altServerConfig -and
@@ -1302,7 +1577,7 @@ while (-not $activationComplete -and $keyAttempts -lt $maxKeyAttempts) {
         & cscript //B "C:\Windows\System32\slmgr.vbs" /upk 2>&1 | Out-Null
         & cscript //B "C:\Windows\System32\slmgr.vbs" /cpky 2>&1 | Out-Null
         Write-Host "🔄 Trying next available key..." -ForegroundColor Yellow
-        Start-Sleep -Seconds 4
+        Start-Sleep -Seconds (Get-AdaptiveDelay -BaseSeconds 4 -MinSeconds 2)
     }
 }
 

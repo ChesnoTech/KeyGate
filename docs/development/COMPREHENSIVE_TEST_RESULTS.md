@@ -1,3 +1,6 @@
+> **⚠️ Historical Document** — References to `OEM_Activator_v2.cmd` are outdated.
+> Current file: `client/OEM_Activator.cmd`. v2 was retired March 2026.
+
 # Comprehensive Test Results - Alternative Activation Server
 
 **Test Date**: 2026-01-30

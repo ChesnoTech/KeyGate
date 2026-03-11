@@ -1,4 +1,4 @@
-# OEM Activation System v2.0 - Configuration File
+# OEM Activation System v3.0 - Configuration File
 # =================================================
 # Edit this file to customize the activation client
 
@@ -6,7 +6,7 @@
 # Replace "activate.local" with your actual server address
 SERVER_URL=https://roo24.ieatkittens.netcraze.pro:65083
 API_ENDPOINT=https://roo24.ieatkittens.netcraze.pro:65083/activate/api
-SCRIPT_ENDPOINT=https://roo24.ieatkittens.netcraze.pro:65083/activate/activation/main_v2.PS1
+SCRIPT_ENDPOINT=https://roo24.ieatkittens.netcraze.pro:65083/activate/activation/main_v3.PS1
 
 # Alternative Examples:
 # SERVER_URL=http://192.168.1.100

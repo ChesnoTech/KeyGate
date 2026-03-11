@@ -40,6 +40,9 @@ if (empty($sessionToken) || empty($orderNumber)) {
     jsonResponse(['success' => false, 'error' => 'Missing required fields: session_token and order_number'], 400);
 }
 
+// Validate order number format against admin-configured rules
+ApiMiddleware::validateOrderNumber($orderNumber);
+
 try {
     // Validate session token and get activation_id
     $stmt = $pdo->prepare("
@@ -68,6 +71,9 @@ try {
     if ($stmt->fetch()) {
         jsonResponse(['success' => true, 'message' => 'Hardware information already recorded', 'duplicate' => true]);
     }
+
+    // Wrap multi-step DB operations in a transaction for atomicity
+    $pdo->beginTransaction();
 
     // Insert hardware information
     $stmt = $pdo->prepare("
@@ -185,13 +191,39 @@ try {
     $stmt = $pdo->prepare("UPDATE activation_attempts SET hardware_collected = 1 WHERE id = ?");
     $stmt->execute([$activationId]);
 
+    $hardwareId = $pdo->lastInsertId();
+    $pdo->commit();
+
+    // Dispatch integration event (non-blocking — errors are logged, not thrown)
+    try {
+        require_once __DIR__ . '/../functions/integration-helpers.php';
+        dispatchEventToAll('activation_complete', [
+            'order_number'      => $orderNumber,
+            'technician_id'     => $activation['technician_id'],
+            'technician_name'   => $activation['technician_id'],
+            'activation_result' => 'success',
+            'hardware'          => [
+                'motherboard_manufacturer' => $data['motherboard_manufacturer'] ?? '',
+                'motherboard_product'      => $data['motherboard_product'] ?? '',
+                'bios_version'             => $data['bios_version'] ?? '',
+                'cpu_name'                 => $data['cpu_name'] ?? '',
+                'total_ram_gb'             => $data['ram_total_capacity_gb'] ?? '',
+            ],
+        ]);
+    } catch (Exception $intgErr) {
+        error_log("Integration dispatch error (non-fatal): " . $intgErr->getMessage());
+    }
+
     jsonResponse([
         'success' => true,
         'message' => 'Hardware information recorded successfully',
-        'hardware_id' => $pdo->lastInsertId()
+        'hardware_id' => $hardwareId
     ]);
 
 } catch (PDOException $e) {
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
     error_log("Hardware submission error: " . $e->getMessage());
     jsonResponse(['success' => false, 'error' => 'Database error occurred'], 500);
 }

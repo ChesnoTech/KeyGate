@@ -40,8 +40,8 @@ class ApiMiddleware
         self::requireMethod($method);
 
         if ($rateLimit !== false && $rateLimit !== null) {
-            require_once __DIR__ . '/../rate-limit-check.php';
-            checkRateLimit($action, $rateLimit[0], $rateLimit[1]);
+            require_once __DIR__ . '/RateLimiter.php';
+            RateLimiter::enforce($action, $rateLimit[0], $rateLimit[1]);
         }
 
         $input = [];
@@ -130,11 +130,19 @@ class ApiMiddleware
     }
 
     /**
-     * Validate order number format.
+     * Validate order number format using dynamic config or fallback constant.
      */
     public static function validateOrderNumber(string $orderNumber): void
     {
-        if (!preg_match(ORDER_NUMBER_PATTERN, $orderNumber)) {
+        try {
+            $config = getOrderFieldConfig();
+            $pattern = buildOrderNumberPattern($config);
+        } catch (\Throwable $e) {
+            // Fallback to hardcoded pattern if config unavailable
+            $pattern = ORDER_NUMBER_PATTERN;
+        }
+
+        if (!preg_match($pattern, $orderNumber)) {
             jsonResponse([
                 'error' => 'Invalid order number format',
                 'error_code' => 'INVALID_ORDER_NUMBER'

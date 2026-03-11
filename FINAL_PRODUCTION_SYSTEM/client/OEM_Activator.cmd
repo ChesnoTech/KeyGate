@@ -1,17 +1,16 @@
 @echo off
-REM OEM Activation System v2.0 - Technician Launcher
-REM Enhanced Database Edition with Concurrency Support
+REM OEM Activation System v3.0 - Technician Launcher
+REM Hardware Collection + USB Auth + Adaptive Timing
 REM =================================================
 
-title OEM Activation System v2.0 - Database Edition
+title OEM Activation System v3.0
 
 REM Display banner
 echo.
 echo  ====================================================
-echo  OEM Activation System v2.0 - Database Edition
+echo  OEM Activation System v3.0
 echo  ====================================================
-echo  Release Date: 2025-08-24
-echo  Enhancement: Full Concurrency Support
+echo  Features: USB Auth, Hardware QC, Adaptive Timing
 echo  Backend: MySQL Database with Atomic Operations
 echo  ====================================================
 echo.
@@ -36,10 +35,9 @@ REM Configuration
 set "SERVER_URL=https://roo24.ieatkittens.netcraze.pro:65083"
 set "PING_HOST=roo24.ieatkittens.netcraze.pro"
 set "API_ENDPOINT=%SERVER_URL%/activate/api"
-set "SCRIPT_ENDPOINT=%SERVER_URL%/activate/activation/main_v2.PS1"
-set "TEMP_SCRIPT=%TEMP%\oem_activation_v2.ps1"
+set "SCRIPT_ENDPOINT=%SERVER_URL%/activate/activation/main_v3.PS1"
+set "TEMP_SCRIPT=%TEMP%\oem_activation_v3.ps1"
 set "LOG_FILE=%TEMP%\oem_activation_log.txt"
-set "LANGUAGE=auto"
 
 REM Check for command-line override
 if not "%~1"=="" (
@@ -55,7 +53,6 @@ if exist "%~dp0CONFIG.txt" (
         if "%%a"=="SERVER_URL" set "SERVER_URL=%%b"
         if "%%a"=="API_ENDPOINT" set "API_ENDPOINT=%%b"
         if "%%a"=="SCRIPT_ENDPOINT" set "SCRIPT_ENDPOINT=%%b"
-        if "%%a"=="LANGUAGE" set "LANGUAGE=%%b"
     )
     echo [OK] Configuration loaded
     echo    Server URL: %SERVER_URL%
@@ -308,7 +305,7 @@ echo Starting PowerShell activation script... >> "%LOG_FILE%"
 echo Script path: %TEMP_SCRIPT% >> "%LOG_FILE%"
 echo ======================================== >> "%LOG_FILE%"
 
-%PS_EXE% -ExecutionPolicy Bypass -Command "& '%TEMP_SCRIPT%' -APIBaseURL '%API_ENDPOINT%' -Language '%LANGUAGE%' *>&1 | Tee-Object -FilePath '%LOG_FILE%' -Append"
+%PS_EXE% -ExecutionPolicy Bypass -Command "& '%TEMP_SCRIPT%' -APIBaseURL '%API_ENDPOINT%' *>&1 | Tee-Object -FilePath '%LOG_FILE%' -Append"
 
 set "activation_result=%errorlevel%"
 

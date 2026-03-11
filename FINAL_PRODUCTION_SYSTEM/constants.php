@@ -13,7 +13,9 @@ define('PASSWORD_MIN_LENGTH', 8);
 define('TECH_ID_LENGTH', 5);
 define('TECH_ID_PATTERN', '/^[A-Z0-9]{5}$/');
 define('TECH_ID_API_PATTERN', '/^[A-Za-z0-9]{1,20}$/');
-define('ORDER_NUMBER_PATTERN', '/^[A-Za-z0-9]{5}$/');
+define('ORDER_NUMBER_PATTERN', '/^[A-Za-z0-9]{5}$/');  // Legacy fallback — dynamic pattern from system_config is preferred
+define('PASSWORD_STRENGTH_PATTERN', '/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/');  // Require uppercase, lowercase, and digit
+define('ORDER_NUMBER_MAX_DB_LENGTH', 50);
 define('PRODUCT_KEY_PATTERN', '/^[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}$/');
 
 // ── Login Protection ───────────────────────────────────────────────

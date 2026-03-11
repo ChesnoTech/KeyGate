@@ -1,6 +1,6 @@
 <?php
 // API endpoint to get an OEM key for activation
-require_once '../config.php';
+require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/middleware/ApiMiddleware.php';
 
 $input = ApiMiddleware::bootstrap('get-key', ['technician_id', 'order_number'], [
@@ -15,8 +15,31 @@ ApiMiddleware::validateTechnicianId($technician_id);
 ApiMiddleware::validateOrderNumber($order_number);
 
 try {
+    // QC Compliance gate: block key if unresolved blocking issues
+    try {
+        require_once __DIR__ . '/../functions/qc-compliance.php';
+        if (qcIsEnabled($pdo)) {
+            $globalSettings = qcGetGlobalSettings($pdo);
+            if (!empty($globalSettings['blocking_prevents_key'])) {
+                $hwStmt = $pdo->prepare("SELECT id FROM hardware_info WHERE order_number = ? ORDER BY collection_timestamp DESC LIMIT 1");
+                $hwStmt->execute([$order_number]);
+                $hwRow = $hwStmt->fetch(PDO::FETCH_ASSOC);
+                if ($hwRow && qcHasBlockingIssues($pdo, (int) $hwRow['id'])) {
+                    jsonResponse([
+                        'success' => false,
+                        'error' => 'Hardware compliance check failed. Blocking issues must be resolved before activation.',
+                        'error_code' => 'QC_COMPLIANCE_BLOCKED',
+                        'failover_available' => false
+                    ], 403);
+                }
+            }
+        }
+    } catch (Exception $qcErr) {
+        error_log("QC gate error (non-fatal): " . $qcErr->getMessage());
+    }
+
     $pdo->beginTransaction();
-    
+
     // Use our new concurrency-safe function to check for existing sessions
     $existing_session = getActiveSession($pdo, $technician_id);
     
@@ -28,7 +51,7 @@ try {
                 SET order_number = ?, expires_at = DATE_ADD(NOW(), INTERVAL ? MINUTE)
                 WHERE id = ?
             ");
-            $timeout_minutes = (int)getConfig('session_timeout_minutes') ?: DEFAULT_SESSION_TIMEOUT_MINUTES;
+            $timeout_minutes = (int) getConfigWithDefault('session_timeout_minutes', DEFAULT_SESSION_TIMEOUT_MINUTES);
             $stmt->execute([$order_number, $timeout_minutes, $existing_session['id']]);
         }
         
@@ -76,7 +99,7 @@ try {
     
     // Create new session with the atomically allocated key
     $session_token = generateToken();
-    $timeout_minutes = (int)getConfig('session_timeout_minutes') ?: DEFAULT_SESSION_TIMEOUT_MINUTES;
+    $timeout_minutes = (int) getConfigWithDefault('session_timeout_minutes', DEFAULT_SESSION_TIMEOUT_MINUTES);
     $expires_at = date('Y-m-d H:i:s', strtotime("+{$timeout_minutes} minutes"));
     
     // Insert new session (we already checked for existing sessions above)
@@ -87,7 +110,28 @@ try {
     $stmt->execute([$technician_id, $session_token, $key['id'], $order_number, $expires_at, $computerName]);
     
     $pdo->commit();
-    
+
+    appLog('info', 'Key allocated', [
+        'event'         => 'key_assigned',
+        'technician_id' => $technician_id,
+        'order_number'  => $order_number,
+        'key_id'        => $key['id'],
+    ]);
+
+    // Dispatch integration event (non-blocking — errors are logged, not thrown)
+    try {
+        require_once __DIR__ . '/../functions/integration-helpers.php';
+        dispatchEventToAll('key_assigned', [
+            'order_number'     => $order_number,
+            'technician_id'    => $technician_id,
+            'technician_name'  => $technician_id,
+            'product_key'      => $key['product_key'],
+            'oem_identifier'   => $key['oem_identifier'],
+        ]);
+    } catch (Exception $intgErr) {
+        error_log("Integration dispatch error (non-fatal): " . $intgErr->getMessage());
+    }
+
     jsonResponse([
         'success' => true,
         'session_token' => $session_token,
@@ -97,7 +141,7 @@ try {
         'fail_counter' => (int)$key['fail_counter'],
         'expires_at' => $expires_at
     ]);
-    
+
 } catch (PDOException $e) {
     if ($pdo->inTransaction()) $pdo->rollback();
     error_log("Database error in get-key.php: " . $e->getMessage());

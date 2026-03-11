@@ -176,7 +176,7 @@ function dispatchNotification(string $action, string $description, int $actorAdm
             return;
         }
 
-        $vapidSubject = getConfig('vapid_subject') ?: 'mailto:admin@oem-activation.local';
+        $vapidSubject = getConfigWithDefault('vapid_subject', 'mailto:admin@oem-activation.local');
 
         $auth = [
             'VAPID' => [

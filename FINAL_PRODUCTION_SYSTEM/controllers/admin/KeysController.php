@@ -78,17 +78,16 @@ function handle_list_keys(PDO $pdo, array $admin_session): void {
         FROM oem_keys k
         $whereClause
         ORDER BY k.id DESC
-        LIMIT $limit OFFSET $offset
+        LIMIT ? OFFSET ?
     ");
+    $params[] = (int)$limit;
+    $params[] = (int)$offset;
     $stmt->execute($params);
     $keys = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Mask keys if configured
-    $show_full = (bool)getConfig('show_full_keys_in_admin');
-    if (!$show_full) {
-        foreach ($keys as &$key) {
-            $key['product_key'] = substr($key['product_key'], 0, 10) . '...' . substr($key['product_key'], -5);
-        }
+    // Mask keys using centralized helper
+    foreach ($keys as &$key) {
+        $key['product_key'] = formatProductKeySecure($key['product_key'], 'admin');
     }
 
     echo json_encode([
@@ -241,4 +240,91 @@ function handle_export_keys(PDO $pdo, array $admin_session): void {
     );
 
     exit;
+}
+
+function handle_add_keys(PDO $pdo, array $admin_session, ?array $json_input = null): void {
+    requirePermission('add_key', $admin_session);
+
+    $keys = $json_input['keys'] ?? [];
+
+    if (!is_array($keys) || empty($keys)) {
+        echo json_encode(['success' => false, 'error' => 'No keys provided']);
+        return;
+    }
+
+    if (count($keys) > 500) {
+        echo json_encode(['success' => false, 'error' => 'Maximum 500 keys per request']);
+        return;
+    }
+
+    require_once dirname(__DIR__, 2) . '/constants.php';
+
+    $imported = 0;
+    $skipped = 0;
+    $errors = [];
+
+    $pdo->beginTransaction();
+    try {
+        $checkStmt = $pdo->prepare("SELECT id FROM oem_keys WHERE product_key = ?");
+        $insertStmt = $pdo->prepare("
+            INSERT INTO oem_keys (product_key, oem_identifier, roll_serial, key_status, created_at)
+            VALUES (?, ?, ?, 'unused', NOW())
+        ");
+
+        foreach ($keys as $i => $keyData) {
+            $row = $i + 1;
+            $product_key = strtoupper(trim($keyData['product_key'] ?? ''));
+            $oem_identifier = trim($keyData['oem_identifier'] ?? '');
+            $roll_serial = trim($keyData['roll_serial'] ?? '');
+
+            if (!preg_match(PRODUCT_KEY_PATTERN, $product_key)) {
+                $errors[] = "Row $row: Invalid key format: $product_key";
+                $skipped++;
+                continue;
+            }
+
+            if (empty($oem_identifier)) {
+                $errors[] = "Row $row: OEM Identifier is required";
+                $skipped++;
+                continue;
+            }
+
+            if (empty($roll_serial)) {
+                $errors[] = "Row $row: Roll Serial is required";
+                $skipped++;
+                continue;
+            }
+
+            $checkStmt->execute([$product_key]);
+            if ($checkStmt->fetch()) {
+                $errors[] = "Row $row: Duplicate key: " . substr($product_key, 0, 5) . "-*****";
+                $skipped++;
+                continue;
+            }
+
+            $insertStmt->execute([$product_key, $oem_identifier, $roll_serial]);
+            $imported++;
+        }
+
+        $pdo->commit();
+    } catch (Exception $e) {
+        $pdo->rollback();
+        error_log("Add keys error: " . $e->getMessage() . "\n" . $e->getTraceAsString());
+        echo json_encode(['success' => false, 'error' => 'A database error occurred while importing keys.']);
+        return;
+    }
+
+    logAdminActivity(
+        $admin_session['admin_id'],
+        $admin_session['id'],
+        'ADD_KEYS',
+        "Added $imported keys manually" . ($skipped > 0 ? " ($skipped skipped)" : "")
+    );
+
+    echo json_encode([
+        'success' => true,
+        'imported' => $imported,
+        'skipped' => $skipped,
+        'errors' => array_slice($errors, 0, 10)
+    ]);
 }

@@ -4,15 +4,12 @@ require_once 'security-headers.php';
 require_once 'config.php';
 require_once 'functions/network-utils.php';
 require_once 'functions/push-helpers.php';
+require_once 'functions/admin-helpers.php';
 
-// Security Configuration
+// Security Configuration (used by enforceHTTPS and checkIPWhitelist below)
 $ADMIN_CONFIG = [
-    'SESSION_TIMEOUT' => (int)getConfig('admin_session_timeout_minutes') ?: DEFAULT_ADMIN_SESSION_TIMEOUT_MINUTES,
-    'MAX_FAILED_LOGINS' => (int)getConfig('admin_max_failed_logins') ?: DEFAULT_ADMIN_MAX_FAILED_LOGINS,
-    'LOCKOUT_DURATION' => (int)getConfig('admin_lockout_duration_minutes') ?: DEFAULT_ADMIN_LOCKOUT_MINUTES,
     'REQUIRE_HTTPS' => (bool)getConfig('admin_require_https'),
     'IP_WHITELIST_ENABLED' => (bool)getConfig('admin_ip_whitelist_enabled'),
-    'FORCE_PASSWORD_CHANGE_DAYS' => (int)getConfig('admin_force_password_change_days') ?: DEFAULT_ADMIN_PASSWORD_CHANGE_DAYS
 ];
 
 // Start secure session
@@ -23,7 +20,13 @@ session_regenerate_id(true);
 function enforceHTTPS() {
     global $ADMIN_CONFIG;
     if ($ADMIN_CONFIG['REQUIRE_HTTPS'] && !isset($_SERVER['HTTPS'])) {
-        header('Location: https://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI']);
+        // Validate host header to prevent open redirect attacks
+        $host = $_SERVER['HTTP_HOST'] ?? '';
+        $allowedHost = getConfig('admin_allowed_host') ?? $_SERVER['SERVER_NAME'] ?? 'localhost';
+        if ($host !== $allowedHost) {
+            $host = $allowedHost;
+        }
+        header('Location: https://' . $host . $_SERVER['REQUEST_URI']);
         exit;
     }
 }
@@ -60,136 +63,7 @@ function checkIPWhitelist() {
 }
 
 // isIPInRange() is provided by functions/network-utils.php
-
-function logAdminActivity($admin_id, $session_id, $action, $description = '') {
-    global $pdo;
-    try {
-        $stmt = $pdo->prepare("
-            INSERT INTO admin_activity_log (admin_id, session_id, action, description, ip_address, user_agent)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ");
-        $stmt->execute([
-            $admin_id, $session_id, $action, $description,
-            getClientIP(), $_SERVER['HTTP_USER_AGENT'] ?? ''
-        ]);
-        // Dispatch push notification (if push-helpers.php is loaded)
-        if (function_exists('dispatchNotification')) {
-            dispatchNotification($action, $description, $admin_id);
-        }
-    } catch (Exception $e) {
-        error_log("Failed to log admin activity: " . $e->getMessage());
-    }
-}
-
-function validateAdminSession() {
-    global $pdo, $ADMIN_CONFIG;
-    
-    if (!isset($_SESSION['admin_token'])) return false;
-    
-    $stmt = $pdo->prepare("
-        SELECT s.*, u.username, u.full_name, u.role, u.is_active,
-               u.password_changed_at, u.must_change_password
-        FROM admin_sessions s 
-        JOIN admin_users u ON s.admin_id = u.id
-        WHERE s.session_token = ? AND s.is_active = 1 AND s.expires_at > NOW() AND u.is_active = 1
-    ");
-    $stmt->execute([$_SESSION['admin_token']]);
-    $session = $stmt->fetch();
-    
-    if (!$session) return false;
-    
-    // Check session timeout
-    $last_activity = strtotime($session['last_activity']);
-    $timeout_seconds = $ADMIN_CONFIG['SESSION_TIMEOUT'] * 60;
-    if (time() - $last_activity > $timeout_seconds) {
-        // Expire session
-        $stmt = $pdo->prepare("UPDATE admin_sessions SET is_active = 0 WHERE id = ?");
-        $stmt->execute([$session['id']]);
-        return false;
-    }
-    
-    // Check password age
-    $password_age = time() - strtotime($session['password_changed_at']);
-    $max_age = $ADMIN_CONFIG['FORCE_PASSWORD_CHANGE_DAYS'] * 24 * 3600;
-    if ($password_age > $max_age) {
-        $session['must_change_password'] = true;
-    }
-    
-    // Update last activity
-    $stmt = $pdo->prepare("UPDATE admin_sessions SET last_activity = NOW() WHERE id = ?");
-    $stmt->execute([$session['id']]);
-    
-    return $session;
-}
-
-function authenticateAdmin($username, $password) {
-    global $pdo, $ADMIN_CONFIG;
-    
-    $stmt = $pdo->prepare("SELECT * FROM admin_users WHERE username = ? AND is_active = 1");
-    $stmt->execute([$username]);
-    $admin = $stmt->fetch();
-    
-    if (!$admin) {
-        logAdminActivity(null, null, 'LOGIN_FAILED', "Invalid username: $username");
-        return false;
-    }
-    
-    // Check lockout
-    if ($admin['locked_until'] && $admin['locked_until'] > date('Y-m-d H:i:s')) {
-        logAdminActivity($admin['id'], null, 'LOGIN_BLOCKED', 'Account locked');
-        return ['error' => 'Account locked until ' . $admin['locked_until']];
-    }
-    
-    // Verify password
-    if (!password_verify($password, $admin['password_hash'])) {
-        // Increment failed attempts
-        $failed_attempts = $admin['failed_login_attempts'] + 1;
-        $locked_until = null;
-        
-        if ($failed_attempts >= $ADMIN_CONFIG['MAX_FAILED_LOGINS']) {
-            $locked_until = date('Y-m-d H:i:s', time() + ($ADMIN_CONFIG['LOCKOUT_DURATION'] * 60));
-        }
-        
-        $stmt = $pdo->prepare("
-            UPDATE admin_users 
-            SET failed_login_attempts = ?, locked_until = ? 
-            WHERE id = ?
-        ");
-        $stmt->execute([$failed_attempts, $locked_until, $admin['id']]);
-        
-        logAdminActivity($admin['id'], null, 'LOGIN_FAILED', "Failed password attempt #$failed_attempts");
-        return false;
-    }
-    
-    // Create session
-    $session_token = bin2hex(random_bytes(SESSION_TOKEN_BYTES));
-    $expires_at = date('Y-m-d H:i:s', time() + ($ADMIN_CONFIG['SESSION_TIMEOUT'] * 60));
-    
-    $stmt = $pdo->prepare("
-        INSERT INTO admin_sessions (admin_id, session_token, ip_address, user_agent, expires_at)
-        VALUES (?, ?, ?, ?, ?)
-    ");
-    $stmt->execute([
-        $admin['id'], $session_token, getClientIP(), $_SERVER['HTTP_USER_AGENT'] ?? '', $expires_at
-    ]);
-    $session_id = $pdo->lastInsertId();
-    
-    // Reset failed attempts
-    $stmt = $pdo->prepare("
-        UPDATE admin_users 
-        SET failed_login_attempts = 0, locked_until = NULL, last_login = NOW(), last_login_ip = ?
-        WHERE id = ?
-    ");
-    $stmt->execute([getClientIP(), $admin['id']]);
-    
-    $_SESSION['admin_token'] = $session_token;
-    $_SESSION['admin_id'] = $admin['id'];
-    $_SESSION['session_id'] = $session_id;
-    
-    logAdminActivity($admin['id'], $session_id, 'LOGIN_SUCCESS', 'Successful login');
-    
-    return $admin;
-}
+// authenticateAdmin(), validateAdminSession(), logAdminActivity() are provided by functions/admin-helpers.php
 
 // Enforce security measures
 enforceHTTPS();
@@ -368,9 +242,7 @@ if (!$admin_session) {
             </div>
             
             <div class="ip-info">
-                Your IP: <?php echo getClientIP(); ?><br>
-                Default login: admin / SuperSecure2024!<br>
-                <small>Change this immediately after first login</small>
+                Your IP: <?php echo getClientIP(); ?>
             </div>
         </div>
     </body>

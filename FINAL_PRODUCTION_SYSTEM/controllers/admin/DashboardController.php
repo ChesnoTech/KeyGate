@@ -78,7 +78,7 @@ function buildReportHtml(PDO $pdo, string $reportType): string {
             $html .= '<table><tr><th>' . __('keys.report_date') . '</th><th>' . __('keys.report_technician') . '</th><th>' . __('keys.report_order') . '</th><th>' . __('keys.report_key') . '</th><th>' . __('keys.report_notes') . '</th></tr>';
             foreach ($failedData as $row) {
                 $maskedKey = $row['product_key']
-                    ? substr($row['product_key'], 0, 5) . '...' . substr($row['product_key'], -5)
+                    ? formatProductKeySecure($row['product_key'], 'admin')
                     : __('common.na');
                 $html .= "<tr><td>{$row['attempted_date']}</td><td>" . htmlspecialchars($row['technician_id']) . "</td>"
                     . "<td>" . htmlspecialchars($row['order_number'] ?? '') . "</td>"
@@ -144,11 +144,41 @@ function handle_get_stats(PDO $pdo, array $admin_session): void {
     $stmt = $pdo->query("SELECT COUNT(*) FROM activation_attempts WHERE DATE(attempted_date) = CURDATE()");
     $stats['activations']['today'] = $stmt->fetchColumn();
 
-    $stmt = $pdo->query("SELECT COUNT(*) FROM activation_attempts WHERE YEARWEEK(attempted_date) = YEARWEEK(CURDATE())");
+    $stmt = $pdo->query("SELECT COUNT(*) FROM activation_attempts WHERE YEARWEEK(attempted_date, 1) = YEARWEEK(CURDATE(), 1)");
     $stats['activations']['week'] = $stmt->fetchColumn();
 
     $stmt = $pdo->query("SELECT COUNT(*) FROM activation_attempts WHERE YEAR(attempted_date) = YEAR(CURDATE()) AND MONTH(attempted_date) = MONTH(CURDATE())");
     $stats['activations']['month'] = $stmt->fetchColumn();
+
+    // Daily activation trend (last 30 days)
+    $stmt = $pdo->query("
+        SELECT DATE(attempted_date) as date,
+               COUNT(*) as total,
+               SUM(CASE WHEN attempt_result = 'success' THEN 1 ELSE 0 END) as successes,
+               SUM(CASE WHEN attempt_result != 'success' THEN 1 ELSE 0 END) as failures
+        FROM activation_attempts
+        WHERE attempted_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+        GROUP BY DATE(attempted_date)
+        ORDER BY date ASC
+    ");
+    $trendRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Fill gaps so every day in the range has an entry
+    $daily_trend = [];
+    $dateMap = [];
+    foreach ($trendRows as $row) {
+        $dateMap[$row['date']] = $row;
+    }
+    for ($i = 29; $i >= 0; $i--) {
+        $d = date('Y-m-d', strtotime("-{$i} days"));
+        $daily_trend[] = [
+            'date' => $d,
+            'total' => (int)($dateMap[$d]['total'] ?? 0),
+            'successes' => (int)($dateMap[$d]['successes'] ?? 0),
+            'failures' => (int)($dateMap[$d]['failures'] ?? 0),
+        ];
+    }
+    $stats['daily_trend'] = $daily_trend;
 
     // Recent activity
     $stmt = $pdo->prepare("

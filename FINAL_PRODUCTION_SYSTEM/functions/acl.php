@@ -29,64 +29,20 @@
  * @return bool
  */
 function aclCheck($permissionKey, $userType, $userId) {
-    global $pdo;
-
     if (!$permissionKey || !$userType || !$userId) {
         return false;
     }
 
-    try {
-        // Get user's role_id
-        $roleId = aclGetUserRoleId($userType, $userId);
+    // Per-request cache: load all effective permissions once per user,
+    // then answer every subsequent check from memory (O(4) queries → O(1)).
+    static $cache = [];
+    $cacheKey = "{$userType}:{$userId}";
 
-        // Check for super_admin wildcard (system role with priority 100)
-        if ($roleId) {
-            $stmt = $pdo->prepare("SELECT role_name, priority FROM acl_roles WHERE id = ? AND is_active = 1");
-            $stmt->execute([$roleId]);
-            $role = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($role && $role['role_name'] === 'super_admin') {
-                return true; // Super admin bypasses all checks
-            }
-        }
-
-        // Check user-specific override first (overrides take precedence)
-        $stmt = $pdo->prepare("
-            SELECT uo.is_granted
-            FROM acl_user_overrides uo
-            INNER JOIN acl_permissions p ON uo.permission_id = p.id
-            WHERE uo.user_type = ?
-              AND uo.user_id = ?
-              AND p.permission_key = ?
-              AND (uo.expires_at IS NULL OR uo.expires_at > NOW())
-        ");
-        $stmt->execute([$userType, $userId, $permissionKey]);
-        $override = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if ($override !== false) {
-            return (bool)$override['is_granted'];
-        }
-
-        // No override — check role permissions
-        if (!$roleId) {
-            return false; // No role assigned
-        }
-
-        $stmt = $pdo->prepare("
-            SELECT COUNT(*) as cnt
-            FROM acl_role_permissions rp
-            INNER JOIN acl_permissions p ON rp.permission_id = p.id
-            WHERE rp.role_id = ?
-              AND p.permission_key = ?
-        ");
-        $stmt->execute([$roleId, $permissionKey]);
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        return ($result['cnt'] > 0);
-
-    } catch (PDOException $e) {
-        error_log("ACL check error: " . $e->getMessage());
-        return false;
+    if (!isset($cache[$cacheKey])) {
+        $cache[$cacheKey] = aclGetEffectivePermissions($userType, $userId);
     }
+
+    return !empty($cache[$cacheKey][$permissionKey]['granted']);
 }
 
 /**
@@ -125,10 +81,33 @@ function aclRequire($permissionKey, $session) {
 }
 
 /**
+ * Require a permission or exit with 403.
+ * Convenience alias for aclRequire() — used by all controllers.
+ *
+ * @param string $action Required permission key
+ * @param array  $adminSession Admin session data
+ */
+function requirePermission($action, $adminSession) {
+    aclRequire($action, $adminSession);
+}
+
+/**
  * Log a permission denial to the existing rbac_permission_denials table.
  */
 function aclLogDenial($userId, $userType, $permissionKey, $session) {
     global $pdo;
+
+    // Structured log for aggregation
+    if (function_exists('appLog')) {
+        appLog('warning', 'ACL permission denied', [
+            'event'      => 'acl_denied',
+            'user_id'    => $userId,
+            'user_type'  => $userType,
+            'permission' => $permissionKey,
+            'role'       => $session['role'] ?? 'unknown',
+        ]);
+    }
+
     try {
         $stmt = $pdo->prepare("
             INSERT INTO rbac_permission_denials (
@@ -770,8 +749,10 @@ function aclGetChangelog($filters = [], $page = 1, $perPage = 50) {
             LEFT JOIN admin_users au ON cl.actor_id = au.id
             $whereClause
             ORDER BY cl.created_at DESC
-            LIMIT $perPage OFFSET $offset
+            LIMIT ? OFFSET ?
         ");
+        $params[] = (int)$perPage;
+        $params[] = (int)$offset;
         $stmt->execute($params);
         $entries = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

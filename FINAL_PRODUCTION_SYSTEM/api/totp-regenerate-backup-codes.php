@@ -6,7 +6,7 @@
  * Requires current TOTP code or existing backup code for verification
  */
 
-require_once '../config.php';
+require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../functions/totp-helpers.php';
 require_once __DIR__ . '/middleware/ApiMiddleware.php';
 

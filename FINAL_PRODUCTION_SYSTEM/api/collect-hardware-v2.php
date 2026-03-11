@@ -19,6 +19,9 @@ $data = ApiMiddleware::bootstrap('collect-hardware', ['session_token', 'order_nu
 $sessionToken = $data['session_token'];
 $orderNumber = $data['order_number'];
 
+// Validate order number format against admin-configured rules
+ApiMiddleware::validateOrderNumber($orderNumber);
+
 try {
     // Validate session token and get technician info
     $stmt = $pdo->prepare("
@@ -33,11 +36,7 @@ try {
     $session = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$session) {
-        echo json_encode([
-            'success' => false,
-            'error' => 'Invalid or expired session token'
-        ]);
-        exit;
+        jsonResponse(['success' => false, 'error' => 'Invalid or expired session token'], 401);
     }
 
     $technicianId = $session['technician_id'];
@@ -61,14 +60,13 @@ try {
 
         // If collected within last 5 minutes, return existing data
         if ($diff < 300) {
-            echo json_encode([
+            jsonResponse([
                 'success' => true,
                 'message' => 'Hardware information already collected for this order',
                 'duplicate' => true,
                 'hardware_id' => $existing['id'],
                 'collected_ago_seconds' => $diff
             ]);
-            exit;
         }
     }
 
@@ -118,6 +116,11 @@ try {
         'os_architecture' => $data['os_architecture'] ?? null,
         'secure_boot_enabled' => isset($data['secure_boot_enabled']) ? (int)$data['secure_boot_enabled'] : null,
         'computer_name' => $data['computer_name'] ?? null,
+
+        // Boot order & HackBGRT (QC compliance)
+        'boot_order' => $data['boot_order'] ?? null,
+        'hackbgrt_installed' => isset($data['hackbgrt_installed']) ? (int)$data['hackbgrt_installed'] : null,
+        'hackbgrt_first_boot' => isset($data['hackbgrt_first_boot']) ? (int)$data['hackbgrt_first_boot'] : null,
     ];
 
     // Insert hardware information
@@ -130,6 +133,7 @@ try {
             ram_total_capacity_gb, ram_slots_used, ram_slots_total, ram_modules,
             video_cards, storage_devices, disk_partitions, complete_disk_layout,
             os_name, os_version, os_architecture, secure_boot_enabled, computer_name,
+            boot_order, hackbgrt_installed, hackbgrt_first_boot,
             collection_timestamp
         ) VALUES (
             ?, ?, ?, ?,
@@ -139,6 +143,7 @@ try {
             ?, ?, ?, ?,
             ?, ?, ?, ?,
             ?, ?, ?, ?, ?,
+            ?, ?, ?,
             NOW()
         )
     ");
@@ -179,7 +184,11 @@ try {
         $hardwareData['os_version'],
         $hardwareData['os_architecture'],
         $hardwareData['secure_boot_enabled'],
-        $hardwareData['computer_name']
+        $hardwareData['computer_name'],
+
+        $hardwareData['boot_order'],
+        $hardwareData['hackbgrt_installed'],
+        $hardwareData['hackbgrt_first_boot']
     ]);
 
     $hardwareId = $pdo->lastInsertId();
@@ -192,12 +201,27 @@ try {
     ");
     $stmt->execute([$orderNumber, $technicianId, $sessionToken, $hardwareId]);
 
-    echo json_encode([
+    // Run QC compliance checks if enabled
+    $complianceResults = null;
+    try {
+        require_once __DIR__ . '/../functions/qc-compliance.php';
+        if (qcIsEnabled($pdo)) {
+            $complianceResults = qcRunChecks($pdo, $hardwareId, $hardwareData);
+        }
+    } catch (Exception $qcError) {
+        error_log("QC compliance check error: " . $qcError->getMessage());
+    }
+
+    $response = [
         'success' => true,
         'message' => 'Hardware information collected successfully',
         'hardware_id' => $hardwareId,
         'technician' => $session['full_name']
-    ]);
+    ];
+    if ($complianceResults !== null) {
+        $response['compliance'] = $complianceResults;
+    }
+    jsonResponse($response);
 
 } catch (PDOException $e) {
     // Log error
@@ -218,9 +242,9 @@ try {
         // Ignore logging errors
     }
 
-    echo json_encode([
+    jsonResponse([
         'success' => false,
         'error' => 'Database error occurred while collecting hardware information'
-    ]);
+    ], 500);
 }
 ?>

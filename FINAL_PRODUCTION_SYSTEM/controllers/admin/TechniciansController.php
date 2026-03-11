@@ -28,12 +28,14 @@ function handle_list_techs(PDO $pdo, array $admin_session): void {
     $stmt->execute($params);
     $total = $stmt->fetchColumn();
 
+    $params[] = (int)$limit;
+    $params[] = (int)$offset;
     $stmt = $pdo->prepare("
         SELECT id, technician_id, full_name, email, is_active, last_login, created_at, preferred_server
         FROM technicians
         $whereClause
         ORDER BY created_at DESC
-        LIMIT $limit OFFSET $offset
+        LIMIT ? OFFSET ?
     ");
     $stmt->execute($params);
     $techs = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -85,20 +87,36 @@ function handle_add_tech(PDO $pdo, array $admin_session): void {
         return;
     }
 
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM technicians WHERE technician_id = ?");
-    $stmt->execute([$tech_id]);
-    if ($stmt->fetchColumn() > 0) {
-        echo json_encode(['success' => false, 'error' => 'Technician ID already exists']);
-        return;
-    }
-
     $password_hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => BCRYPT_COST]);
 
-    $stmt = $pdo->prepare("
-        INSERT INTO technicians (technician_id, password_hash, full_name, email, is_active, preferred_server, preferred_language)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ");
-    $stmt->execute([$tech_id, $password_hash, $full_name, $email, $is_active, $preferred_server, $preferred_language]);
+    try {
+        $pdo->beginTransaction();
+
+        // Check + insert inside transaction to prevent TOCTOU race condition
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM technicians WHERE technician_id = ?");
+        $stmt->execute([$tech_id]);
+        if ($stmt->fetchColumn() > 0) {
+            $pdo->rollBack();
+            echo json_encode(['success' => false, 'error' => 'Technician ID already exists']);
+            return;
+        }
+
+        $stmt = $pdo->prepare("
+            INSERT INTO technicians (technician_id, password_hash, full_name, email, is_active, preferred_server, preferred_language)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ");
+        $stmt->execute([$tech_id, $password_hash, $full_name, $email, $is_active, $preferred_server, $preferred_language]);
+
+        $pdo->commit();
+    } catch (PDOException $e) {
+        $pdo->rollBack();
+        // Handle duplicate key constraint violation gracefully
+        if ($e->getCode() == '23000') {
+            echo json_encode(['success' => false, 'error' => 'Technician ID already exists']);
+            return;
+        }
+        throw $e;
+    }
 
     logAdminActivity(
         $admin_session['admin_id'],

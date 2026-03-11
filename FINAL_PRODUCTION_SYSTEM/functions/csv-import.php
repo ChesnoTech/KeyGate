@@ -143,7 +143,7 @@ function importKeyRow($row, $format) {
     $oem_identifier = trim($row[$format['oem_col']] ?? '');
 
     // Validate product key format
-    if (!preg_match('/^[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}$/', $product_key)) {
+    if (!preg_match(PRODUCT_KEY_PATTERN, $product_key)) {
         return ['status' => 'skipped', 'error' => "Invalid key format: {$product_key}"];
     }
 

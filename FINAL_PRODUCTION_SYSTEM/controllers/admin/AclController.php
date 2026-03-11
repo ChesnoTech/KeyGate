@@ -51,7 +51,8 @@ function handle_acl_create_role(PDO $pdo, array $admin_session, ?array $json_inp
     $description = htmlspecialchars(strip_tags($data['description'] ?? ''), ENT_QUOTES, 'UTF-8');
     $roleType = in_array($data['role_type'] ?? '', ['admin', 'technician']) ? $data['role_type'] : 'admin';
     $color = preg_match('/^#[0-9a-fA-F]{6}$/', $data['color'] ?? '') ? $data['color'] : '#6c757d';
-    $permIds = array_map('intval', (array)($data['permission_ids'] ?? []));
+    $rawPermIds = $data['permission_ids'] ?? [];
+    $permIds = is_string($rawPermIds) ? array_map('intval', array_filter(explode(',', $rawPermIds), 'strlen')) : array_map('intval', (array)$rawPermIds);
     // Only super_admin can assign dangerous permissions
     $permIds = filterDangerousPermissions($permIds, $admin_session['admin_id']);
 
@@ -105,7 +106,8 @@ function handle_acl_update_role(PDO $pdo, array $admin_session, ?array $json_inp
         $data['color'] = '#6c757d';
     }
     if (isset($data['permission_ids'])) {
-        $data['permission_ids'] = array_map('intval', (array)$data['permission_ids']);
+        $rawPermIds = $data['permission_ids'];
+        $data['permission_ids'] = is_string($rawPermIds) ? array_map('intval', array_filter(explode(',', $rawPermIds), 'strlen')) : array_map('intval', (array)$rawPermIds);
         // Only super_admin can assign dangerous permissions
         $data['permission_ids'] = filterDangerousPermissions($data['permission_ids'], $admin_session['admin_id']);
     }

@@ -5,26 +5,40 @@
  */
 
 function handle_get_2fa_status(PDO $pdo, array $admin_session): void {
-    $stmt = $pdo->prepare("
-        SELECT totp_enabled, verified_at,
-               (SELECT COUNT(*) FROM JSON_TABLE(backup_codes, '$[*]' COLUMNS(code VARCHAR(255) PATH '$')) AS codes) as backup_count
-        FROM admin_totp_secrets
-        WHERE admin_id = ?
-    ");
-    $stmt->execute([$admin_session['admin_id']]);
-    $totp = $stmt->fetch(PDO::FETCH_ASSOC);
+    // Check if admin_totp_secrets table exists
+    try {
+        $stmt = $pdo->prepare("
+            SELECT totp_enabled, verified_at, backup_codes
+            FROM admin_totp_secrets
+            WHERE admin_id = ?
+        ");
+        $stmt->execute([$admin_session['admin_id']]);
+        $totp = $stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        // Table may not exist yet
+        $totp = null;
+    }
 
     if ($totp) {
+        // Count backup codes from JSON array (MariaDB-compatible)
+        $backupCount = 0;
+        if (!empty($totp['backup_codes'])) {
+            $codes = json_decode($totp['backup_codes'], true);
+            $backupCount = is_array($codes) ? count($codes) : 0;
+        }
+
         echo json_encode([
             'success' => true,
             'enabled' => (bool)$totp['totp_enabled'],
             'verified_at' => $totp['verified_at'],
-            'backup_codes_remaining' => $totp['backup_count'] ?? 0
+            'backup_codes_remaining' => $backupCount
         ]);
     } else {
         echo json_encode([
             'success' => true,
-            'enabled' => false
+            'enabled' => false,
+            'verified_at' => null,
+            'backup_codes_remaining' => 0
         ]);
     }
 }

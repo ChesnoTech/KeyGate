@@ -3,8 +3,8 @@
  * Authenticate technician using USB device serial number
  * Returns session token if USB is authorized
  */
-require_once '../config.php';
-require_once '../functions/network-utils.php';
+require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../functions/network-utils.php';
 require_once __DIR__ . '/middleware/ApiMiddleware.php';
 
 // bootstrap handles: PowerShell check, POST validation, rate limiting, JSON parsing
@@ -159,7 +159,7 @@ try {
 
     // Create session token
     $sessionToken = bin2hex(random_bytes(32));
-    $sessionHours = (int)(getConfig('usb_session_timeout_hours') ?: 8);
+    $sessionHours = (int) getConfigWithDefault('usb_session_timeout_hours', 8);
     $expiresAt = date('Y-m-d H:i:s', strtotime("+{$sessionHours} hours"));
     $clientIP = getClientIP();
 

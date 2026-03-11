@@ -128,7 +128,7 @@ $lockFile = __DIR__ . '/../../setup.lock';
         <h4>4. 🖥️ Deploy Client Files</h4>
         <ul style="margin: 10px 0 0 20px; font-size: 14px;">
             <li>Update PowerShell script URL</li>
-            <li>Distribute OEM_Activator_v2.cmd</li>
+            <li>Distribute OEM_Activator.cmd</li>
             <li>Train technician staff</li>
             <li>Monitor system activity</li>
         </ul>

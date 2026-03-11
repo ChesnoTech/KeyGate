@@ -240,4 +240,83 @@ class RateLimiter {
             }
         }
     }
+
+    // ── Static convenience methods (replaces rate-limit-check.php) ──
+
+    /**
+     * Enforce rate limit for the current request.
+     * Sends 429 response and exits if limit exceeded; sends 503 and exits if Redis unavailable.
+     * Adds X-RateLimit-* headers on success.
+     *
+     * @param string      $action     Rate limit action name
+     * @param int         $limit      Maximum requests allowed
+     * @param int         $window     Time window in seconds
+     * @param string|null $identifier Custom identifier (default: client IP)
+     */
+    public static function enforce($action, $limit = RATE_LIMIT_DEFAULT_REQUESTS, $window = RATE_LIMIT_DEFAULT_WINDOW, $identifier = null) {
+        // Check if rate limiting is disabled in system config
+        if (function_exists('getConfigWithDefault') && getConfigWithDefault('rate_limit_enabled', '1') === '0') {
+            return;
+        }
+
+        try {
+            $rateLimiter = new self();
+
+            $identifier = $identifier ?? (function_exists('getClientIP') ? getClientIP() : ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+
+            $result = $rateLimiter->checkLimit($identifier, $action, $limit, $window);
+
+            // Add rate limit headers
+            header('X-RateLimit-Limit: ' . $limit);
+            header('X-RateLimit-Remaining: ' . $result['remaining']);
+            header('X-RateLimit-Reset: ' . $result['reset_at']);
+
+            if (!$result['allowed']) {
+                $rateLimiter->logViolation(
+                    $identifier,
+                    $action,
+                    $_SERVER['REQUEST_URI'] ?? 'unknown',
+                    $limit + 1,
+                    $limit,
+                    $window
+                );
+
+                if (function_exists('appLog')) {
+                    appLog('warning', 'Rate limit exceeded', [
+                        'event'      => 'rate_limit',
+                        'action'     => $action,
+                        'identifier' => $identifier,
+                        'limit'      => $limit,
+                        'window'     => $window,
+                    ]);
+                }
+
+                http_response_code(429);
+                header('Retry-After: ' . $result['retry_after']);
+                header('Content-Type: application/json');
+
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'Too many requests',
+                    'message' => 'Rate limit exceeded. Please try again later.',
+                    'retry_after' => $result['retry_after'],
+                    'limit' => $limit,
+                    'window_seconds' => $window,
+                    'reset_at' => date('Y-m-d H:i:s', $result['reset_at'])
+                ]);
+
+                exit;
+            }
+        } catch (Exception $e) {
+            error_log("Rate limiter initialization failed (fail-closed): " . $e->getMessage());
+            http_response_code(503);
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => false,
+                'error' => 'Service temporarily unavailable',
+                'message' => 'Rate limiting service is not available. Please try again later.'
+            ]);
+            exit;
+        }
+    }
 }

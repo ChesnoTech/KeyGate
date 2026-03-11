@@ -1,3 +1,6 @@
+> **Note:** References to replacing `main_v2.PS1` are historical — v2 has been retired.
+> Current activation script: `activation/main_v3.PS1`. Client launcher: `client/OEM_Activator.cmd`.
+
 # Hardware Collection System v3.0 - Implementation Summary
 
 ## Overview

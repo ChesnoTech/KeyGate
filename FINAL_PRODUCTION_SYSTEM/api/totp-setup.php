@@ -6,8 +6,8 @@
  * Also generates backup codes for recovery
  */
 
-require_once '../config.php';
-require_once '../functions/rbac.php';
+require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../functions/acl.php';
 require_once __DIR__ . '/../functions/totp-helpers.php';
 require_once __DIR__ . '/middleware/ApiMiddleware.php';
 
@@ -63,7 +63,7 @@ try {
     $secret = $totp->getSecret();
 
     // Get issuer name from config
-    $issuer = getConfig('totp_issuer_name') ?: 'OEM Activation System';
+    $issuer = getConfigWithDefault('totp_issuer_name', 'OEM Activation System');
 
     // Set TOTP parameters
     $totp->setLabel($admin['username']);

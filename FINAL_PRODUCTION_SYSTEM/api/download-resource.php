@@ -61,9 +61,10 @@ try {
         exit;
     }
 
-    // Stream the file
+    // Stream the file — sanitize filename to prevent header injection
+    $safeFilename = str_replace(['"', "\r", "\n", "\0"], '', basename($resource['original_filename']));
     header('Content-Type: application/octet-stream');
-    header('Content-Disposition: attachment; filename="' . $resource['original_filename'] . '"');
+    header('Content-Disposition: attachment; filename="' . $safeFilename . '"');
     header('Content-Length: ' . $resource['file_size']);
     header('X-Checksum-SHA256: ' . $resource['checksum_sha256']);
     header('Cache-Control: no-cache, no-store, must-revalidate');

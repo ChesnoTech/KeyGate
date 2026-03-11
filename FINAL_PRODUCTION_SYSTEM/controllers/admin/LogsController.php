@@ -33,6 +33,8 @@ function handle_list_logs(PDO $pdo, array $admin_session): void {
     $total = $stmt->fetchColumn();
 
     // Get logs
+    $params[] = (int)$limit;
+    $params[] = (int)$offset;
     $stmt = $pdo->prepare("
         SELECT
             aal.created_at, au.username, aal.action, aal.description, aal.ip_address
@@ -40,7 +42,7 @@ function handle_list_logs(PDO $pdo, array $admin_session): void {
         LEFT JOIN admin_users au ON aal.admin_id = au.id
         $whereClause
         ORDER BY aal.created_at DESC
-        LIMIT $limit OFFSET $offset
+        LIMIT ? OFFSET ?
     ");
     $stmt->execute($params);
     $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);

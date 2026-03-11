@@ -1,6 +1,6 @@
 <?php
 // API endpoint for technician login
-require_once '../config.php';
+require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/middleware/ApiMiddleware.php';
 
 $input = ApiMiddleware::bootstrap('login', ['technician_id', 'password'], [
@@ -23,8 +23,10 @@ try {
     $technician = $stmt->fetch();
     
     if (!$technician) {
-        // Log failed attempt
-        error_log("Login attempt for non-existent technician: $technician_id from " . getClientIP());
+        appLog('warning', 'Login attempt for non-existent technician', [
+            'technician_id' => $technician_id,
+            'event' => 'auth_failure',
+        ]);
         jsonResponse(['error' => 'Invalid credentials', 'error_code' => 'INVALID_CREDENTIALS'], 401);
     }
 
@@ -53,11 +55,11 @@ try {
     if (!$password_valid) {
         // Increment failed attempts
         $failed_attempts = $technician['failed_login_attempts'] + 1;
-        $max_attempts = (int)getConfig('max_failed_logins') ?: DEFAULT_MAX_FAILED_LOGINS;
+        $max_attempts = (int) getConfigWithDefault('max_failed_logins', DEFAULT_MAX_FAILED_LOGINS);
         
         $locked_until = null;
         if ($failed_attempts >= $max_attempts) {
-            $lockout_minutes = (int)getConfig('lockout_duration_minutes') ?: DEFAULT_LOCKOUT_MINUTES;
+            $lockout_minutes = (int) getConfigWithDefault('lockout_duration_minutes', DEFAULT_LOCKOUT_MINUTES);
             $locked_until = date('Y-m-d H:i:s', strtotime("+{$lockout_minutes} minutes"));
         }
         
@@ -68,7 +70,12 @@ try {
         ");
         $stmt->execute([$failed_attempts, $locked_until, $technician_id]);
         
-        error_log("Failed login for technician: $technician_id from " . getClientIP() . " (attempt $failed_attempts)");
+        appLog('warning', 'Failed login for technician', [
+            'technician_id' => $technician_id,
+            'event' => 'auth_failure',
+            'attempt' => $failed_attempts,
+            'locked' => $locked_until !== null,
+        ]);
         
         if ($locked_until) {
             jsonResponse([
@@ -106,6 +113,26 @@ try {
     if ($using_temp_password || $technician['must_change_password']) {
         $response['action_required'] = 'change_password';
         $response['message'] = 'Password change required before continuing';
+    }
+
+    // Include order field configuration for PowerShell clients
+    try {
+        $orderConfig = getOrderFieldConfig();
+        $lang = $technician['preferred_language'] ?? 'en';
+        $langSuffix = in_array($lang, ['en', 'ru']) ? $lang : 'en';
+        $pattern = buildOrderNumberPattern($orderConfig);
+        // Strip PHP regex delimiters for PowerShell/JS consumption
+        $cleanPattern = preg_replace('#^/(.+)/$#', '$1', $pattern);
+        $response['order_field'] = [
+            'label'      => $orderConfig["order_field_label_{$langSuffix}"],
+            'prompt'     => $orderConfig["order_field_prompt_{$langSuffix}"],
+            'pattern'    => $cleanPattern,
+            'min_length' => (int) $orderConfig['order_field_min_length'],
+            'max_length' => (int) $orderConfig['order_field_max_length'],
+            'char_type'  => $orderConfig['order_field_char_type'],
+        ];
+    } catch (Exception $e) {
+        error_log("Order field config in login response error: " . $e->getMessage());
     }
 
     // Include role and permissions in response

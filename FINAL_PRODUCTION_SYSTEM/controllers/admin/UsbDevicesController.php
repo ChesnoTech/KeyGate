@@ -7,6 +7,7 @@
 function handle_list_usb_devices(PDO $pdo, array $admin_session): void {
     $filterTech = $_GET['technician_id'] ?? '';
     $filterStatus = $_GET['status'] ?? '';
+    $search = trim($_GET['search'] ?? '');
 
     $where = [];
     $params = [];
@@ -19,6 +20,12 @@ function handle_list_usb_devices(PDO $pdo, array $admin_session): void {
     if (!empty($filterStatus)) {
         $where[] = "d.device_status = ?";
         $params[] = $filterStatus;
+    }
+
+    if (!empty($search)) {
+        $where[] = "(d.device_name LIKE ? OR d.device_serial_number LIKE ? OR d.device_manufacturer LIKE ? OR d.device_model LIKE ? OR t.full_name LIKE ? OR d.technician_id LIKE ?)";
+        $searchParam = "%$search%";
+        $params = array_merge($params, [$searchParam, $searchParam, $searchParam, $searchParam, $searchParam, $searchParam]);
     }
 
     $whereClause = !empty($where) ? "WHERE " . implode(" AND ", $where) : "";

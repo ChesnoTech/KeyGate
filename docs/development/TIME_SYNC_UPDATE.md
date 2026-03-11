@@ -1,3 +1,6 @@
+> **⚠️ Historical Document** — References to `main_v2.PS1` are outdated.
+> Current file: `activation/main_v3.PS1`. v2 was retired March 2026.
+
 # Time Sync Function Added
 
 **Date:** 2026-01-25

@@ -1,4 +1,4 @@
-# 🔐 OEM Activation System v2.0
+# 🔐 OEM Activation System v3.0
 
 **Professional Windows OEM License Management Platform**
 
@@ -49,7 +49,7 @@ OEM_Activation_System/
 │   ├── diagnostics.php          # System diagnostics
 │   └── steps/                   # Installation steps
 ├── 🗂️ activation/               # PowerShell scripts
-│   └── main_v2.PS1              # Client activation logic
+│   └── main_v3.PS1              # Client activation logic (USB auth, hardware QC, adaptive timing)
 ├── 🗂️ database/                 # Database files
 │   ├── install.sql              # Main database schema
 │   ├── database_setup.sql       # Core setup
@@ -57,7 +57,7 @@ OEM_Activation_System/
 │   ├── database_concurrency_indexes.sql  # Performance
 │   └── examples/                # Sample CSV files
 ├── 🗂️ client/                   # Client distribution
-│   ├── OEM_Activator_v2.cmd     # Technician launcher
+│   ├── OEM_Activator.cmd        # Technician launcher
 │   ├── CONFIG.txt               # Client configuration
 │   └── README_TECHNICIAN.md     # Technician guide
 ├── 🗂️ logs/                     # Log directory
@@ -217,8 +217,8 @@ The system supports clean URLs without `.php` extensions:
 5. **Testing**: Verify all functionality works
 
 ### Client Updates Required
-- Replace old client files with `OEM_Activator_v2.cmd`
-- Update PowerShell script to `main_v2.PS1`
+- Replace old client files with `OEM_Activator.cmd`
+- Update PowerShell script to `main_v3.PS1`
 - Configure new server URL in client
 - Test activation process with technicians
 
@@ -263,7 +263,7 @@ The system supports clean URLs without `.php` extensions:
 - **Logs**: Check application and server logs
 
 ### System Information
-- **Version**: 2.0.0
+- **Version**: 3.0.0
 - **Architecture**: MySQL + PHP + PowerShell
 - **License**: Internal/Proprietary Use
 - **Compatibility**: Windows 10/11, PHP 8.0+
@@ -283,6 +283,6 @@ The system supports clean URLs without `.php` extensions:
 
 ---
 
-*Last Updated: 2025-08-28*  
-*System Version: 2.0.0*  
+*Last Updated: 2026-03-11*
+*System Version: 3.0.0*
 *Documentation Status: Current*

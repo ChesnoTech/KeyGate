@@ -192,7 +192,7 @@ function handle_send_test_notification(PDO $pdo, array $admin_session, ?array $j
         if (!empty($subs)) {
             $vapidKeys = getVapidKeys();
             if ($vapidKeys) {
-                $vapidSubject = getConfig('vapid_subject') ?: 'mailto:admin@oem-activation.local';
+                $vapidSubject = getConfigWithDefault('vapid_subject', 'mailto:admin@oem-activation.local');
                 $webPush = new \Minishlink\WebPush\WebPush([
                     'VAPID' => [
                         'subject' => $vapidSubject,

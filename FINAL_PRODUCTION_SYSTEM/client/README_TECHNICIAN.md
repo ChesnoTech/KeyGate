@@ -1,10 +1,10 @@
-# 🔐 OEM Activation System v2.0 - Technician Guide
-**Database Edition with Enhanced Concurrency Support**
+# 🔐 OEM Activation System v3.0 - Technician Guide
+**USB Auth, Hardware QC, Adaptive Network Timing**
 
 ## 📋 Quick Start
 
 ### **Step 1: Run the Activator**
-1. **Right-click** on `OEM_Activator_v2.cmd`
+1. **Right-click** on `OEM_Activator.cmd`
 2. Select **"Run as administrator"**
 3. Follow the on-screen prompts
 
@@ -74,7 +74,7 @@ SERVER_URL=http://oem-server:8080
 ### **Common Issues**
 
 #### **❌ "Administrator privileges required"**
-**Solution**: Right-click `OEM_Activator_v2.cmd` → "Run as administrator"
+**Solution**: Right-click `OEM_Activator.cmd` → "Run as administrator"
 
 #### **❌ "Could not download activation script"**  
 **Solutions**:
@@ -151,6 +151,6 @@ SERVER_URL=http://oem-server:8080
 
 ---
 
-**🔐 OEM Activation System v2.0** - Professional license management for the modern enterprise.
+**🔐 OEM Activation System v3.0** - Professional license management for the modern enterprise.
 
 *For technical support, contact your system administrator.*

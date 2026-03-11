@@ -7,7 +7,7 @@
  * 2. Login authentication (validates code during login)
  */
 
-require_once '../config.php';
+require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../functions/totp-helpers.php';
 require_once __DIR__ . '/middleware/ApiMiddleware.php';
 

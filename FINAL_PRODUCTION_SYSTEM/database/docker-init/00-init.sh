@@ -1,9 +1,10 @@
 #!/bin/bash
 # =============================================================
-# OEM Activation System v2.0 — Complete Database Initialization
+# OEM Activation System v2.0 — Idempotent Database Initialization
 # =============================================================
 # This file is the ONLY entry point for docker-entrypoint-initdb.d.
-# It runs all migration SQL files in correct dependency order.
+# It runs all migration SQL files in correct dependency order,
+# skipping any that have already been applied (tracked in schema_versions).
 #
 # MariaDB provides $MARIADB_DATABASE, $MARIADB_USER, $MARIADB_PASSWORD
 # =============================================================
@@ -12,44 +13,77 @@ set -e
 
 DB="${MARIADB_DATABASE:-oem_activation}"
 SQL_DIR="/docker-entrypoint-initdb.d/sql"
+MYSQL_CMD="mysql -u root -p${MARIADB_ROOT_PASSWORD} ${DB}"
 
 echo "=== OEM Activation System: Database Initialization ==="
 echo "Database: $DB"
 echo "SQL directory: $SQL_DIR"
 
+# ── Step 0: Ensure schema_versions table exists ──────────────
+# This must run unconditionally so the tracking table is always present.
+$MYSQL_CMD < "$SQL_DIR/schema_versions_migration.sql" 2>/dev/null || true
+
+# ── Idempotent migration runner ──────────────────────────────
+# Checks schema_versions before running; records after success.
 run_sql() {
     local file="$SQL_DIR/$1"
-    if [ -f "$file" ]; then
-        echo "[INIT] Running: $1"
-        mysql -u root -p"${MARIADB_ROOT_PASSWORD}" "$DB" < "$file"
-    else
+    local version="$2"
+
+    if [ ! -f "$file" ]; then
         echo "[WARN] File not found: $file"
+        return
     fi
+
+    # Check if already applied
+    local applied
+    applied=$($MYSQL_CMD -N -e "SELECT COUNT(*) FROM schema_versions WHERE filename = '$1'" 2>/dev/null || echo "0")
+
+    if [ "$applied" -gt 0 ]; then
+        echo "[SKIP] Already applied: $1"
+        return
+    fi
+
+    echo "[INIT] Running: $1 (version $version)"
+    $MYSQL_CMD < "$file"
+
+    # Compute checksum and record
+    local checksum
+    checksum=$(sha256sum "$file" | cut -d' ' -f1)
+
+    $MYSQL_CMD -e "INSERT INTO schema_versions (version, filename, checksum) VALUES ($version, '$1', '$checksum')"
+    echo "[DONE] Applied: $1"
 }
 
+# ── Migrations in dependency order ───────────────────────────
+# Version numbers are sequential and reflect the order of introduction.
+
 # Phase 1: Core schema (technicians, oem_keys, activation_attempts, admin tables)
-run_sql "install.sql"
+run_sql "install.sql"                          1
 
 # Phase 2: Performance indexes for concurrent access
-run_sql "database_concurrency_indexes.sql"
+run_sql "database_concurrency_indexes.sql"     2
 
 # Phase 3: Security and access control
-run_sql "rbac_migration.sql"
-run_sql "acl_migration.sql"
-run_sql "2fa_migration.sql"
-run_sql "rate_limiting_migration.sql"
+run_sql "rbac_migration.sql"                   3
+run_sql "acl_migration.sql"                    4
+run_sql "2fa_migration.sql"                    5
+run_sql "rate_limiting_migration.sql"          6
 
 # Phase 4: Feature migrations
-run_sql "backup_migration.sql"
-run_sql "hardware_info_migration.sql"
-run_sql "hardware_info_v2_migration.sql"
-run_sql "push_notifications_migration.sql"
-run_sql "client_resources_migration.sql"
-run_sql "i18n_migration.sql"
+run_sql "backup_migration.sql"                 7
+run_sql "hardware_info_migration.sql"          8
+run_sql "hardware_info_v2_migration.sql"       9
+run_sql "push_notifications_migration.sql"    10
+run_sql "client_resources_migration.sql"      11
+run_sql "i18n_migration.sql"                  12
+run_sql "qc_compliance_migration.sql"         13
+run_sql "order_field_config_migration.sql"    14
+run_sql "integrations_migration.sql"          15
 
 # Phase 5: Temp password column widening (allows bcrypt hashes)
-run_sql "temp_password_hash_migration.sql"
+run_sql "temp_password_hash_migration.sql"    16
 
+echo ""
 echo "=== Database initialization complete ==="
 echo ""
 echo "NOTE: To hash existing temp passwords, run after first boot:"
