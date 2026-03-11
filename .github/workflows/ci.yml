@@ -98,21 +98,41 @@ jobs:
           echo "--- .env contents ---"
           cat .env
 
-      - name: Start Docker stack
-        run: docker compose up -d
+      - name: Build Docker images
+        run: docker compose build
 
-      - name: Wait for services to be ready
+      - name: Start database and Redis first
         run: |
-          echo "Waiting for all services..."
-          for i in $(seq 1 60); do
-            if curl -sf http://localhost:8080/api/health.php > /dev/null 2>&1; then
-              echo "✅ All services healthy after ~$((i * 5))s"
+          docker compose up -d db redis
+          echo "Waiting for database to be healthy..."
+          for i in $(seq 1 40); do
+            if docker compose exec -T db mariadb -uroot -pci_root_pass -e "SELECT 1" > /dev/null 2>&1; then
+              echo "✅ Database ready after ~$((i * 5))s"
               break
             fi
-            if [ "$i" -eq 60 ]; then
-              echo "❌ Services failed to start within 5 minutes"
+            if [ "$i" -eq 40 ]; then
+              echo "❌ Database failed to start"
+              docker compose logs db
+              exit 1
+            fi
+            sleep 5
+          done
+
+      - name: Start web and remaining services
+        run: docker compose up -d
+
+      - name: Wait for web server
+        run: |
+          echo "Waiting for web server health endpoint..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/api/health.php > /dev/null 2>&1; then
+              echo "✅ Web server healthy after ~$((i * 5))s"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "❌ Web server failed to start"
               docker compose ps
-              docker compose logs --tail 50
+              docker compose logs web --tail 50
               exit 1
             fi
             sleep 5
