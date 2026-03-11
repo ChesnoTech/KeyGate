@@ -1,5 +1,12 @@
 # OEM Activation System v3.0
 
+[![CI](https://github.com/ChesnoTech/OEM_Activation_System/actions/workflows/ci.yml/badge.svg)](https://github.com/ChesnoTech/OEM_Activation_System/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/ChesnoTech/OEM_Activation_System?label=release)](https://github.com/ChesnoTech/OEM_Activation_System/releases/latest)
+![PHP](https://img.shields.io/badge/PHP-8.3-777BB4?logo=php&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+![License](https://img.shields.io/badge/license-proprietary-red)
+
 **Professional Windows OEM license management for computer assembly operations.**
 
 Secure, database-driven system that automates Windows OEM key distribution, activation, and tracking across technician workstations. Replaces legacy SSH/CSV workflows with a modern REST API architecture deployed via Docker.
