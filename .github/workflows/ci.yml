@@ -99,22 +99,23 @@ jobs:
           cat .env
 
       - name: Start Docker stack
-        run: docker compose up -d --wait --wait-timeout 300
+        run: docker compose up -d
 
       - name: Wait for services to be ready
         run: |
-          echo "Waiting for web server..."
-          for i in $(seq 1 30); do
+          echo "Waiting for all services..."
+          for i in $(seq 1 60); do
             if curl -sf http://localhost:8080/api/health.php > /dev/null 2>&1; then
-              echo "✅ Web server is healthy"
+              echo "✅ All services healthy after ~$((i * 5))s"
               break
             fi
-            if [ "$i" -eq 30 ]; then
-              echo "❌ Web server failed to start"
-              docker compose logs web
+            if [ "$i" -eq 60 ]; then
+              echo "❌ Services failed to start within 5 minutes"
+              docker compose ps
+              docker compose logs --tail 50
               exit 1
             fi
-            sleep 2
+            sleep 5
           done
 
       - name: Test API health endpoint
