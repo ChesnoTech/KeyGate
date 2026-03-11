@@ -84,7 +84,7 @@ jobs:
           MARIADB_ROOT_PASSWORD=ci_root_pass
           REDIS_HOST=redis
           REDIS_PORT=6379
-          REDIS_PASSWORD=
+          REDIS_PASSWORD=ci_redis_pass
           APP_TIMEZONE=UTC
           BACKUP_RETENTION_DAYS=30
           CORS_ORIGINS=
@@ -94,7 +94,7 @@ jobs:
           ENVEOF
 
       - name: Start Docker stack
-        run: docker compose up -d --wait --wait-timeout 120
+        run: docker compose up -d --wait --wait-timeout 300
 
       - name: Wait for services to be ready
         run: |
