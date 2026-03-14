@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Pencil, Trash2, Package, HardDrive, ChevronRight, GripVertical } from 'lucide-react'
+import { Plus, Pencil, Trash2, Package, HardDrive, ChevronRight, GripVertical, ShieldCheck } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -50,6 +50,14 @@ const ENFORCEMENT_LABELS: Record<number, { label: string; color: string }> = {
   2: { label: 'product_lines.enforcement_warning', color: 'outline' },
   3: { label: 'product_lines.enforcement_blocking', color: 'destructive' },
 }
+
+const CHECK_LABELS: { key: string; field: string; labelKey: string; shortLabel: string }[] = [
+  { key: 'secure_boot', field: 'secure_boot_enforcement', labelKey: 'compliance.col_secure_boot', shortLabel: 'SB' },
+  { key: 'bios', field: 'bios_enforcement', labelKey: 'compliance.col_bios', shortLabel: 'BIOS' },
+  { key: 'hackbgrt', field: 'hackbgrt_enforcement', labelKey: 'compliance.col_boot_logo', shortLabel: 'Logo' },
+  { key: 'partition', field: 'partition_enforcement', labelKey: 'compliance.col_partitions', shortLabel: 'Part' },
+  { key: 'drivers', field: 'missing_drivers_enforcement', labelKey: 'compliance.col_drivers', shortLabel: 'Drv' },
+]
 
 function formatMB(mb: number): string {
   if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`
@@ -364,7 +372,11 @@ export function ProductLinesPage() {
   const { data: lineDetail } = useProductLine(selectedLineId)
 
   const [lineDialogOpen, setLineDialogOpen] = useState(false)
-  const [editingLine, setEditingLine] = useState<{ id?: number; name: string; order_pattern: string; description: string; enforcement_level: number } | undefined>()
+  const [editingLine, setEditingLine] = useState<{
+    id?: number; name: string; order_pattern: string; description: string; enforcement_level: number;
+    secure_boot_enforcement?: number | null; bios_enforcement?: number | null; hackbgrt_enforcement?: number | null;
+    partition_enforcement?: number | null; missing_drivers_enforcement?: number | null;
+  } | undefined>()
   const [variantDialogOpen, setVariantDialogOpen] = useState(false)
   const [editingVariant, setEditingVariant] = useState<{ id?: number; name: string; disk_size_min_mb: number; disk_size_max_mb: number; partitions: PartitionTemplate[] } | undefined>()
 
@@ -378,7 +390,15 @@ export function ProductLinesPage() {
 
   const openAddLine = () => { setEditingLine(undefined); setLineDialogOpen(true) }
   const openEditLine = (line: typeof lines[0]) => {
-    setEditingLine({ id: line.id, name: line.name, order_pattern: line.order_pattern, description: line.description ?? '', enforcement_level: line.enforcement_level })
+    setEditingLine({
+      id: line.id, name: line.name, order_pattern: line.order_pattern,
+      description: line.description ?? '', enforcement_level: line.enforcement_level,
+      secure_boot_enforcement: line.secure_boot_enforcement,
+      bios_enforcement: line.bios_enforcement,
+      hackbgrt_enforcement: line.hackbgrt_enforcement,
+      partition_enforcement: line.partition_enforcement,
+      missing_drivers_enforcement: line.missing_drivers_enforcement,
+    })
     setLineDialogOpen(true)
   }
 
@@ -424,9 +444,19 @@ export function ProductLinesPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <Badge variant={ENFORCEMENT_LABELS[line.enforcement_level]?.color as 'secondary' | 'default' | 'outline' | 'destructive'}>
-                      {t(ENFORCEMENT_LABELS[line.enforcement_level]?.label)}
-                    </Badge>
+                    <div className="flex gap-0.5">
+                      {CHECK_LABELS.map(check => {
+                        const val = (line as Record<string, unknown>)[check.field] as number | null
+                        if (val == null) return null
+                        const meta = ENFORCEMENT_LABELS[val]
+                        if (!meta) return null
+                        return (
+                          <Badge key={check.key} variant={meta.color as 'secondary' | 'default' | 'outline' | 'destructive'} className="text-[10px] px-1 py-0">
+                            {check.shortLabel}
+                          </Badge>
+                        )
+                      })}
+                    </div>
                     {line.variant_count !== undefined && (
                       <span className="text-xs text-muted-foreground">{line.variant_count}</span>
                     )}
@@ -471,6 +501,36 @@ export function ProductLinesPage() {
               </CardHeader>
 
               <CardContent className="space-y-4">
+                {/* QC Enforcement Summary */}
+                <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                    <h3 className="text-sm font-medium">{t('product_lines.qc_enforcement', 'QC Enforcement per Check')}</h3>
+                  </div>
+                  <div className="grid grid-cols-5 gap-3">
+                    {CHECK_LABELS.map(check => {
+                      const val = (detail as Record<string, unknown>)[check.field] as number | null
+                      const isInherited = val == null
+                      const meta = isInherited ? null : ENFORCEMENT_LABELS[val]
+                      return (
+                        <div key={check.key} className="text-center space-y-1">
+                          <div className="text-xs text-muted-foreground">{t(check.labelKey)}</div>
+                          {isInherited ? (
+                            <Badge variant="secondary" className="text-[10px]">{t('compliance.inherit', 'Inherit')}</Badge>
+                          ) : meta ? (
+                            <Badge variant={meta.color as 'secondary' | 'default' | 'outline' | 'destructive'} className="text-[10px]">
+                              {t(meta.label)}
+                            </Badge>
+                          ) : null}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">{t('product_lines.qc_enforcement_hint', 'Set per-check enforcement for this product line. "Inherit" uses global defaults.')}</p>
+                </div>
+
+                <Separator />
+
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-medium">{t('product_lines.variants', 'Variants')}</h3>
                   <Button size="sm" onClick={openAddVariant}><Plus className="h-3 w-3 mr-1" />{t('product_lines.add_variant', 'Add Variant')}</Button>
