@@ -1198,6 +1198,7 @@
     "compliance.rec_bios": "Рекомендуемый BIOS",
     "compliance.bios_enforcement": "Проверка BIOS",
     "compliance.hb_enforcement": "Проверка загр. логотипа",
+    "compliance.drivers_enforcement": "Проверка драйверов",
     "compliance.notes": "Заметки",
     "compliance.known_bios_versions": "Известные версии BIOS",
 

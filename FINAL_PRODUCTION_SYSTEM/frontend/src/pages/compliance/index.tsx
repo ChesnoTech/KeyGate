@@ -171,6 +171,7 @@ function MotherboardRegistryTab() {
         recommended_bios_version: editBoard.recommended_bios_version ?? '',
         bios_enforcement: editBoard.bios_enforcement?.toString() ?? '',
         hackbgrt_enforcement: editBoard.hackbgrt_enforcement?.toString() ?? '',
+        missing_drivers_enforcement: editBoard.missing_drivers_enforcement?.toString() ?? '',
         notes: editBoard.notes ?? '',
       })
     }
@@ -186,6 +187,7 @@ function MotherboardRegistryTab() {
       recommended_bios_version: editForm.recommended_bios_version || null,
       bios_enforcement: editForm.bios_enforcement || null,
       hackbgrt_enforcement: editForm.hackbgrt_enforcement || null,
+      missing_drivers_enforcement: editForm.missing_drivers_enforcement || null,
       notes: editForm.notes || null,
     }, { onSuccess: () => setEditBoard(null) })
   }
@@ -305,6 +307,18 @@ function MotherboardRegistryTab() {
               <div className="space-y-2">
                 <Label>{t('compliance.hb_enforcement', 'Boot Logo Enforcement')}</Label>
                 <Select value={editForm.hackbgrt_enforcement ?? ''} onValueChange={(v) => setEditForm({ ...editForm, hackbgrt_enforcement: !v || v === '__inherit__' ? '' : v })}>
+                  <SelectTrigger><SelectValue placeholder={t('compliance.inherit', 'Inherit')} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__inherit__">{t('compliance.inherit', 'Inherit')}</SelectItem>
+                    {enforcementOptions.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{t(o.labelKey)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>{t('compliance.drivers_enforcement', 'Missing Drivers Enforcement')}</Label>
+                <Select value={editForm.missing_drivers_enforcement ?? ''} onValueChange={(v) => setEditForm({ ...editForm, missing_drivers_enforcement: !v || v === '__inherit__' ? '' : v })}>
                   <SelectTrigger><SelectValue placeholder={t('compliance.inherit', 'Inherit')} /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__inherit__">{t('compliance.inherit', 'Inherit')}</SelectItem>

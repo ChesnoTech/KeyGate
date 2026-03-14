@@ -25,6 +25,7 @@ export interface MotherboardRow {
   recommended_bios_version: string | null
   bios_enforcement: number | null
   hackbgrt_enforcement: number | null
+  missing_drivers_enforcement: number | null
   known_bios_versions: string[]
   notes: string | null
   is_active: number
@@ -32,6 +33,8 @@ export interface MotherboardRow {
   effective_secure_boot_enforcement: number
   effective_bios_enforcement: number
   effective_hackbgrt_enforcement: number
+  effective_partition_enforcement: number
+  effective_missing_drivers_enforcement: number
   effective_secure_boot_required: number
   effective_min_bios: string | null
   effective_rec_bios: string | null
@@ -127,6 +130,7 @@ export interface UpdateMotherboardInput {
   recommended_bios_version?: string | null
   bios_enforcement?: string | null
   hackbgrt_enforcement?: string | null
+  missing_drivers_enforcement?: string | null
   notes?: string | null
 }
 

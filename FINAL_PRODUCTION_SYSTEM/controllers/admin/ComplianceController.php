@@ -67,7 +67,8 @@ function handle_qc_list_motherboards(PDO $pdo, array $admin_session, ?array $jso
     $stmt = $pdo->prepare("
         SELECT r.*, md.secure_boot_required AS mfr_sb_required, md.secure_boot_enforcement AS mfr_sb_enforcement,
                md.min_bios_version AS mfr_min_bios, md.recommended_bios_version AS mfr_rec_bios,
-               md.bios_enforcement AS mfr_bios_enforcement, md.hackbgrt_enforcement AS mfr_hb_enforcement
+               md.bios_enforcement AS mfr_bios_enforcement, md.hackbgrt_enforcement AS mfr_hb_enforcement,
+               md.missing_drivers_enforcement AS mfr_drivers_enforcement
         FROM qc_motherboard_registry r
         LEFT JOIN qc_manufacturer_defaults md ON r.manufacturer = md.manufacturer
         $whereClause
@@ -85,6 +86,8 @@ function handle_qc_list_motherboards(PDO $pdo, array $admin_session, ?array $jso
         $row['effective_secure_boot_enforcement'] = $row['secure_boot_enforcement'] ?? $row['mfr_sb_enforcement'] ?? (int) ($globalSettings['default_secure_boot_enforcement'] ?? 1);
         $row['effective_bios_enforcement'] = $row['bios_enforcement'] ?? $row['mfr_bios_enforcement'] ?? (int) ($globalSettings['default_bios_enforcement'] ?? 1);
         $row['effective_hackbgrt_enforcement'] = $row['hackbgrt_enforcement'] ?? $row['mfr_hb_enforcement'] ?? (int) ($globalSettings['default_hackbgrt_enforcement'] ?? 1);
+        $row['effective_partition_enforcement'] = (int) ($globalSettings['default_partition_enforcement'] ?? 2);
+        $row['effective_missing_drivers_enforcement'] = $row['missing_drivers_enforcement'] ?? $row['mfr_drivers_enforcement'] ?? (int) ($globalSettings['default_missing_drivers_enforcement'] ?? 2);
         $row['effective_secure_boot_required'] = $row['secure_boot_required'] ?? $row['mfr_sb_required'] ?? 1;
         $row['effective_min_bios'] = $row['min_bios_version'] ?? $row['mfr_min_bios'] ?? null;
         $row['effective_rec_bios'] = $row['recommended_bios_version'] ?? $row['mfr_rec_bios'] ?? null;
@@ -134,7 +137,7 @@ function handle_qc_update_motherboard(PDO $pdo, array $admin_session, ?array $js
 
     $fields = [];
     $params = [];
-    $allowedFields = ['secure_boot_required', 'secure_boot_enforcement', 'min_bios_version', 'recommended_bios_version', 'bios_enforcement', 'hackbgrt_enforcement', 'notes', 'is_active'];
+    $allowedFields = ['secure_boot_required', 'secure_boot_enforcement', 'min_bios_version', 'recommended_bios_version', 'bios_enforcement', 'hackbgrt_enforcement', 'missing_drivers_enforcement', 'notes', 'is_active'];
 
     foreach ($allowedFields as $field) {
         if (array_key_exists($field, $json_input)) {

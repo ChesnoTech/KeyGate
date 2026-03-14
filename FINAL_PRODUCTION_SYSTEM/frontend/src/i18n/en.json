@@ -1198,6 +1198,7 @@
     "compliance.rec_bios": "Recommended BIOS",
     "compliance.bios_enforcement": "BIOS Enforcement",
     "compliance.hb_enforcement": "Boot Logo Enforcement",
+    "compliance.drivers_enforcement": "Missing Drivers Enforcement",
     "compliance.notes": "Notes",
     "compliance.known_bios_versions": "Known BIOS Versions",
 

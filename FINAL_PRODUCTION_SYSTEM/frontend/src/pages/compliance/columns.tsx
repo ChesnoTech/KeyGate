@@ -98,6 +98,10 @@ export function getMotherboardColumns(
             <EnforcementBadge level={r.effective_bios_enforcement} t={t} />
             <span className="text-[10px] text-muted-foreground mr-0.5">BL:</span>
             <EnforcementBadge level={r.effective_hackbgrt_enforcement} t={t} />
+            <span className="text-[10px] text-muted-foreground mr-0.5">Part:</span>
+            <EnforcementBadge level={r.effective_partition_enforcement} t={t} />
+            <span className="text-[10px] text-muted-foreground mr-0.5">Drv:</span>
+            <EnforcementBadge level={r.effective_missing_drivers_enforcement} t={t} />
           </div>
         )
       },
