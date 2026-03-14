@@ -52,7 +52,7 @@ export interface ComplianceResult {
   id: number
   hardware_info_id: number
   order_number: string
-  check_type: 'bios_version' | 'secure_boot' | 'hackbgrt_boot_priority'
+  check_type: 'bios_version' | 'secure_boot' | 'hackbgrt_boot_priority' | 'partition_layout'
   check_result: 'pass' | 'info' | 'warning' | 'fail'
   enforcement_level: number
   expected_value: string | null
@@ -170,6 +170,46 @@ export function listComplianceResults(params: ListComplianceResultsParams = {}) 
     page: number
     total_pages: number
   }>('qc_list_compliance_results', params as Record<string, string | number | boolean>)
+}
+
+// ── Grouped by Order ────────────────────────────────────
+
+export interface CheckSummary {
+  result: 'pass' | 'info' | 'warning' | 'fail'
+  enforcement_level: number
+  expected_value: string | null
+  actual_value: string | null
+  message: string | null
+  rule_source: string
+}
+
+export interface GroupedComplianceRow {
+  order_number: string
+  hardware_info_id: number
+  motherboard_manufacturer: string | null
+  motherboard_product: string | null
+  hw_bios_version: string | null
+  detected_variant_name: string | null
+  detected_line_name: string | null
+  checked_at: string
+  worst_result: 'pass' | 'info' | 'warning' | 'fail'
+  checks: Record<string, CheckSummary>
+}
+
+export interface ListComplianceGroupedParams {
+  page?: number
+  search?: string
+  check_result?: string
+}
+
+export function listComplianceGrouped(params: ListComplianceGroupedParams = {}) {
+  return apiGet<{
+    success: boolean
+    results: GroupedComplianceRow[]
+    total: number
+    page: number
+    total_pages: number
+  }>('qc_list_compliance_grouped', params as Record<string, string | number | boolean>)
 }
 
 export function recheckHistorical(data?: { manufacturer?: string; product?: string }) {

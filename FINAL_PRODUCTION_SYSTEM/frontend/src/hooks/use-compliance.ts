@@ -9,10 +9,12 @@ import {
   listManufacturers,
   updateManufacturer,
   listComplianceResults,
+  listComplianceGrouped,
   recheckHistorical,
   getQcStats,
   type ListMotherboardsParams,
   type ListComplianceResultsParams,
+  type ListComplianceGroupedParams,
   type QcGlobalSettings,
   type UpdateMotherboardInput,
   type UpdateManufacturerInput,
@@ -83,6 +85,13 @@ export function useComplianceResults(params: ListComplianceResultsParams = {}) {
   return useQuery({
     queryKey: ['compliance', 'results', params],
     queryFn: () => listComplianceResults(params),
+  })
+}
+
+export function useComplianceGrouped(params: ListComplianceGroupedParams = {}) {
+  return useQuery({
+    queryKey: ['compliance', 'grouped', params],
+    queryFn: () => listComplianceGrouped(params),
   })
 }
 

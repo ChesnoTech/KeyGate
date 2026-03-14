@@ -1,13 +1,28 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { AuthContext, type AuthContextValue } from '@/hooks/use-auth'
 import { checkSession, login as apiLogin, logout as apiLogout } from '@/api/auth'
-import { setCsrfToken } from '@/api/client'
+import { setCsrfToken, setSessionExpiredHandler } from '@/api/client'
 import type { AdminUser, SessionInfo } from '@/types/api'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AdminUser | null>(null)
   const [permissions, setPermissions] = useState<Record<string, boolean>>({})
   const [isLoading, setIsLoading] = useState(true)
+  const navigate = useNavigate()
+  const { t } = useTranslation()
+
+  // Register global 401 handler — clears state, redirects to login with toast
+  useEffect(() => {
+    setSessionExpiredHandler(() => {
+      setUser(null)
+      setPermissions({})
+      navigate('/login', { replace: true })
+      toast.error(t('auth.session_expired', 'Session expired. Please log in again.'))
+    })
+  }, [navigate, t])
 
   const applySession = useCallback((session: SessionInfo) => {
     if (session.authenticated && session.user) {

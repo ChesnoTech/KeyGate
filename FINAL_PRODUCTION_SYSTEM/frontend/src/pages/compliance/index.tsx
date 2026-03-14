@@ -126,7 +126,7 @@ function GlobalSettingsTab() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>{t('compliance.default_hb_enforcement', 'Default HackBGRT Enforcement')}</Label>
+              <Label>{t('compliance.default_hb_enforcement', 'Default Boot Logo Enforcement')}</Label>
               <Select value={form.default_hackbgrt_enforcement} onValueChange={(v) => v && setForm({ ...form, default_hackbgrt_enforcement: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -308,7 +308,7 @@ function MotherboardRegistryTab() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>{t('compliance.hb_enforcement', 'HackBGRT Enforcement')}</Label>
+                <Label>{t('compliance.hb_enforcement', 'Boot Logo Enforcement')}</Label>
                 <Select value={editForm.hackbgrt_enforcement ?? ''} onValueChange={(v) => setEditForm({ ...editForm, hackbgrt_enforcement: !v || v === '__inherit__' ? '' : v })}>
                   <SelectTrigger><SelectValue placeholder={t('compliance.inherit', 'Inherit')} /></SelectTrigger>
                   <SelectContent>
@@ -459,7 +459,7 @@ function ManufacturerDefaultsTab() {
                 <span>{t(`compliance.enforcement_${mfr.bios_enforcement}`)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">{t('compliance.hb_enforcement', 'HackBGRT')}</span>
+                <span className="text-muted-foreground">{t('compliance.hb_enforcement', 'Boot Logo')}</span>
                 <span>{t(`compliance.enforcement_${mfr.hackbgrt_enforcement}`)}</span>
               </div>
               {mfr.min_bios_version && (
@@ -540,7 +540,7 @@ function ManufacturerDefaultsTab() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>{t('compliance.hb_enforcement', 'HackBGRT Enforcement')}</Label>
+              <Label>{t('compliance.hb_enforcement', 'Boot Logo Enforcement')}</Label>
               <Select value={editForm.hackbgrt_enforcement} onValueChange={(v) => v && setEditForm({ ...editForm, hackbgrt_enforcement: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>

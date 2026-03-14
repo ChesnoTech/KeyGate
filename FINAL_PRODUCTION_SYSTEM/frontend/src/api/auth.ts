@@ -36,7 +36,7 @@ export async function login(username: string, password: string): Promise<LoginRe
 }
 
 export async function logout(): Promise<void> {
-  await fetch('/activate/secure-admin.php?logout=1', {
+  await fetch(`${API_BASE}?logout=1`, {
     credentials: 'include',
   })
 }

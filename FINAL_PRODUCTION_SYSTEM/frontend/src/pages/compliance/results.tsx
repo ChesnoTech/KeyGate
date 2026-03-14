@@ -14,27 +14,25 @@ import {
 } from '@/components/ui/select'
 import { DataTable } from '@/components/data-table/data-table'
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import { useComplianceResults, useQcStats, useRecheckHistorical } from '@/hooks/use-compliance'
-import { getComplianceResultColumns } from './columns'
+import { useComplianceGrouped, useQcStats, useRecheckHistorical } from '@/hooks/use-compliance'
+import { getGroupedComplianceColumns } from './columns'
 
 export function ComplianceResultsPage() {
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
-  const [checkType, setCheckType] = useState('')
-  const [checkResult, setCheckResult] = useState('')
+  const [resultFilter, setResultFilter] = useState('')
   const [page, setPage] = useState(1)
   const [showRecheck, setShowRecheck] = useState(false)
 
-  const { data, isLoading } = useComplianceResults({
+  const { data, isLoading } = useComplianceGrouped({
     page,
     search: search || undefined,
-    check_type: checkType || undefined,
-    check_result: checkResult || undefined,
+    check_result: resultFilter || undefined,
   })
   const { data: statsData } = useQcStats()
   const recheckMutation = useRecheckHistorical()
 
-  const columns = useMemo(() => getComplianceResultColumns(t), [t])
+  const columns = useMemo(() => getGroupedComplianceColumns(t), [t])
 
   const stats = statsData?.stats
 
@@ -100,25 +98,13 @@ export function ComplianceResultsPage() {
               className="pl-8"
             />
           </div>
-          <Select value={checkType} onValueChange={(v) => { setCheckType(!v || v === '__all__' ? '' : v); setPage(1) }}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder={t('compliance.all_types', 'All Check Types')} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">{t('compliance.all_types', 'All Check Types')}</SelectItem>
-              <SelectItem value="bios_version">{t('compliance.type_bios_version', 'BIOS Version')}</SelectItem>
-              <SelectItem value="secure_boot">{t('compliance.type_secure_boot', 'Secure Boot')}</SelectItem>
-              <SelectItem value="hackbgrt_boot_priority">{t('compliance.type_hackbgrt_boot_priority', 'HackBGRT Boot')}</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={checkResult} onValueChange={(v) => { setCheckResult(!v || v === '__all__' ? '' : v); setPage(1) }}>
+          <Select value={resultFilter} onValueChange={(v) => { setResultFilter(!v || v === '__all__' ? '' : v); setPage(1) }}>
             <SelectTrigger className="w-[150px]">
               <SelectValue placeholder={t('compliance.all_results', 'All Results')} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">{t('compliance.all_results', 'All Results')}</SelectItem>
               <SelectItem value="pass">{t('compliance.result_pass', 'Pass')}</SelectItem>
-              <SelectItem value="info">{t('compliance.result_info', 'Info')}</SelectItem>
               <SelectItem value="warning">{t('compliance.result_warning', 'Warning')}</SelectItem>
               <SelectItem value="fail">{t('compliance.result_fail', 'Fail')}</SelectItem>
             </SelectContent>

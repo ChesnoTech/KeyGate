@@ -121,6 +121,10 @@ try {
         'boot_order' => $data['boot_order'] ?? null,
         'hackbgrt_installed' => isset($data['hackbgrt_installed']) ? (int)$data['hackbgrt_installed'] : null,
         'hackbgrt_first_boot' => isset($data['hackbgrt_first_boot']) ? (int)$data['hackbgrt_first_boot'] : null,
+
+        // Driver status (QC compliance)
+        'missing_drivers' => $data['missing_drivers'] ?? null,  // JSON array of problem devices
+        'missing_drivers_count' => isset($data['missing_drivers_count']) ? (int)$data['missing_drivers_count'] : null,
     ];
 
     // Insert hardware information
@@ -134,6 +138,7 @@ try {
             video_cards, storage_devices, disk_partitions, complete_disk_layout,
             os_name, os_version, os_architecture, secure_boot_enabled, computer_name,
             boot_order, hackbgrt_installed, hackbgrt_first_boot,
+            missing_drivers, missing_drivers_count,
             collection_timestamp
         ) VALUES (
             ?, ?, ?, ?,
@@ -144,6 +149,7 @@ try {
             ?, ?, ?, ?,
             ?, ?, ?, ?, ?,
             ?, ?, ?,
+            ?, ?,
             NOW()
         )
     ");
@@ -188,7 +194,10 @@ try {
 
         $hardwareData['boot_order'],
         $hardwareData['hackbgrt_installed'],
-        $hardwareData['hackbgrt_first_boot']
+        $hardwareData['hackbgrt_first_boot'],
+
+        $hardwareData['missing_drivers'],
+        $hardwareData['missing_drivers_count']
     ]);
 
     $hardwareId = $pdo->lastInsertId();

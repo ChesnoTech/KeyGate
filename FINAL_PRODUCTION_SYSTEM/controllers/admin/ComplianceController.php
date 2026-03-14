@@ -279,6 +279,146 @@ function handle_qc_list_compliance_results(PDO $pdo, array $admin_session, ?arra
     ]);
 }
 
+// ── Compliance Results — Grouped by Order ────────────────────
+
+function handle_qc_list_compliance_grouped(PDO $pdo, array $admin_session, ?array $json_input = null): void {
+    requirePermission('view_compliance', $admin_session);
+
+    $page = max(1, (int) ($_GET['page'] ?? 1));
+    $search = trim($_GET['search'] ?? '');
+    $resultFilter = trim($_GET['check_result'] ?? ''); // pass|warning|fail — filters orders that HAVE this result
+    $limit = PAGINATION_COMPLIANCE;
+    $offset = ($page - 1) * $limit;
+
+    // Sub-query: distinct (order_number, hardware_info_id) with worst result per order
+    // Result severity ordering: fail > warning > info > pass
+    $havingClause = '';
+    $havingParams = [];
+    if ($resultFilter !== '') {
+        // Filter to orders that have at least one check matching this result
+        $havingClause = "HAVING MAX(CASE WHEN cr.check_result = ? THEN 1 ELSE 0 END) = 1";
+        $havingParams[] = $resultFilter;
+    }
+
+    $searchClause = '';
+    $searchParams = [];
+    if ($search !== '') {
+        $searchClause = "AND cr.order_number LIKE ?";
+        $searchParams[] = "%$search%";
+    }
+
+    // Count distinct orders
+    $countSql = "
+        SELECT COUNT(*) FROM (
+            SELECT cr.order_number, cr.hardware_info_id
+            FROM qc_compliance_results cr
+            WHERE 1=1 $searchClause
+            GROUP BY cr.order_number, cr.hardware_info_id
+            $havingClause
+        ) sub
+    ";
+    $stmt = $pdo->prepare($countSql);
+    $stmt->execute(array_merge($searchParams, $havingParams));
+    $total = (int) $stmt->fetchColumn();
+
+    // Fetch grouped orders with worst result, ordered by latest check
+    $sql = "
+        SELECT
+            cr.order_number,
+            cr.hardware_info_id,
+            hi.motherboard_manufacturer,
+            hi.motherboard_product,
+            hi.bios_version AS hw_bios_version,
+            hi.detected_variant_name,
+            hi.detected_line_name,
+            MAX(cr.checked_at) AS checked_at,
+            MAX(CASE WHEN cr.check_result = 'fail' THEN 3
+                     WHEN cr.check_result = 'warning' THEN 2
+                     WHEN cr.check_result = 'info' THEN 1
+                     ELSE 0 END) AS worst_severity
+        FROM qc_compliance_results cr
+        LEFT JOIN hardware_info hi ON cr.hardware_info_id = hi.id
+        WHERE 1=1 $searchClause
+        GROUP BY cr.order_number, cr.hardware_info_id,
+                 hi.motherboard_manufacturer, hi.motherboard_product, hi.bios_version,
+                 hi.detected_variant_name, hi.detected_line_name
+        $havingClause
+        ORDER BY MAX(cr.checked_at) DESC
+        LIMIT ? OFFSET ?
+    ";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute(array_merge($searchParams, $havingParams, [(int) $limit, (int) $offset]));
+    $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // For each order, fetch all individual check results
+    if (!empty($orders)) {
+        $orderKeys = [];
+        foreach ($orders as $o) {
+            $orderKeys[] = $o['order_number'] . '|' . $o['hardware_info_id'];
+        }
+
+        // Fetch all checks for these orders in one query
+        $placeholders = implode(',', array_fill(0, count($orders), '(?, ?)'));
+        $checkParams = [];
+        foreach ($orders as $o) {
+            $checkParams[] = $o['order_number'];
+            $checkParams[] = $o['hardware_info_id'];
+        }
+
+        $checkSql = "
+            SELECT cr.order_number, cr.hardware_info_id, cr.check_type, cr.check_result,
+                   cr.enforcement_level, cr.expected_value, cr.actual_value, cr.message,
+                   cr.rule_source
+            FROM qc_compliance_results cr
+            WHERE (cr.order_number, cr.hardware_info_id) IN ($placeholders)
+            ORDER BY cr.check_type
+        ";
+        $stmt = $pdo->prepare($checkSql);
+        $stmt->execute($checkParams);
+        $allChecks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Group checks by order+hw key
+        $checksMap = [];
+        foreach ($allChecks as $c) {
+            $key = $c['order_number'] . '|' . $c['hardware_info_id'];
+            $checksMap[$key][] = $c;
+        }
+
+        // Attach checks to each order row
+        foreach ($orders as &$o) {
+            $key = $o['order_number'] . '|' . $o['hardware_info_id'];
+            $checks = $checksMap[$key] ?? [];
+
+            // Build per-check-type summary
+            $o['checks'] = [];
+            foreach ($checks as $c) {
+                $o['checks'][$c['check_type']] = [
+                    'result'           => $c['check_result'],
+                    'enforcement_level' => (int) $c['enforcement_level'],
+                    'expected_value'    => $c['expected_value'],
+                    'actual_value'      => $c['actual_value'],
+                    'message'           => $c['message'],
+                    'rule_source'       => $c['rule_source'],
+                ];
+            }
+
+            // Map worst_severity back to string
+            $severityMap = [0 => 'pass', 1 => 'info', 2 => 'warning', 3 => 'fail'];
+            $o['worst_result'] = $severityMap[(int) $o['worst_severity']] ?? 'pass';
+            unset($o['worst_severity']);
+        }
+        unset($o);
+    }
+
+    echo json_encode([
+        'success' => true,
+        'results' => $orders,
+        'total' => $total,
+        'page' => $page,
+        'total_pages' => max(1, (int) ceil($total / $limit)),
+    ]);
+}
+
 // ── Retroactive Recheck ──────────────────────────────────────
 
 function handle_qc_recheck_historical(PDO $pdo, array $admin_session, ?array $json_input = null): void {

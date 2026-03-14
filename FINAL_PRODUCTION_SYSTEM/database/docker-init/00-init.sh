@@ -83,6 +83,9 @@ run_sql "integrations_migration.sql"          15
 # Phase 5: Temp password column widening (allows bcrypt hashes)
 run_sql "temp_password_hash_migration.sql"    16
 
+# Phase 6: Product variants & partition QC
+run_sql "product_variants_migration.sql"      17
+
 echo ""
 echo "=== Database initialization complete ==="
 echo ""

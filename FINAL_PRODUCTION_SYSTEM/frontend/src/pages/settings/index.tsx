@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Save, Upload, Trash2, RotateCcw, Palette } from 'lucide-react'
+import { Save, Upload, Trash2, RotateCcw, Palette, Timer } from 'lucide-react'
 import { AppHeader } from '@/components/layout/app-header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,6 +20,8 @@ import {
   useSaveAltServerSettings,
   useOrderFieldSettings,
   useSaveOrderFieldSettings,
+  useSessionSettings,
+  useSaveSessionSettings,
 } from '@/hooks/use-settings'
 import {
   useBranding,
@@ -27,7 +29,7 @@ import {
   useUploadBrandAsset,
   useDeleteBrandAsset,
 } from '@/hooks/use-branding'
-import type { AltServerConfig, OrderFieldConfig } from '@/api/settings'
+import type { AltServerConfig, OrderFieldConfig, SessionConfig } from '@/api/settings'
 import type { BrandingConfig } from '@/api/branding'
 
 // Labels are now provided via i18n (settings.script_type_cmd / settings.script_type_powershell)
@@ -179,6 +181,27 @@ export function SettingsPage() {
       brand_sidebar_color: '',
       brand_accent_color: '',
     }))
+  }
+
+  // Session settings
+  const { data: sessionData, isLoading: sessionLoading } = useSessionSettings()
+  const saveSessionMutation = useSaveSessionSettings()
+
+  const [sessionForm, setSessionForm] = useState<SessionConfig>({
+    admin_session_timeout_minutes: 30,
+    admin_max_failed_logins: 3,
+    admin_lockout_duration_minutes: 30,
+    admin_force_password_change_days: 90,
+  })
+
+  useEffect(() => {
+    if (sessionData?.config) {
+      setSessionForm(sessionData.config)
+    }
+  }, [sessionData])
+
+  const handleSessionSave = () => {
+    saveSessionMutation.mutate(sessionForm)
   }
 
   return (
@@ -440,6 +463,87 @@ export function SettingsPage() {
                 <Button onClick={handleBrandSave} disabled={saveBrandMutation.isPending}>
                   <Save className="mr-2 h-4 w-4" />
                   {saveBrandMutation.isPending ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Session Settings Card */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Timer className="h-5 w-5 text-primary" />
+              <div>
+                <CardTitle>{t('settings.session_title', 'Session Settings')}</CardTitle>
+                <CardDescription>
+                  {t('settings.session_desc', 'Configure admin session timeout and inactivity limits.')}
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {sessionLoading ? (
+              <div className="space-y-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-8 w-full" />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>{t('settings.session_timeout', 'Session Timeout (minutes)')}</Label>
+                    <Input
+                      type="number"
+                      min={5}
+                      max={1440}
+                      value={sessionForm.admin_session_timeout_minutes}
+                      onChange={(e) => setSessionForm({ ...sessionForm, admin_session_timeout_minutes: Number(e.target.value) })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {t('settings.session_timeout_desc', 'Maximum session lifetime before forced re-login.')}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t('settings.max_failed_logins', 'Max Failed Login Attempts')}</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={sessionForm.admin_max_failed_logins}
+                      onChange={(e) => setSessionForm({ ...sessionForm, admin_max_failed_logins: Number(e.target.value) })}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>{t('settings.lockout_duration', 'Lockout Duration (minutes)')}</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={1440}
+                      value={sessionForm.admin_lockout_duration_minutes}
+                      onChange={(e) => setSessionForm({ ...sessionForm, admin_lockout_duration_minutes: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t('settings.password_change_days', 'Force Password Change (days)')}</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={365}
+                      value={sessionForm.admin_force_password_change_days}
+                      onChange={(e) => setSessionForm({ ...sessionForm, admin_force_password_change_days: Number(e.target.value) })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {t('settings.password_change_days_desc', '0 = never require password change')}
+                    </p>
+                  </div>
+                </div>
+                <Button onClick={handleSessionSave} disabled={saveSessionMutation.isPending}>
+                  <Save className="mr-2 h-4 w-4" />
+                  {saveSessionMutation.isPending ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
                 </Button>
               </div>
             )}

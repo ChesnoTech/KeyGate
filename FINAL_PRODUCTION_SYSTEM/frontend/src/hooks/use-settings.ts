@@ -6,8 +6,11 @@ import {
   saveAltServerSettings,
   getOrderFieldSettings,
   saveOrderFieldSettings,
+  getSessionSettings,
+  saveSessionSettings,
   type AltServerConfig,
   type OrderFieldConfig,
+  type SessionConfig,
 } from '@/api/settings'
 
 export function useAltServerSettings() {
@@ -45,6 +48,26 @@ export function useSaveOrderFieldSettings() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['settings', 'order-fields'] })
       toast.success(t('toast.settings_saved', 'Settings saved successfully'))
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+export function useSessionSettings() {
+  return useQuery({
+    queryKey: ['settings', 'session'],
+    queryFn: () => getSessionSettings(),
+  })
+}
+
+export function useSaveSessionSettings() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: (config: SessionConfig) => saveSessionSettings(config),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings', 'session'] })
+      toast.success(t('settings.session_saved', 'Session settings saved'))
     },
     onError: (e: Error) => toast.error(e.message),
   })

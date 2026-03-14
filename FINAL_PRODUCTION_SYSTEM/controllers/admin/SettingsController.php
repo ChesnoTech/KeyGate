@@ -162,3 +162,52 @@ function handle_save_order_field_settings(PDO $pdo, array $admin_session, ?array
         'computed_pattern' => buildOrderNumberPattern($newConfig),
     ]);
 }
+
+// ── Session Settings ────────────────────────────────────────
+
+function handle_get_session_settings(PDO $pdo, array $admin_session): void {
+    $config = [
+        'admin_session_timeout_minutes' => getConfigWithDefault('admin_session_timeout_minutes', defined('DEFAULT_ADMIN_SESSION_TIMEOUT_MINUTES') ? DEFAULT_ADMIN_SESSION_TIMEOUT_MINUTES : 30),
+        'admin_max_failed_logins' => getConfigWithDefault('admin_max_failed_logins', defined('DEFAULT_MAX_FAILED_LOGINS') ? DEFAULT_MAX_FAILED_LOGINS : 3),
+        'admin_lockout_duration_minutes' => getConfigWithDefault('admin_lockout_duration_minutes', defined('DEFAULT_LOCKOUT_DURATION_MINUTES') ? DEFAULT_LOCKOUT_DURATION_MINUTES : 30),
+        'admin_force_password_change_days' => getConfigWithDefault('admin_force_password_change_days', 90),
+    ];
+    jsonResponse(['success' => true, 'config' => $config]);
+}
+
+function handle_save_session_settings(PDO $pdo, array $admin_session, ?array $json_input = null): void {
+    if (!$json_input) {
+        jsonResponse(['success' => false, 'error' => 'Invalid JSON input'], 400);
+        return;
+    }
+
+    // Validate session timeout (5-1440 minutes = 5 min to 24 hours)
+    $timeout = (int) ($json_input['admin_session_timeout_minutes'] ?? 30);
+    if ($timeout < 5 || $timeout > 1440) {
+        jsonResponse(['success' => false, 'error' => 'Session timeout must be between 5 and 1440 minutes'], 400);
+        return;
+    }
+
+    $maxFailed = max(1, min(20, (int) ($json_input['admin_max_failed_logins'] ?? 3)));
+    $lockoutDuration = max(1, min(1440, (int) ($json_input['admin_lockout_duration_minutes'] ?? 30)));
+    $passwordDays = max(0, min(365, (int) ($json_input['admin_force_password_change_days'] ?? 90)));
+
+    $configs = [
+        'admin_session_timeout_minutes' => (string) $timeout,
+        'admin_max_failed_logins' => (string) $maxFailed,
+        'admin_lockout_duration_minutes' => (string) $lockoutDuration,
+        'admin_force_password_change_days' => (string) $passwordDays,
+    ];
+
+    $stmt = $pdo->prepare("INSERT INTO system_config (config_key, config_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE config_value = VALUES(config_value)");
+    foreach ($configs as $key => $value) {
+        $stmt->execute([$key, $value]);
+    }
+
+    jsonResponse(['success' => true, 'config' => [
+        'admin_session_timeout_minutes' => $timeout,
+        'admin_max_failed_logins' => $maxFailed,
+        'admin_lockout_duration_minutes' => $lockoutDuration,
+        'admin_force_password_change_days' => $passwordDays,
+    ]]);
+}

@@ -11,6 +11,7 @@ import {
   UserCog,
   ClipboardCheck,
   ShieldCheck,
+  Boxes,
   Settings,
   Database,
   ScrollText,
@@ -67,6 +68,7 @@ const navGroups = [
     items: [
       { path: '/compliance', labelKey: 'nav.compliance', icon: ClipboardCheck, minRole: 'admin' as const },
       { path: '/compliance/results', labelKey: 'nav.compliance_results', icon: ShieldCheck },
+      { path: '/product-lines', labelKey: 'nav.product_lines', icon: Boxes, minRole: 'admin' as const },
     ],
   },
   {

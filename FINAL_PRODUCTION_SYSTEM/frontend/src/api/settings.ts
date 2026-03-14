@@ -71,3 +71,25 @@ export function saveOrderFieldSettings(config: OrderFieldConfig) {
     config as unknown as Record<string, unknown>
   )
 }
+
+// ── Session Settings ────────────────────────────────────────
+
+export interface SessionConfig {
+  admin_session_timeout_minutes: number
+  admin_max_failed_logins: number
+  admin_lockout_duration_minutes: number
+  admin_force_password_change_days: number
+}
+
+export interface GetSessionSettingsResponse {
+  success: boolean
+  config: SessionConfig
+}
+
+export function getSessionSettings() {
+  return apiGet<GetSessionSettingsResponse>('get_session_settings')
+}
+
+export function saveSessionSettings(config: SessionConfig) {
+  return apiPostJson<{ success: boolean; config: SessionConfig }>('save_session_settings', config as unknown as Record<string, unknown>)
+}

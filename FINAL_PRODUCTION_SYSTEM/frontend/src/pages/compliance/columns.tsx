@@ -7,7 +7,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Badge } from '@/components/ui/badge'
-import type { MotherboardRow, ComplianceResult } from '@/api/compliance'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import type { MotherboardRow, ComplianceResult, GroupedComplianceRow, CheckSummary } from '@/api/compliance'
 
 const enforcementLabels: Record<number, { label: string; color: string }> = {
   0: { label: 'Disabled', color: 'bg-gray-400' },
@@ -91,7 +96,7 @@ export function getMotherboardColumns(
             <EnforcementBadge level={r.effective_secure_boot_enforcement} t={t} />
             <span className="text-[10px] text-muted-foreground mr-0.5">BIOS:</span>
             <EnforcementBadge level={r.effective_bios_enforcement} t={t} />
-            <span className="text-[10px] text-muted-foreground mr-0.5">HB:</span>
+            <span className="text-[10px] text-muted-foreground mr-0.5">BL:</span>
             <EnforcementBadge level={r.effective_hackbgrt_enforcement} t={t} />
           </div>
         )
@@ -195,6 +200,232 @@ export function getComplianceResultColumns(
       accessorKey: 'rule_source',
       header: t('compliance.rule_source', 'Source'),
       cell: ({ row }) => t(`compliance.source_${row.original.rule_source}`, row.original.rule_source),
+    },
+    {
+      accessorKey: 'checked_at',
+      header: t('compliance.checked_at', 'Checked'),
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-xs">
+          {row.original.checked_at?.replace('T', ' ').slice(0, 16) ?? '\u2014'}
+        </span>
+      ),
+    },
+  ]
+}
+
+// ── Grouped Compliance Results (one row per order) ──────
+
+/** Parse partition check message into structured lines */
+function parsePartitionMessage(message: string): { header: string; lines: { name: string; ok: boolean; detail: string }[] } | null {
+  const lines = message.split('\n').filter(Boolean)
+  if (lines.length < 2) return null
+  const header = lines[0]
+  const parsed = lines.slice(1).map((line) => {
+    // e.g. "#1 EFI: OK (260 MB, deviation 0% within 1%)"
+    //      "#3 OS: FAIL (150000 MB, deviation 25% exceeds 1%)"
+    const m = line.match(/^#\d+\s+(.+?):\s+(OK|FAIL)\s+\((.+)\)$/)
+    if (!m) return null
+    return { name: m[1], ok: m[2] === 'OK', detail: m[3] }
+  }).filter(Boolean) as { name: string; ok: boolean; detail: string }[]
+  return parsed.length > 0 ? { header, lines: parsed } : null
+}
+
+function PartitionTooltip({ check, label, t }: { check: CheckSummary; label: string; t: (k: string, d?: string) => string }) {
+  const parsed = check.message ? parsePartitionMessage(check.message) : null
+
+  // If it's a simple pass message or unparseable, show simple tooltip
+  if (!parsed) {
+    return (
+      <SimpleTooltip check={check} label={label} />
+    )
+  }
+
+  return (
+    <div className="space-y-1.5 max-w-sm">
+      <p className="font-medium text-xs">{label}</p>
+      <p className="text-[11px] opacity-80">{parsed.header}</p>
+      <table className="w-full text-[10px]">
+        <tbody>
+          {parsed.lines.map((line, i) => (
+            <tr key={i} className={line.ok ? 'text-green-400' : 'text-red-400'}>
+              <td className="pr-2 py-0.5 font-medium whitespace-nowrap">
+                {line.ok ? '✓' : '✗'} {line.name}
+              </td>
+              <td className="py-0.5 opacity-80">{line.detail}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/** Parse missing drivers message into structured list */
+function parseDriversMessage(message: string): { header: string; devices: string[] } | null {
+  const lines = message.split('\n').filter(Boolean)
+  if (lines.length < 2) return null
+  return { header: lines[0], devices: lines.slice(1) }
+}
+
+function DriversTooltip({ check, label }: { check: CheckSummary; label: string }) {
+  const parsed = check.message ? parseDriversMessage(check.message) : null
+
+  if (!parsed) {
+    return <SimpleTooltip check={check} label={label} />
+  }
+
+  return (
+    <div className="space-y-1.5 max-w-sm">
+      <p className="font-medium text-xs">{label}</p>
+      <p className="text-[11px] opacity-80">{parsed.header}</p>
+      <ul className="text-[10px] space-y-0.5">
+        {parsed.devices.map((device, i) => (
+          <li key={i} className="text-red-400 flex items-start gap-1">
+            <span className="shrink-0">✗</span>
+            <span className="opacity-90">{device}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function SimpleTooltip({ check, label }: { check: CheckSummary; label: string }) {
+  // Clean message: remove raw JSON from display
+  const msg = check.message
+  return (
+    <div className="space-y-1 max-w-xs">
+      <p className="font-medium text-xs">{label}</p>
+      {msg && <p className="text-[11px] opacity-80">{msg}</p>}
+      {check.expected_value && check.actual_value
+        && !check.expected_value.startsWith('{') && !check.expected_value.startsWith('[') && (
+        <p className="text-[10px] opacity-60">
+          {check.expected_value} → {check.actual_value}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function CheckCell({ check, label, checkType, t }: { check?: CheckSummary; label: string; checkType?: string; t: (k: string, d?: string) => string }) {
+  if (!check) {
+    return <span className="text-muted-foreground text-[10px]">{'\u2014'}</span>
+  }
+  const color = resultColors[check.result] ?? 'bg-gray-400'
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Badge variant="secondary" className={`${color} text-white text-[10px] px-1.5 py-0 cursor-help`}>
+          {t(`compliance.result_${check.result}`, check.result)}
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" className="p-3">
+        {checkType === 'partition_layout'
+          ? <PartitionTooltip check={check} label={label} t={t} />
+          : checkType === 'missing_drivers'
+            ? <DriversTooltip check={check} label={label} />
+            : <SimpleTooltip check={check} label={label} />
+        }
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function getGroupedComplianceColumns(
+  t: (key: string, defaultValue?: any) => string
+): ColumnDef<GroupedComplianceRow>[] {
+  return [
+    {
+      accessorKey: 'order_number',
+      header: t('compliance.order_number', 'Order #'),
+      cell: ({ row }) => (
+        <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
+          {row.original.order_number}
+        </code>
+      ),
+    },
+    {
+      id: 'board',
+      header: t('compliance.motherboard', 'Motherboard'),
+      cell: ({ row }) => {
+        const r = row.original
+        return r.motherboard_manufacturer
+          ? <span className="text-xs">{r.motherboard_manufacturer} {r.motherboard_product ?? ''}</span>
+          : <span className="text-muted-foreground">{'\u2014'}</span>
+      },
+    },
+    {
+      id: 'overall',
+      header: t('compliance.overall', 'Overall'),
+      cell: ({ row }) => {
+        const color = resultColors[row.original.worst_result] ?? 'bg-gray-400'
+        return (
+          <Badge variant="secondary" className={`${color} text-white text-[10px] px-1.5 py-0`}>
+            {t(`compliance.result_${row.original.worst_result}`, row.original.worst_result)}
+          </Badge>
+        )
+      },
+    },
+    {
+      id: 'secure_boot',
+      header: t('compliance.col_secure_boot', 'Secure Boot'),
+      cell: ({ row }) => (
+        <CheckCell
+          check={row.original.checks['secure_boot']}
+          label={t('compliance.type_secure_boot', 'Secure Boot')}
+          checkType="secure_boot"
+          t={t}
+        />
+      ),
+    },
+    {
+      id: 'bios_version',
+      header: t('compliance.col_bios', 'BIOS'),
+      cell: ({ row }) => (
+        <CheckCell
+          check={row.original.checks['bios_version']}
+          label={t('compliance.type_bios_version', 'BIOS Version')}
+          checkType="bios_version"
+          t={t}
+        />
+      ),
+    },
+    {
+      id: 'hackbgrt',
+      header: t('compliance.col_boot_logo', 'Boot Logo'),
+      cell: ({ row }) => (
+        <CheckCell
+          check={row.original.checks['hackbgrt_boot_priority']}
+          label={t('compliance.type_hackbgrt_boot_priority', 'Boot Logo Verification')}
+          checkType="hackbgrt_boot_priority"
+          t={t}
+        />
+      ),
+    },
+    {
+      id: 'partition_layout',
+      header: t('compliance.col_partitions', 'Partitions'),
+      cell: ({ row }) => (
+        <CheckCell
+          check={row.original.checks['partition_layout']}
+          label={t('compliance.type_partition_layout', 'Partition Layout')}
+          checkType="partition_layout"
+          t={t}
+        />
+      ),
+    },
+    {
+      id: 'missing_drivers',
+      header: t('compliance.col_drivers', 'Drivers'),
+      cell: ({ row }) => (
+        <CheckCell
+          check={row.original.checks['missing_drivers']}
+          label={t('compliance.type_missing_drivers', 'Missing Drivers')}
+          checkType="missing_drivers"
+          t={t}
+        />
+      ),
     },
     {
       accessorKey: 'checked_at',

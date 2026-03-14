@@ -1082,6 +1082,42 @@ function Collect-HardwareInfo {
         # === Computer Name ===
         $hardwareInfo['computer_name'] = $env:COMPUTERNAME
 
+        # === Missing / Problematic Drivers ===
+        Write-Host "  • Driver status..." -ForegroundColor Gray
+        try {
+            $problemDevices = @(Get-PnpDevice -ErrorAction SilentlyContinue |
+                Where-Object { $_.Status -ne 'OK' -and $_.Status -ne 'Unknown' -and $_.Class -ne $null } |
+                Select-Object -Property @{N='device_name';E={$_.FriendlyName}},
+                                         @{N='device_id';E={$_.InstanceId}},
+                                         @{N='status';E={$_.Status}},
+                                         @{N='class';E={$_.Class}},
+                                         @{N='error_code';E={$_.ConfigManagerErrorCode}})
+
+            # Fallback for older Windows: WMI query for devices with errors
+            if (-not $problemDevices -and $problemDevices.Count -eq 0) {
+                $problemDevices = @(Get-WmiObject Win32_PnPEntity -ErrorAction SilentlyContinue |
+                    Where-Object { $_.ConfigManagerErrorCode -ne 0 } |
+                    Select-Object -Property @{N='device_name';E={$_.Name}},
+                                             @{N='device_id';E={$_.DeviceID}},
+                                             @{N='status';E={$_.Status}},
+                                             @{N='class';E={$_.PNPClass}},
+                                             @{N='error_code';E={$_.ConfigManagerErrorCode}})
+            }
+
+            $hardwareInfo['missing_drivers_count'] = $problemDevices.Count
+            if ($problemDevices.Count -gt 0) {
+                $hardwareInfo['missing_drivers'] = ($problemDevices | ConvertTo-Json -Compress)
+                Write-Host "    ⚠️ Found $($problemDevices.Count) device(s) with driver issues" -ForegroundColor Yellow
+            } else {
+                $hardwareInfo['missing_drivers'] = '[]'
+                Write-Host "    ✅ All drivers OK" -ForegroundColor Green
+            }
+        } catch {
+            Write-Host "    ⚠️ Could not check driver status: $($_.Exception.Message)" -ForegroundColor Yellow
+            $hardwareInfo['missing_drivers_count'] = $null
+            $hardwareInfo['missing_drivers'] = $null
+        }
+
         Write-Host "✅ Hardware information collected successfully" -ForegroundColor Green
 
         return $hardwareInfo
@@ -1351,16 +1387,61 @@ if (-not $SessionInfo) {
 # Measure network latency to Microsoft servers and configure adaptive timing
 Test-NetworkLatency
 
-# Get order number (use server-configured field settings if available)
-$orderFieldParams = @{}
-if ($SessionInfo.order_field) {
-    $of = $SessionInfo.order_field
-    if ($of.prompt)     { $orderFieldParams['Prompt']  = $of.prompt }
-    if ($of.pattern)    { $orderFieldParams['Pattern'] = "^$($of.pattern)$" -replace '\^\^', '^' -replace '\$\$', '$' }
-    if ($of.min_length) { $orderFieldParams['MinLen']  = [int]$of.min_length }
-    if ($of.max_length) { $orderFieldParams['MaxLen']  = [int]$of.max_length }
+# Get order number — product lines menu + 6 digits, or legacy field settings
+if ($SessionInfo.product_lines -and $SessionInfo.product_lines.Count -gt 0) {
+    # New flow: technician picks order type from product lines, then enters 6 digits
+    $lines = $SessionInfo.product_lines
+    Write-Host ""
+    Write-Host "═══════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "  $($Lang['select_order_type'])" -ForegroundColor Cyan
+    Write-Host "═══════════════════════════════════════" -ForegroundColor Cyan
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $num = $i + 1
+        Write-Host "  [$num] $($lines[$i].name)" -ForegroundColor White
+        Write-Host "      $($lines[$i].prefix)######" -ForegroundColor DarkGray
+    }
+    Write-Host "═══════════════════════════════════════" -ForegroundColor Cyan
+
+    # Get selection
+    $selectedLine = $null
+    while (-not $selectedLine) {
+        $choice = Read-Host "  (1-$($lines.Count))"
+        if ($choice -match '^\d+$') {
+            $idx = [int]$choice - 1
+            if ($idx -ge 0 -and $idx -lt $lines.Count) {
+                $selectedLine = $lines[$idx]
+            }
+        }
+        if (-not $selectedLine) {
+            Write-Host "  ⚠️ Invalid choice. Enter 1-$($lines.Count)" -ForegroundColor Yellow
+        }
+    }
+    Write-Host "  ✅ $($selectedLine.name)" -ForegroundColor Green
+
+    # Get 6-digit order number
+    $digits = $null
+    while (-not $digits) {
+        $input = Read-Host "  $($Lang['prompt_6_digits'])"
+        if ($input -match '^\d{6}$') {
+            $digits = $input
+        } else {
+            Write-Host "  $($Lang['order_6_digits_invalid'])" -ForegroundColor Yellow
+        }
+    }
+    $OrderNumber = "$($selectedLine.prefix)$digits"
+    Write-Host "  📋 $OrderNumber" -ForegroundColor Cyan
+} else {
+    # Legacy flow: use server-configured field settings
+    $orderFieldParams = @{}
+    if ($SessionInfo.order_field) {
+        $of = $SessionInfo.order_field
+        if ($of.prompt)     { $orderFieldParams['Prompt']  = $of.prompt }
+        if ($of.pattern)    { $orderFieldParams['Pattern'] = "^$($of.pattern)$" -replace '\^\^', '^' -replace '\$\$', '$' }
+        if ($of.min_length) { $orderFieldParams['MinLen']  = [int]$of.min_length }
+        if ($of.max_length) { $orderFieldParams['MaxLen']  = [int]$of.max_length }
+    }
+    $OrderNumber = Get-Valid-OrderNumber @orderFieldParams
 }
-$OrderNumber = Get-Valid-OrderNumber @orderFieldParams
 
 # === COLLECT HARDWARE IMMEDIATELY (Regardless of activation status) ===
 Write-Host "`n🔧 Starting hardware collection..." -ForegroundColor Cyan

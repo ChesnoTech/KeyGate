@@ -82,219 +82,34 @@ if (isset($_GET['logout'])) {
         logAdminActivity($_SESSION['admin_id'], $_SESSION['session_id'], 'LOGOUT', 'User logout');
     }
     session_destroy();
-    header('Location: secure-admin.php');
+    // Return JSON for API calls, redirect for browser
+    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) || str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json')) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => true, 'message' => 'Logged out']);
+    } else {
+        header('Location: /');
+    }
     exit;
 }
 
-// Handle login
-$error = '';
-$success = '';
+// Legacy login form removed — React frontend is the admin panel.
+// This file is still included by admin_v2.php for session/security infrastructure.
+// If accessed directly in a browser, redirect to the React frontend.
 
+// Handle legacy POST login (in case something still hits it)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['username'])) {
     $result = authenticateAdmin($_POST['username'], $_POST['password']);
     if ($result === false) {
-        $error = 'Invalid credentials';
+        header('Location: /?error=invalid_credentials');
     } elseif (is_array($result) && isset($result['error'])) {
-        $error = $result['error'];
+        header('Location: /?error=auth_failed');
     } else {
-        header('Location: secure-admin.php');
-        exit;
+        header('Location: /');
     }
-}
-
-// Check if user is logged in
-$admin_session = validateAdminSession();
-
-if (!$admin_session) {
-    // Show login form
-    ?>
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Secure Admin - OEM Activation</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
-            body { 
-                font-family: Arial, sans-serif; 
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                margin: 0; 
-                padding: 20px; 
-                min-height: 100vh;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            .login-container {
-                background: white;
-                padding: 40px;
-                border-radius: 15px;
-                box-shadow: 0 15px 35px rgba(0,0,0,0.1);
-                max-width: 400px;
-                width: 100%;
-                text-align: center;
-            }
-            .logo {
-                color: #667eea;
-                font-size: 24px;
-                margin-bottom: 30px;
-                font-weight: bold;
-            }
-            .form-group {
-                margin-bottom: 20px;
-                text-align: left;
-            }
-            label {
-                display: block;
-                margin-bottom: 5px;
-                color: #333;
-                font-weight: bold;
-            }
-            input[type="text"], input[type="password"] {
-                width: 100%;
-                padding: 12px;
-                border: 2px solid #e1e5e9;
-                border-radius: 8px;
-                font-size: 16px;
-                box-sizing: border-box;
-                transition: border-color 0.3s;
-            }
-            input[type="text"]:focus, input[type="password"]:focus {
-                outline: none;
-                border-color: #667eea;
-                box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-            }
-            .btn {
-                width: 100%;
-                padding: 12px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                border: none;
-                border-radius: 8px;
-                font-size: 16px;
-                cursor: pointer;
-                margin-top: 10px;
-                transition: transform 0.2s;
-            }
-            .btn:hover {
-                transform: translateY(-2px);
-            }
-            .error {
-                background: #f8d7da;
-                color: #721c24;
-                padding: 15px;
-                border-radius: 8px;
-                margin-bottom: 20px;
-                border: 1px solid #f5c6cb;
-            }
-            .security-info {
-                background: #d1ecf1;
-                color: #0c5460;
-                padding: 15px;
-                border-radius: 8px;
-                margin-top: 20px;
-                font-size: 14px;
-                text-align: left;
-            }
-            .ip-info {
-                font-size: 12px;
-                color: #666;
-                margin-top: 15px;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="login-container">
-            <div class="logo">🔐 Secure Admin</div>
-            <div>OEM Activation System</div>
-            
-            <?php if ($error): ?>
-                <div class="error">
-                    ❌ <?php echo htmlspecialchars($error); ?>
-                </div>
-            <?php endif; ?>
-            
-            <form method="post">
-                <div class="form-group">
-                    <label for="username">Username:</label>
-                    <input type="text" id="username" name="username" required autocomplete="username">
-                </div>
-                
-                <div class="form-group">
-                    <label for="password">Password:</label>
-                    <input type="password" id="password" name="password" required autocomplete="current-password">
-                </div>
-                
-                <button type="submit" class="btn">Login</button>
-            </form>
-            
-            <div class="security-info">
-                <strong>Security Features:</strong><br>
-                ✅ Encrypted passwords<br>
-                ✅ Account lockout protection<br>
-                ✅ Session timeout<br>
-                ✅ Activity logging<br>
-                <?php if ($ADMIN_CONFIG['REQUIRE_HTTPS']): ?>
-                ✅ HTTPS required<br>
-                <?php endif; ?>
-                <?php if ($ADMIN_CONFIG['IP_WHITELIST_ENABLED']): ?>
-                ✅ IP whitelist active<br>
-                <?php endif; ?>
-            </div>
-            
-            <div class="ip-info">
-                Your IP: <?php echo getClientIP(); ?>
-            </div>
-        </div>
-    </body>
-    </html>
-    <?php
     exit;
 }
 
-// User is logged in - show admin panel
-// Include the rest of admin functionality here or redirect to main admin page
-logAdminActivity($admin_session['admin_id'], $admin_session['id'], 'PAGE_ACCESS', 'Admin panel accessed');
-
-// For now, show a secure landing page
-?>
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Secure Admin Panel</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-        .header { background: #28a745; color: white; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-        .info-box { background: white; padding: 20px; border-radius: 5px; margin-bottom: 20px; }
-        .logout { float: right; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>🔐 Secure Admin Panel - OEM Activation System</h1>
-        <a href="?logout=1" class="logout" style="color: white; text-decoration: none;">Logout</a>
-        <div style="clear: both;"></div>
-        <small>Welcome, <?php echo htmlspecialchars($admin_session['full_name']); ?> (<?php echo htmlspecialchars($admin_session['role']); ?>)</small>
-    </div>
-    
-    <div class="info-box">
-        <h3>Enhanced Security Active</h3>
-        <p><strong>Session Information:</strong></p>
-        <ul>
-            <li>Last Activity: <?php echo $admin_session['last_activity']; ?></li>
-            <li>Session Expires: <?php echo $admin_session['expires_at']; ?></li>
-            <li>Your IP: <?php echo getClientIP(); ?></li>
-            <li>Role: <?php echo $admin_session['role']; ?></li>
-        </ul>
-        
-        <?php if ($admin_session['must_change_password']): ?>
-            <div style="background: #fff3cd; color: #856404; padding: 15px; border-radius: 5px; margin: 15px 0;">
-                <strong>⚠️ Password Change Required</strong><br>
-                Your password needs to be changed for security reasons.
-            </div>
-        <?php endif; ?>
-        
-        <p><a href="admin_v2.php">← Continue to Main Admin Panel</a></p>
-    </div>
-</body>
-</html>
-<?php
+// Check session — redirect to React frontend either way
+$admin_session = validateAdminSession();
+header('Location: /');
+exit;

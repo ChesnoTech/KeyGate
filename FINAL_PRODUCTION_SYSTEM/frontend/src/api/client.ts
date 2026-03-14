@@ -1,11 +1,25 @@
 const API_BASE = '/activate/admin_v2.php'
 
 let csrfToken = ''
+let onSessionExpired: (() => void) | null = null
+let sessionExpiredFiring = false
+
+/** Register a callback that fires when a 401 is detected (debounced) */
+export function setSessionExpiredHandler(handler: () => void): void {
+  onSessionExpired = handler
+  sessionExpiredFiring = false
+}
 
 export class AuthError extends Error {
   constructor() {
     super('Authentication required')
     this.name = 'AuthError'
+    // Fire the session-expired handler (debounce: only once until re-registered)
+    if (onSessionExpired && !sessionExpiredFiring) {
+      sessionExpiredFiring = true
+      const handler = onSessionExpired
+      setTimeout(handler, 0)
+    }
   }
 }
 

@@ -133,7 +133,7 @@ if (!$admin_session) {
         echo json_encode(['authenticated' => false, 'error' => 'Session expired']);
         exit;
     }
-    header('Location: secure-admin.php');
+    header('Location: /');
     exit;
 }
 
@@ -205,6 +205,8 @@ $action_registry = [
     'save_alt_server_settings' => ['SettingsController.php',   'handle_save_alt_server_settings', true,  true],
     'get_order_field_settings' => ['SettingsController.php',   'handle_get_order_field_settings', false, false],
     'save_order_field_settings'=> ['SettingsController.php',   'handle_save_order_field_settings',true,  true],
+    'get_session_settings'     => ['SettingsController.php',   'handle_get_session_settings',     false, false],
+    'save_session_settings'    => ['SettingsController.php',   'handle_save_session_settings',    true,  true],
 
     // usb devices
     'list_usb_devices'         => ['UsbDevicesController.php', 'handle_list_usb_devices',         false, false],
@@ -272,8 +274,17 @@ $action_registry = [
     'qc_list_manufacturers'    => ['ComplianceController.php', 'handle_qc_list_manufacturers',    false, true],
     'qc_update_manufacturer'   => ['ComplianceController.php', 'handle_qc_update_manufacturer',   true,  true],
     'qc_list_compliance_results' => ['ComplianceController.php', 'handle_qc_list_compliance_results', false, true],
+    'qc_list_compliance_grouped' => ['ComplianceController.php', 'handle_qc_list_compliance_grouped', false, true],
     'qc_recheck_historical'    => ['ComplianceController.php', 'handle_qc_recheck_historical',    true,  true],
     'qc_get_stats'             => ['ComplianceController.php', 'handle_qc_get_stats',             false, true],
+
+    // product lines & variants (partition QC)
+    'get_product_lines'        => ['ProductVariantsController.php', 'handle_get_product_lines',        false, true],
+    'get_product_line'         => ['ProductVariantsController.php', 'handle_get_product_line',         false, true],
+    'save_product_line'        => ['ProductVariantsController.php', 'handle_save_product_line',        true,  true],
+    'delete_product_line'      => ['ProductVariantsController.php', 'handle_delete_product_line',      true,  true],
+    'save_product_variant'     => ['ProductVariantsController.php', 'handle_save_product_variant',     true,  true],
+    'delete_product_variant'   => ['ProductVariantsController.php', 'handle_delete_product_variant',   true,  true],
 ];
 
 // ── Action Dispatcher ────────────────────────────────────────
@@ -322,11 +333,18 @@ if (isset($_GET['action']) || isset($_POST['action']) || isset($json_input['acti
 
 // Handle logout
 if (isset($_GET['logout'])) {
-    $stmt = $pdo->prepare("UPDATE admin_sessions SET is_active = 0 WHERE session_token = ?");
-    $stmt->execute([$_SESSION['admin_token']]);
-
+    if (isset($_SESSION['admin_token'])) {
+        $stmt = $pdo->prepare("UPDATE admin_sessions SET is_active = 0 WHERE session_token = ?");
+        $stmt->execute([$_SESSION['admin_token']]);
+    }
     session_destroy();
-    header('Location: secure-admin.php');
+    // Return JSON for API calls, redirect for browser
+    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) || str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json')) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => true, 'message' => 'Logged out']);
+    } else {
+        header('Location: /');
+    }
     exit;
 }
 
