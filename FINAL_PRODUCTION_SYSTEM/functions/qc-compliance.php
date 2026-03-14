@@ -651,6 +651,44 @@ function qcCheckPartitionLayout(PDO $pdo, int $hardwareInfoId, string $orderNumb
         }
     }
 
+    // 9b. Check unallocated space on boot disk
+    $maxUnallocatedMb = null;
+    // Check variant-level setting first, then global
+    if (isset($variant['max_unallocated_mb']) && $variant['max_unallocated_mb'] !== null) {
+        $maxUnallocatedMb = (int) $variant['max_unallocated_mb'];
+    } else {
+        // Check global setting
+        try {
+            $gStmt = $pdo->prepare("SELECT setting_value FROM qc_global_settings WHERE setting_key = 'max_unallocated_mb'");
+            $gStmt->execute();
+            $gVal = $gStmt->fetchColumn();
+            if ($gVal !== false && $gVal !== null && $gVal !== '') {
+                $maxUnallocatedMb = (int) $gVal;
+            }
+        } catch (PDOException $e) { /* table may not have this setting yet */ }
+    }
+
+    if ($maxUnallocatedMb !== null && $maxUnallocatedMb > 0 && $diskSizeMb > 0) {
+        // Sum all actual partition sizes
+        $totalPartitionMb = 0;
+        foreach ($actualPartitions as $ap) {
+            if (isset($ap['size_mb'])) {
+                $totalPartitionMb += (int) round((float) $ap['size_mb']);
+            } elseif (isset($ap['size_bytes'])) {
+                $totalPartitionMb += (int) round((float) $ap['size_bytes'] / 1048576);
+            } elseif (isset($ap['size_gb'])) {
+                $totalPartitionMb += (int) round((float) $ap['size_gb'] * 1024);
+            }
+        }
+        $unallocatedMb = max(0, $diskSizeMb - $totalPartitionMb);
+        if ($unallocatedMb > $maxUnallocatedMb) {
+            $details[] = "Unallocated space: FAIL ({$unallocatedMb} MB > {$maxUnallocatedMb} MB limit)";
+            $allPass = false;
+        } else {
+            $details[] = "Unallocated space: OK ({$unallocatedMb} MB within {$maxUnallocatedMb} MB limit)";
+        }
+    }
+
     // 10. Build result
     $result = $allPass ? 'pass' : qcEnforcementToResult($enforcement);
     $detailStr = implode("\n", $details);

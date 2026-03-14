@@ -6,7 +6,7 @@ param(
 )
 
 $ActivationDelaySeconds = 10
-$MaxRetryAttempts = 3
+$MaxRetryAttempts = 4  # Retry same key up to 4 times (failures are usually network issues, not bad keys)
 
 # === Adaptive Network Timing ===
 # Activation delays exist because Microsoft's servers (not our LAN API) need time to
@@ -1330,20 +1330,14 @@ function Main-ActivationLoop {
             } else {
                 Write-Host "`n❌ Activation failed: $($reportResponse.message)" -ForegroundColor Red
 
-                if ($reportResponse.continue_session -and $currentAttempt -lt $MaxRetryAttempts) {
-                    $retry = Read-Host "`nRetry with same key? (Y/N)"
-                    if ($retry -in @('Y', 'y', 'yes', 'Yes')) {
-                        $currentAttempt++
-                        $retryDelay = Get-AdaptiveDelay -BaseSeconds 5 -MinSeconds 2
-                        Write-Host "⏳ Waiting $retryDelay seconds before retry..." -ForegroundColor Yellow
-                        Start-Sleep -Seconds $retryDelay
-                        continue
-                    } else {
-                        Write-Host "🔄 Getting next available key..." -ForegroundColor Yellow
-                        return $false
-                    }
+                if ($currentAttempt -lt $MaxRetryAttempts) {
+                    $currentAttempt++
+                    $retryDelay = Get-AdaptiveDelay -BaseSeconds 8 -MinSeconds 4
+                    Write-Host "⏳ Retrying same key in $retryDelay seconds... (attempt $currentAttempt of $MaxRetryAttempts)" -ForegroundColor Yellow
+                    Start-Sleep -Seconds $retryDelay
+                    continue
                 } else {
-                    Write-Host "⚠️ Maximum retry attempts reached for this key." -ForegroundColor Yellow
+                    Write-Host "⚠️ All $MaxRetryAttempts retry attempts exhausted for this key." -ForegroundColor Yellow
                     return $false
                 }
             }
@@ -1541,12 +1535,12 @@ Write-Host "`n🔧 Using OEM Activation Server (Primary)..." -ForegroundColor Gr
 
 $activationComplete = $false
 $keyAttempts = 0
-$maxKeyAttempts = 3  # Conservative: legacy timing gives more time per key, fewer keys needed
+$maxKeyAttempts = 1  # Single key per PC — retry same key up to $MaxRetryAttempts times
 
 while (-not $activationComplete -and $keyAttempts -lt $maxKeyAttempts) {
     $keyAttempts++
 
-    Write-Host "`n🔍 Getting activation key... (Key attempt #$keyAttempts)" -ForegroundColor Cyan
+    Write-Host "`n🔍 Requesting activation key..." -ForegroundColor Cyan
 
     # Get key from API
     $keyBody = @{
@@ -1663,8 +1657,9 @@ while (-not $activationComplete -and $keyAttempts -lt $maxKeyAttempts) {
 }
 
 if (-not $activationComplete) {
-    Write-Host "`n⚠️ Activation failed after trying $keyAttempts keys." -ForegroundColor Red
-    Write-Host "However, hardware information was collected successfully." -ForegroundColor Cyan
+    Write-Host "`n⚠️ Activation failed after $MaxRetryAttempts attempts." -ForegroundColor Red
+    Write-Host "This may be a network issue. Try again later or contact your supervisor." -ForegroundColor Yellow
+    Write-Host "Hardware information was collected successfully." -ForegroundColor Cyan
     Write-Host "`nPress any key to close..." -ForegroundColor Gray
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     exit 1

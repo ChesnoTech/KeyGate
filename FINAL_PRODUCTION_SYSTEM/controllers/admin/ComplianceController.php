@@ -19,7 +19,7 @@ function handle_qc_get_settings(PDO $pdo, array $admin_session, ?array $json_inp
 function handle_qc_save_settings(PDO $pdo, array $admin_session, ?array $json_input = null): void {
     requirePermission('manage_compliance', $admin_session);
 
-    $allowedKeys = ['qc_enabled', 'default_bios_enforcement', 'default_secure_boot_enforcement', 'default_hackbgrt_enforcement', 'blocking_prevents_key'];
+    $allowedKeys = ['qc_enabled', 'default_bios_enforcement', 'default_secure_boot_enforcement', 'default_hackbgrt_enforcement', 'blocking_prevents_key', 'default_partition_enforcement', 'default_missing_drivers_enforcement', 'max_unallocated_mb'];
 
     foreach ($allowedKeys as $key) {
         if (isset($json_input[$key])) {

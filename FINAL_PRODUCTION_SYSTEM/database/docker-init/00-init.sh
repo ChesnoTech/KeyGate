@@ -86,6 +86,10 @@ run_sql "temp_password_hash_migration.sql"    16
 # Phase 6: Product variants & partition QC
 run_sql "product_variants_migration.sql"      17
 
+# Phase 7: Missing drivers & unallocated space
+run_sql "missing_drivers_migration.sql"       18
+run_sql "unallocated_space_migration.sql"     19
+
 echo ""
 echo "=== Database initialization complete ==="
 echo ""

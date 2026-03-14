@@ -1174,6 +1174,8 @@
     "compliance.qc_enabled_desc": "Enable hardware compliance checking on all activations.",
     "compliance.blocking_prevents_key": "Blocking Prevents Activation",
     "compliance.blocking_prevents_key_desc": "Refuse key distribution when blocking compliance issues exist.",
+    "compliance.max_unallocated_mb": "Max Unallocated Space (MB)",
+    "compliance.max_unallocated_mb_desc": "Fail partition check if unallocated disk space exceeds this limit. Set to 0 to disable.",
     "compliance.default_bios_enforcement": "Default BIOS Enforcement",
     "compliance.default_sb_enforcement": "Default Secure Boot Enforcement",
     "compliance.default_hb_enforcement": "Default Boot Logo Enforcement",

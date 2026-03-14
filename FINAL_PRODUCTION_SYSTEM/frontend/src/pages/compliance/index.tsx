@@ -58,6 +58,7 @@ function GlobalSettingsTab() {
     default_partition_enforcement: '2',
     default_missing_drivers_enforcement: '2',
     blocking_prevents_key: '1',
+    max_unallocated_mb: '1024',
   })
 
   useEffect(() => {
@@ -70,6 +71,7 @@ function GlobalSettingsTab() {
         default_partition_enforcement: data.settings.default_partition_enforcement ?? '2',
         default_missing_drivers_enforcement: data.settings.default_missing_drivers_enforcement ?? '2',
         blocking_prevents_key: data.settings.blocking_prevents_key ?? '1',
+        max_unallocated_mb: data.settings.max_unallocated_mb ?? '1024',
       })
     }
   }, [data])
@@ -131,6 +133,18 @@ function GlobalSettingsTab() {
                 </Select>
               </div>
             ))}
+          </div>
+
+          <div className="space-y-2 max-w-xs">
+            <Label>{t('compliance.max_unallocated_mb', 'Max Unallocated Space (MB)')}</Label>
+            <p className="text-sm text-muted-foreground">{t('compliance.max_unallocated_mb_desc', 'Fail partition check if unallocated disk space exceeds this limit. Set to 0 to disable.')}</p>
+            <Input
+              type="number"
+              min="0"
+              step="128"
+              value={form.max_unallocated_mb}
+              onChange={(e) => setForm({ ...form, max_unallocated_mb: e.target.value })}
+            />
           </div>
 
           <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending}>

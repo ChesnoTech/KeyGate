@@ -1174,6 +1174,8 @@
     "compliance.qc_enabled_desc": "Включить проверку соответствия оборудования при всех активациях.",
     "compliance.blocking_prevents_key": "Блокировка препятствует активации",
     "compliance.blocking_prevents_key_desc": "Отказывать в выдаче ключа при наличии блокирующих несоответствий.",
+    "compliance.max_unallocated_mb": "Макс. нераспределённое пространство (МБ)",
+    "compliance.max_unallocated_mb_desc": "Не пройти проверку разделов, если нераспределённое пространство превышает лимит. 0 — отключить.",
     "compliance.default_bios_enforcement": "Проверка BIOS по умолчанию",
     "compliance.default_sb_enforcement": "Проверка Secure Boot по умолчанию",
     "compliance.default_hb_enforcement": "Проверка загр. логотипа по умолчанию",

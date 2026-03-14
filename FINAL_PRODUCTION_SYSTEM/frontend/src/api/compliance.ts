@@ -10,6 +10,7 @@ export interface QcGlobalSettings {
   default_partition_enforcement: string
   default_missing_drivers_enforcement: string
   blocking_prevents_key: string
+  max_unallocated_mb: string
 }
 
 export interface MotherboardRow {

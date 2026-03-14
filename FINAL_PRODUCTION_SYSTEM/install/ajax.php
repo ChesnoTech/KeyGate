@@ -314,6 +314,7 @@ function handleInstallDb() {
         ['temp_password_hash_migration.sql', 16],
         ['product_variants_migration.sql',   17],
         ['missing_drivers_migration.sql',    18],
+        ['unallocated_space_migration.sql',  19],
     ];
 
     $results = [];
