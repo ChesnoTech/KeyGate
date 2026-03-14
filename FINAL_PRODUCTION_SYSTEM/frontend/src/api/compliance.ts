@@ -7,6 +7,8 @@ export interface QcGlobalSettings {
   default_bios_enforcement: string
   default_secure_boot_enforcement: string
   default_hackbgrt_enforcement: string
+  default_partition_enforcement: string
+  default_missing_drivers_enforcement: string
   blocking_prevents_key: string
 }
 

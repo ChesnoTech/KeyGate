@@ -230,7 +230,7 @@ function parsePartitionMessage(message: string): { header: string; lines: { name
   return parsed.length > 0 ? { header, lines: parsed } : null
 }
 
-function PartitionTooltip({ check, label, t }: { check: CheckSummary; label: string; t: (k: string, d?: string) => string }) {
+function PartitionTooltip({ check, label }: { check: CheckSummary; label: string; t?: (k: string, d?: string) => string }) {
   const parsed = check.message ? parsePartitionMessage(check.message) : null
 
   // If it's a simple pass message or unparseable, show simple tooltip
@@ -314,8 +314,8 @@ function CheckCell({ check, label, checkType, t }: { check?: CheckSummary; label
   const color = resultColors[check.result] ?? 'bg-gray-400'
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <Badge variant="secondary" className={`${color} text-white text-[10px] px-1.5 py-0 cursor-help`}>
+      <TooltipTrigger className="cursor-help">
+        <Badge variant="secondary" className={`${color} text-white text-[10px] px-1.5 py-0`}>
           {t(`compliance.result_${check.result}`, check.result)}
         </Badge>
       </TooltipTrigger>

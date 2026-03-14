@@ -446,7 +446,7 @@ export function ProductLinesPage() {
                   <div className="flex items-center gap-2 shrink-0">
                     <div className="flex gap-0.5">
                       {CHECK_LABELS.map(check => {
-                        const val = (line as Record<string, unknown>)[check.field] as number | null
+                        const val = (line as unknown as Record<string, unknown>)[check.field] as number | null
                         if (val == null) return null
                         const meta = ENFORCEMENT_LABELS[val]
                         if (!meta) return null
@@ -509,7 +509,7 @@ export function ProductLinesPage() {
                   </div>
                   <div className="grid grid-cols-5 gap-3">
                     {CHECK_LABELS.map(check => {
-                      const val = (detail as Record<string, unknown>)[check.field] as number | null
+                      const val = (detail as unknown as Record<string, unknown>)[check.field] as number | null
                       const isInherited = val == null
                       const meta = isInherited ? null : ENFORCEMENT_LABELS[val]
                       return (

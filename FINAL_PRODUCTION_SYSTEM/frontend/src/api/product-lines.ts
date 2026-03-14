@@ -70,7 +70,7 @@ export interface SaveProductLineInput {
 }
 
 export function saveProductLine(data: SaveProductLineInput) {
-  return apiPostJson<{ success: boolean; id: number }>('save_product_line', data as Record<string, unknown>)
+  return apiPostJson<{ success: boolean; id: number }>('save_product_line', data as unknown as Record<string, unknown>)
 }
 
 export function deleteProductLine(id: number) {
@@ -94,7 +94,7 @@ export interface SaveProductVariantInput {
 }
 
 export function saveProductVariant(data: SaveProductVariantInput) {
-  return apiPostJson<{ success: boolean; id: number }>('save_product_variant', data as Record<string, unknown>)
+  return apiPostJson<{ success: boolean; id: number }>('save_product_variant', data as unknown as Record<string, unknown>)
 }
 
 export function deleteProductVariant(id: number) {
