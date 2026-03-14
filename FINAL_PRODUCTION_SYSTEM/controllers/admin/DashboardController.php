@@ -150,18 +150,23 @@ function handle_get_stats(PDO $pdo, array $admin_session): void {
     $stmt = $pdo->query("SELECT COUNT(*) FROM activation_attempts WHERE YEAR(attempted_date) = YEAR(CURDATE()) AND MONTH(attempted_date) = MONTH(CURDATE())");
     $stats['activations']['month'] = $stmt->fetchColumn();
 
-    // Daily activation trend (last 30 days)
+    // Daily activation trend — fetch all history, let frontend slice by range
     $stmt = $pdo->query("
         SELECT DATE(attempted_date) as date,
                COUNT(*) as total,
                SUM(CASE WHEN attempt_result = 'success' THEN 1 ELSE 0 END) as successes,
                SUM(CASE WHEN attempt_result != 'success' THEN 1 ELSE 0 END) as failures
         FROM activation_attempts
-        WHERE attempted_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
         GROUP BY DATE(attempted_date)
         ORDER BY date ASC
     ");
     $trendRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Determine range: from earliest record (or 30 days ago) to today
+    $earliest = !empty($trendRows) ? $trendRows[0]['date'] : date('Y-m-d', strtotime('-30 days'));
+    $startDate = new DateTime($earliest);
+    $endDate = new DateTime('today');
+    $totalDays = max((int)$startDate->diff($endDate)->days, 30);
 
     // Fill gaps so every day in the range has an entry
     $daily_trend = [];
@@ -169,7 +174,7 @@ function handle_get_stats(PDO $pdo, array $admin_session): void {
     foreach ($trendRows as $row) {
         $dateMap[$row['date']] = $row;
     }
-    for ($i = 29; $i >= 0; $i--) {
+    for ($i = $totalDays; $i >= 0; $i--) {
         $d = date('Y-m-d', strtotime("-{$i} days"));
         $daily_trend[] = [
             'date' => $d,
