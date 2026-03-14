@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useCallback, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Search, ShieldCheck, AlertTriangle, XCircle, CheckCircle, Info, RefreshCw } from 'lucide-react'
 import { AppHeader } from '@/components/layout/app-header'
@@ -12,10 +12,174 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { DataTable } from '@/components/data-table/data-table'
-import { ConfirmDialog } from '@/components/confirm-dialog'
-import { useComplianceGrouped, useQcStats, useRecheckHistorical } from '@/hooks/use-compliance'
+import { useComplianceGrouped, useQcStats, useRecheckCount, useRecheckHistorical } from '@/hooks/use-compliance'
 import { getGroupedComplianceColumns } from './columns'
+
+// ── Recheck Dialog with batched progress ───────────────
+
+function RecheckDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { t } = useTranslation()
+  const countMutation = useRecheckCount()
+  const recheckMutation = useRecheckHistorical()
+
+  const [phase, setPhase] = useState<'idle' | 'counting' | 'confirm' | 'running' | 'done'>('idle')
+  const [totalCount, setTotalCount] = useState(0)
+  const [processed, setProcessed] = useState(0)
+  const [stats, setStats] = useState({ passed: 0, failed: 0, warnings: 0 })
+  const abortRef = useRef(false)
+
+  const reset = useCallback(() => {
+    setPhase('idle')
+    setTotalCount(0)
+    setProcessed(0)
+    setStats({ passed: 0, failed: 0, warnings: 0 })
+    abortRef.current = false
+  }, [])
+
+  const handleOpen = useCallback((v: boolean) => {
+    if (v) {
+      reset()
+      setPhase('counting')
+      countMutation.mutate(undefined, {
+        onSuccess: (res) => {
+          setTotalCount(res.count)
+          setPhase('confirm')
+        },
+        onError: () => setPhase('idle'),
+      })
+    } else {
+      abortRef.current = true
+    }
+    onOpenChange(v)
+  }, [countMutation, onOpenChange, reset])
+
+  const runBatch = useCallback((afterId: number) => {
+    if (abortRef.current) return
+    recheckMutation.mutate({ batch_size: 50, after_id: afterId }, {
+      onSuccess: (res) => {
+        setProcessed(prev => prev + res.stats.rechecked)
+        setStats(prev => ({
+          passed: prev.passed + res.stats.passed,
+          failed: prev.failed + res.stats.failed,
+          warnings: prev.warnings + res.stats.warnings,
+        }))
+        if (res.stats.has_more && !abortRef.current) {
+          // Continue next batch
+          runBatch(res.stats.last_id)
+        } else {
+          setPhase('done')
+        }
+      },
+      onError: () => setPhase('done'),
+    })
+  }, [recheckMutation])
+
+  const startRecheck = useCallback(() => {
+    setPhase('running')
+    setProcessed(0)
+    setStats({ passed: 0, failed: 0, warnings: 0 })
+    abortRef.current = false
+    runBatch(0)
+  }, [runBatch])
+
+  const handleStop = useCallback(() => {
+    abortRef.current = true
+    setPhase('done')
+  }, [])
+
+  const progressPct = totalCount > 0 ? Math.min(Math.round((processed / totalCount) * 100), 100) : 0
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <RefreshCw className="h-5 w-5" />
+            {t('compliance.recheck_title', 'Recheck Historical Records')}
+          </DialogTitle>
+          <DialogDescription>
+            {phase === 'counting' && t('compliance.recheck_counting', 'Counting records...')}
+            {phase === 'confirm' && t('compliance.recheck_confirm_desc', 'This will re-run all QC compliance checks on {{count}} hardware records using current rules. Existing results will be replaced. Records are processed in batches of 50.', { count: totalCount })}
+            {phase === 'running' && t('compliance.recheck_running', 'Processing records in batches...')}
+            {phase === 'done' && t('compliance.recheck_done', 'Recheck complete.')}
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Progress */}
+        {(phase === 'running' || phase === 'done') && (
+          <div className="space-y-3">
+            <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-300 ${phase === 'done' ? 'bg-green-500' : 'bg-primary'}`}
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>{processed} / {totalCount}</span>
+              <span>{progressPct}%</span>
+            </div>
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="rounded-md border p-2">
+                <div className="text-lg font-bold text-green-600">{stats.passed}</div>
+                <div className="text-[10px] text-muted-foreground">{t('compliance.result_pass', 'Pass')}</div>
+              </div>
+              <div className="rounded-md border p-2">
+                <div className="text-lg font-bold text-orange-500">{stats.warnings}</div>
+                <div className="text-[10px] text-muted-foreground">{t('compliance.result_warning', 'Warning')}</div>
+              </div>
+              <div className="rounded-md border p-2">
+                <div className="text-lg font-bold text-red-500">{stats.failed}</div>
+                <div className="text-[10px] text-muted-foreground">{t('compliance.result_fail', 'Fail')}</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Confirm: show record count warning */}
+        {phase === 'confirm' && totalCount === 0 && (
+          <p className="text-sm text-muted-foreground">{t('compliance.recheck_no_records', 'No hardware records found to recheck.')}</p>
+        )}
+
+        <DialogFooter>
+          {phase === 'confirm' && totalCount > 0 && (
+            <>
+              <Button variant="outline" onClick={() => handleOpen(false)}>{t('common.cancel', 'Cancel')}</Button>
+              <Button variant="destructive" onClick={startRecheck}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                {t('compliance.recheck_start', 'Recheck {{count}} Records', { count: totalCount })}
+              </Button>
+            </>
+          )}
+          {phase === 'confirm' && totalCount === 0 && (
+            <Button variant="outline" onClick={() => handleOpen(false)}>{t('common.close', 'Close')}</Button>
+          )}
+          {phase === 'running' && (
+            <Button variant="outline" onClick={handleStop}>
+              {t('compliance.recheck_stop', 'Stop')}
+            </Button>
+          )}
+          {phase === 'done' && (
+            <Button onClick={() => handleOpen(false)}>{t('common.close', 'Close')}</Button>
+          )}
+          {phase === 'counting' && (
+            <Button variant="outline" disabled>{t('common.loading', 'Loading...')}</Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ── Main Page ──────────────────────────────────────────
 
 export function ComplianceResultsPage() {
   const { t } = useTranslation()
@@ -30,7 +194,6 @@ export function ComplianceResultsPage() {
     check_result: resultFilter || undefined,
   })
   const { data: statsData } = useQcStats()
-  const recheckMutation = useRecheckHistorical()
 
   const columns = useMemo(() => getGroupedComplianceColumns(t), [t])
 
@@ -128,14 +291,7 @@ export function ComplianceResultsPage() {
         )}
       </div>
 
-      <ConfirmDialog
-        open={showRecheck}
-        onOpenChange={setShowRecheck}
-        title={t('compliance.recheck_title', 'Recheck Historical Records?')}
-        description={t('compliance.recheck_desc', 'This will re-run compliance checks on all historical hardware records using current rules. Existing results will be replaced.')}
-        confirmLabel={t('compliance.recheck_confirm', 'Recheck All')}
-        onConfirm={() => recheckMutation.mutate(undefined)}
-      />
+      <RecheckDialog open={showRecheck} onOpenChange={setShowRecheck} />
     </>
   )
 }

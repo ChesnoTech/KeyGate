@@ -214,10 +214,17 @@ export function listComplianceGrouped(params: ListComplianceGroupedParams = {}) 
   }>('qc_list_compliance_grouped', params as Record<string, string | number | boolean>)
 }
 
-export function recheckHistorical(data?: { manufacturer?: string; product?: string }) {
+export function recheckCount(data?: { manufacturer?: string; product?: string }) {
   return apiPostJson<{
     success: boolean
-    stats: { rechecked: number; deleted: number }
+    count: number
+  }>('qc_recheck_count', data)
+}
+
+export function recheckHistorical(data?: { manufacturer?: string; product?: string; batch_size?: number; after_id?: number }) {
+  return apiPostJson<{
+    success: boolean
+    stats: { rechecked: number; passed: number; failed: number; warnings: number; last_id: number; has_more: boolean }
   }>('qc_recheck_historical', data)
 }
 

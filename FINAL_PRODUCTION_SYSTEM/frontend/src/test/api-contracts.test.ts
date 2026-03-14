@@ -124,6 +124,7 @@ const BACKEND_ACTIONS: Record<string, { method: 'GET' | 'POST'; csrf: boolean }>
   qc_update_manufacturer:      { method: 'POST', csrf: true },
   qc_list_compliance_results:  { method: 'GET',  csrf: false },
   qc_list_compliance_grouped:  { method: 'GET',  csrf: false },
+  qc_recheck_count:            { method: 'POST', csrf: true },
   qc_recheck_historical:       { method: 'POST', csrf: true },
   qc_get_stats:                { method: 'GET',  csrf: false },
 

@@ -275,6 +275,7 @@ $action_registry = [
     'qc_update_manufacturer'   => ['ComplianceController.php', 'handle_qc_update_manufacturer',   true,  true],
     'qc_list_compliance_results' => ['ComplianceController.php', 'handle_qc_list_compliance_results', false, true],
     'qc_list_compliance_grouped' => ['ComplianceController.php', 'handle_qc_list_compliance_grouped', false, true],
+    'qc_recheck_count'         => ['ComplianceController.php', 'handle_qc_recheck_count',         true,  true],
     'qc_recheck_historical'    => ['ComplianceController.php', 'handle_qc_recheck_historical',    true,  true],
     'qc_get_stats'             => ['ComplianceController.php', 'handle_qc_get_stats',             false, true],
 

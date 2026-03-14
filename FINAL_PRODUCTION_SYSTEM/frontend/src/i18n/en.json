@@ -1257,9 +1257,14 @@
     "product_lines.qc_enforcement_hint": "Set per-check enforcement for this product line. \"Inherit\" uses global defaults.",
 
     "compliance.recheck_historical": "Recheck Historical",
-    "compliance.recheck_title": "Recheck Historical Records?",
-    "compliance.recheck_desc": "This will re-run compliance checks on all historical hardware records using current rules. Existing results will be replaced.",
-    "compliance.recheck_confirm": "Recheck All",
+    "compliance.recheck_title": "Recheck Historical Records",
+    "compliance.recheck_counting": "Counting records...",
+    "compliance.recheck_confirm_desc": "This will re-run all QC compliance checks on {{count}} hardware records using current rules. Existing results will be replaced. Records are processed in batches of 50.",
+    "compliance.recheck_running": "Processing records in batches...",
+    "compliance.recheck_done": "Recheck complete.",
+    "compliance.recheck_no_records": "No hardware records found to recheck.",
+    "compliance.recheck_start": "Recheck {{count}} Records",
+    "compliance.recheck_stop": "Stop",
 
     "common.app_name": "OEM Activation",
     "common.app_version": "System v2.0",

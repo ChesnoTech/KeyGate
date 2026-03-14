@@ -421,16 +421,28 @@ function handle_qc_list_compliance_grouped(PDO $pdo, array $admin_session, ?arra
 
 // ── Retroactive Recheck ──────────────────────────────────────
 
-function handle_qc_recheck_historical(PDO $pdo, array $admin_session, ?array $json_input = null): void {
+function handle_qc_recheck_count(PDO $pdo, array $admin_session, ?array $json_input = null): void {
     requirePermission('manage_compliance', $admin_session);
 
     $manufacturer = $json_input['manufacturer'] ?? null;
     $product = $json_input['product'] ?? null;
 
-    $stats = qcRecheckHistorical($pdo, $manufacturer, $product);
+    $count = qcRecheckCount($pdo, $manufacturer, $product);
+    jsonResponse(['success' => true, 'count' => $count]);
+}
 
-    logAdminActivity($admin_session['admin_id'], $admin_session['id'], 'QC_RECHECK_HISTORICAL', "Retroactive compliance recheck: {$stats['rechecked']} records");
-    echo json_encode(['success' => true, 'stats' => $stats]);
+function handle_qc_recheck_historical(PDO $pdo, array $admin_session, ?array $json_input = null): void {
+    requirePermission('manage_compliance', $admin_session);
+
+    $manufacturer = $json_input['manufacturer'] ?? null;
+    $product = $json_input['product'] ?? null;
+    $batchSize = isset($json_input['batch_size']) ? (int) $json_input['batch_size'] : 50;
+    $afterId = isset($json_input['after_id']) ? (int) $json_input['after_id'] : 0;
+
+    $stats = qcRecheckHistorical($pdo, $manufacturer, $product, $batchSize, $afterId);
+
+    logAdminActivity($admin_session['admin_id'], $admin_session['id'], 'QC_RECHECK_HISTORICAL', "Retroactive compliance recheck batch: {$stats['rechecked']} records (after_id={$afterId})");
+    jsonResponse(['success' => true, 'stats' => $stats]);
 }
 
 // ── QC Statistics ────────────────────────────────────────────

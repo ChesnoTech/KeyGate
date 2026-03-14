@@ -713,11 +713,10 @@ function qcHasBlockingIssues(PDO $pdo, int $hardwareInfoId): bool {
 }
 
 /**
- * Re-run compliance checks on historical hardware records.
- * Deletes old results and re-evaluates against current rules.
+ * Count how many hardware records would be affected by a recheck.
+ * Used for preview/confirmation before running the actual recheck.
  */
-function qcRecheckHistorical(PDO $pdo, ?string $manufacturer = null, ?string $product = null): array {
-    // Build query to find matching hardware records
+function qcRecheckCount(PDO $pdo, ?string $manufacturer = null, ?string $product = null): int {
     $where = [];
     $params = [];
     if (!empty($manufacturer)) {
@@ -729,15 +728,47 @@ function qcRecheckHistorical(PDO $pdo, ?string $manufacturer = null, ?string $pr
         $params[] = $product;
     }
     $whereClause = !empty($where) ? "WHERE " . implode(" AND ", $where) : "";
+    $stmt = $pdo->prepare("SELECT COUNT(*) as cnt FROM hardware_info $whereClause");
+    $stmt->execute($params);
+    return (int) $stmt->fetch(PDO::FETCH_ASSOC)['cnt'];
+}
 
-    $stmt = $pdo->prepare("SELECT id, order_number, motherboard_manufacturer, motherboard_product, bios_version, secure_boot_enabled, hackbgrt_installed, hackbgrt_first_boot, complete_disk_layout, missing_drivers, missing_drivers_count FROM hardware_info $whereClause ORDER BY id ASC");
+/**
+ * Re-run compliance checks on historical hardware records.
+ * Processes in batches with a hard limit per call for safety.
+ * Returns batch stats + cursor for pagination.
+ *
+ * @param int $batchSize Max records per call (capped at 100)
+ * @param int $afterId   Process records with id > afterId (cursor for batching)
+ */
+function qcRecheckHistorical(PDO $pdo, ?string $manufacturer = null, ?string $product = null, int $batchSize = 50, int $afterId = 0): array {
+    // Hard cap batch size to prevent abuse
+    $batchSize = min(max($batchSize, 1), 100);
+
+    // Build query to find matching hardware records
+    $where = ["id > ?"];
+    $params = [$afterId];
+    if (!empty($manufacturer)) {
+        $where[] = "motherboard_manufacturer = ?";
+        $params[] = $manufacturer;
+    }
+    if (!empty($product)) {
+        $where[] = "motherboard_product = ?";
+        $params[] = $product;
+    }
+    $whereClause = "WHERE " . implode(" AND ", $where);
+
+    $stmt = $pdo->prepare("SELECT id, order_number, motherboard_manufacturer, motherboard_product, bios_version, secure_boot_enabled, hackbgrt_installed, hackbgrt_first_boot, complete_disk_layout, missing_drivers, missing_drivers_count FROM hardware_info $whereClause ORDER BY id ASC LIMIT ?");
+    $params[] = $batchSize;
     $stmt->execute($params);
     $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $stats = ['rechecked' => 0, 'passed' => 0, 'failed' => 0, 'warnings' => 0];
+    $lastId = $afterId;
 
     foreach ($records as $hw) {
         $hwId = (int) $hw['id'];
+        $lastId = $hwId;
 
         // Delete existing compliance results for this record
         $stmt2 = $pdo->prepare("DELETE FROM qc_compliance_results WHERE hardware_info_id = ?");
@@ -764,6 +795,9 @@ function qcRecheckHistorical(PDO $pdo, ?string $manufacturer = null, ?string $pr
         elseif ($result['has_warnings']) $stats['warnings']++;
         else $stats['passed']++;
     }
+
+    $stats['last_id'] = $lastId;
+    $stats['has_more'] = count($records) === $batchSize;
 
     return $stats;
 }

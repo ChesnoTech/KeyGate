@@ -1257,9 +1257,14 @@
     "product_lines.qc_enforcement_hint": "Настройте уровень проверки для каждого типа. \"Наследовать\" использует глобальные настройки.",
 
     "compliance.recheck_historical": "Перепроверить историю",
-    "compliance.recheck_title": "Перепроверить исторические записи?",
-    "compliance.recheck_desc": "Это перезапустит проверки соответствия для всех исторических записей оборудования по текущим правилам. Существующие результаты будут заменены.",
-    "compliance.recheck_confirm": "Перепроверить все",
+    "compliance.recheck_title": "Перепроверка исторических записей",
+    "compliance.recheck_counting": "Подсчёт записей...",
+    "compliance.recheck_confirm_desc": "Это перезапустит все проверки QC для {{count}} записей оборудования по текущим правилам. Существующие результаты будут заменены. Обработка пакетами по 50 записей.",
+    "compliance.recheck_running": "Обработка записей пакетами...",
+    "compliance.recheck_done": "Перепроверка завершена.",
+    "compliance.recheck_no_records": "Нет записей для перепроверки.",
+    "compliance.recheck_start": "Перепроверить {{count}} записей",
+    "compliance.recheck_stop": "Остановить",
 
     "common.app_name": "OEM Активация",
     "common.app_version": "Система v2.0",
