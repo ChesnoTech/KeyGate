@@ -1210,6 +1210,11 @@
 
     "compliance.order_number": "Заказ №",
     "compliance.motherboard": "Материнская плата",
+    "compliance.check_secure_boot": "Secure Boot",
+    "compliance.check_bios": "Версия BIOS",
+    "compliance.check_boot_logo": "Загрузочный логотип",
+    "compliance.check_partitions": "Разделы",
+    "compliance.check_drivers": "Драйверы",
     "compliance.check_type": "Проверка",
     "compliance.result": "Результат",
     "compliance.expected_actual": "Ожид. / Факт.",
@@ -1243,6 +1248,11 @@
     "compliance.all_results": "Все результаты",
 
     "compliance.overall": "Итог",
+    "compliance.col_sb": "SB",
+    "compliance.col_bios_enf": "BIOS",
+    "compliance.col_bl": "BL",
+    "compliance.col_part": "Разд",
+    "compliance.col_drv": "Драй",
     "compliance.col_secure_boot": "Secure Boot",
     "compliance.col_bios": "BIOS",
     "compliance.col_boot_logo": "Логотип",

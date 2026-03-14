@@ -86,25 +86,29 @@ export function getMotherboardColumns(
       ),
     },
     {
-      id: 'enforcement',
-      header: t('compliance.enforcement', 'Enforcement'),
-      cell: ({ row }) => {
-        const r = row.original
-        return (
-          <div className="flex gap-1 flex-wrap">
-            <span className="text-[10px] text-muted-foreground mr-0.5">SB:</span>
-            <EnforcementBadge level={r.effective_secure_boot_enforcement} t={t} />
-            <span className="text-[10px] text-muted-foreground mr-0.5">BIOS:</span>
-            <EnforcementBadge level={r.effective_bios_enforcement} t={t} />
-            <span className="text-[10px] text-muted-foreground mr-0.5">BL:</span>
-            <EnforcementBadge level={r.effective_hackbgrt_enforcement} t={t} />
-            <span className="text-[10px] text-muted-foreground mr-0.5">Part:</span>
-            <EnforcementBadge level={r.effective_partition_enforcement} t={t} />
-            <span className="text-[10px] text-muted-foreground mr-0.5">Drv:</span>
-            <EnforcementBadge level={r.effective_missing_drivers_enforcement} t={t} />
-          </div>
-        )
-      },
+      id: 'enf_sb',
+      header: t('compliance.col_sb', 'SB'),
+      cell: ({ row }) => <EnforcementBadge level={row.original.effective_secure_boot_enforcement} t={t} />,
+    },
+    {
+      id: 'enf_bios',
+      header: t('compliance.col_bios_enf', 'BIOS'),
+      cell: ({ row }) => <EnforcementBadge level={row.original.effective_bios_enforcement} t={t} />,
+    },
+    {
+      id: 'enf_bl',
+      header: t('compliance.col_bl', 'BL'),
+      cell: ({ row }) => <EnforcementBadge level={row.original.effective_hackbgrt_enforcement} t={t} />,
+    },
+    {
+      id: 'enf_part',
+      header: t('compliance.col_part', 'Part'),
+      cell: ({ row }) => <EnforcementBadge level={row.original.effective_partition_enforcement} t={t} />,
+    },
+    {
+      id: 'enf_drv',
+      header: t('compliance.col_drv', 'Drv'),
+      cell: ({ row }) => <EnforcementBadge level={row.original.effective_missing_drivers_enforcement} t={t} />,
     },
     {
       id: 'bios_versions',

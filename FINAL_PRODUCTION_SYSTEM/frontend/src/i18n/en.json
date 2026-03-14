@@ -1210,6 +1210,11 @@
 
     "compliance.order_number": "Order #",
     "compliance.motherboard": "Motherboard",
+    "compliance.check_secure_boot": "Secure Boot",
+    "compliance.check_bios": "BIOS Version",
+    "compliance.check_boot_logo": "Boot Logo",
+    "compliance.check_partitions": "Partitions",
+    "compliance.check_drivers": "Drivers",
     "compliance.check_type": "Check",
     "compliance.result": "Result",
     "compliance.expected_actual": "Expected / Actual",
@@ -1243,6 +1248,11 @@
     "compliance.all_results": "All Results",
 
     "compliance.overall": "Overall",
+    "compliance.col_sb": "SB",
+    "compliance.col_bios_enf": "BIOS",
+    "compliance.col_bl": "BL",
+    "compliance.col_part": "Part",
+    "compliance.col_drv": "Drv",
     "compliance.col_secure_boot": "Secure Boot",
     "compliance.col_bios": "BIOS",
     "compliance.col_boot_logo": "Boot Logo",
