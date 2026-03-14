@@ -85,6 +85,13 @@ function handle_save_product_line(PDO $pdo, array $admin_session, ?array $json_i
     $enforcement = (int) ($json_input['enforcement_level'] ?? 2);
     $isActive = (int) ($json_input['is_active'] ?? 1);
 
+    // Per-check enforcement (null = inherit from global)
+    $sbEnf   = isset($json_input['secure_boot_enforcement']) && $json_input['secure_boot_enforcement'] !== null ? (int) $json_input['secure_boot_enforcement'] : null;
+    $biosEnf = isset($json_input['bios_enforcement']) && $json_input['bios_enforcement'] !== null ? (int) $json_input['bios_enforcement'] : null;
+    $hbEnf   = isset($json_input['hackbgrt_enforcement']) && $json_input['hackbgrt_enforcement'] !== null ? (int) $json_input['hackbgrt_enforcement'] : null;
+    $partEnf = isset($json_input['partition_enforcement']) && $json_input['partition_enforcement'] !== null ? (int) $json_input['partition_enforcement'] : null;
+    $drvEnf  = isset($json_input['missing_drivers_enforcement']) && $json_input['missing_drivers_enforcement'] !== null ? (int) $json_input['missing_drivers_enforcement'] : null;
+
     if ($name === '' || $orderPattern === '') {
         jsonResponse(['success' => false, 'error' => 'Name and order pattern are required'], 400);
     }
@@ -98,18 +105,24 @@ function handle_save_product_line(PDO $pdo, array $admin_session, ?array $json_i
             // Update
             $stmt = $pdo->prepare("
                 UPDATE product_lines
-                SET name = ?, order_pattern = ?, description = ?, enforcement_level = ?, is_active = ?
+                SET name = ?, order_pattern = ?, description = ?, enforcement_level = ?, is_active = ?,
+                    secure_boot_enforcement = ?, bios_enforcement = ?, hackbgrt_enforcement = ?,
+                    partition_enforcement = ?, missing_drivers_enforcement = ?
                 WHERE id = ?
             ");
-            $stmt->execute([$name, $orderPattern, $description, $enforcement, $isActive, $id]);
+            $stmt->execute([$name, $orderPattern, $description, $enforcement, $isActive,
+                            $sbEnf, $biosEnf, $hbEnf, $partEnf, $drvEnf, $id]);
             $action = 'PRODUCT_LINE_UPDATE';
         } else {
             // Insert
             $stmt = $pdo->prepare("
-                INSERT INTO product_lines (name, order_pattern, description, enforcement_level, is_active)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO product_lines (name, order_pattern, description, enforcement_level, is_active,
+                    secure_boot_enforcement, bios_enforcement, hackbgrt_enforcement,
+                    partition_enforcement, missing_drivers_enforcement)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
-            $stmt->execute([$name, $orderPattern, $description, $enforcement, $isActive]);
+            $stmt->execute([$name, $orderPattern, $description, $enforcement, $isActive,
+                            $sbEnf, $biosEnf, $hbEnf, $partEnf, $drvEnf]);
             $id = (int) $pdo->lastInsertId();
             $action = 'PRODUCT_LINE_CREATE';
         }

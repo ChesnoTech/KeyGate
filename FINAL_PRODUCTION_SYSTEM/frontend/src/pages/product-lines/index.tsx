@@ -65,11 +65,22 @@ function LineDialog({
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
-  initial?: { id?: number; name: string; order_pattern: string; description: string; enforcement_level: number }
+  initial?: {
+    id?: number; name: string; order_pattern: string; description: string; enforcement_level: number;
+    secure_boot_enforcement?: number | null; bios_enforcement?: number | null; hackbgrt_enforcement?: number | null;
+    partition_enforcement?: number | null; missing_drivers_enforcement?: number | null;
+  }
 }) {
   const { t } = useTranslation()
   const saveLine = useSaveProductLine()
-  const [form, setForm] = useState(initial ?? { name: '', order_pattern: '', description: '', enforcement_level: 2 })
+  const [form, setForm] = useState(initial ?? {
+    name: '', order_pattern: '', description: '', enforcement_level: 2,
+    secure_boot_enforcement: null as number | null,
+    bios_enforcement: null as number | null,
+    hackbgrt_enforcement: null as number | null,
+    partition_enforcement: null as number | null,
+    missing_drivers_enforcement: null as number | null,
+  })
 
   const handleSave = () => {
     const data: SaveProductLineInput = {
@@ -78,38 +89,65 @@ function LineDialog({
       order_pattern: form.order_pattern,
       description: form.description || undefined,
       enforcement_level: form.enforcement_level,
+      secure_boot_enforcement: form.secure_boot_enforcement,
+      bios_enforcement: form.bios_enforcement,
+      hackbgrt_enforcement: form.hackbgrt_enforcement,
+      partition_enforcement: form.partition_enforcement,
+      missing_drivers_enforcement: form.missing_drivers_enforcement,
     }
     saveLine.mutate(data, { onSuccess: () => onOpenChange(false) })
   }
 
+  const enforcementSelect = (label: string, field: keyof typeof form) => (
+    <div className="space-y-1">
+      <Label className="text-xs">{label}</Label>
+      <Select
+        value={form[field] != null ? String(form[field]) : '__inherit__'}
+        onValueChange={v => setForm(f => ({ ...f, [field]: v === '__inherit__' ? null : Number(v) }))}
+      >
+        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__inherit__">{t('compliance.inherit', 'Inherit (global)')}</SelectItem>
+          {[0, 1, 2, 3].map(n => (
+            <SelectItem key={n} value={String(n)}>{t(ENFORCEMENT_LABELS[n].label)}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{initial?.id ? t('product_lines.edit_line', 'Edit Product Line') : t('product_lines.add_line', 'Add Product Line')}</DialogTitle>
           <DialogDescription>{t('product_lines.line_dialog_desc', 'Define a product line with its order number pattern.')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>{t('product_lines.name', 'Name')}</Label>
-            <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="RTX Series" />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>{t('product_lines.name', 'Name')}</Label>
+              <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="RTX Series" />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('product_lines.order_pattern', 'Order Pattern')}</Label>
+              <Input value={form.order_pattern} onChange={e => setForm(f => ({ ...f, order_pattern: e.target.value }))} placeholder="ЭЛ00-######" />
+              <p className="text-xs text-muted-foreground">{t('product_lines.pattern_hint', '# = digit, * = any')}</p>
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label>{t('product_lines.order_pattern', 'Order Pattern')}</Label>
-            <Input value={form.order_pattern} onChange={e => setForm(f => ({ ...f, order_pattern: e.target.value }))} placeholder="ЭЛ00-######" />
-            <p className="text-xs text-muted-foreground">{t('product_lines.pattern_hint', 'Order number prefix (e.g. ЭЛ00-######, ЛЕ00-######). Use # for digits, * for any characters.')}</p>
+          <Separator />
+          <div>
+            <Label className="text-sm font-medium">{t('product_lines.qc_enforcement', 'QC Enforcement per Check')}</Label>
+            <p className="text-xs text-muted-foreground mb-3">{t('product_lines.qc_enforcement_hint', 'Set per-check enforcement for this product line. "Inherit" uses global defaults.')}</p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {enforcementSelect(t('compliance.col_secure_boot', 'Secure Boot'), 'secure_boot_enforcement')}
+              {enforcementSelect(t('compliance.col_bios', 'BIOS Version'), 'bios_enforcement')}
+              {enforcementSelect(t('compliance.col_boot_logo', 'Boot Logo'), 'hackbgrt_enforcement')}
+              {enforcementSelect(t('compliance.col_partitions', 'Partitions'), 'partition_enforcement')}
+              {enforcementSelect(t('compliance.col_drivers', 'Drivers'), 'missing_drivers_enforcement')}
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label>{t('product_lines.enforcement', 'Enforcement Level')}</Label>
-            <Select value={String(form.enforcement_level)} onValueChange={v => setForm(f => ({ ...f, enforcement_level: Number(v) }))}>
-              <SelectTrigger><SelectValue>{t(ENFORCEMENT_LABELS[form.enforcement_level]?.label)}</SelectValue></SelectTrigger>
-              <SelectContent>
-                {[0, 1, 2, 3].map(n => (
-                  <SelectItem key={n} value={String(n)}>{t(ENFORCEMENT_LABELS[n].label)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <Separator />
           <div className="space-y-2">
             <Label>{t('product_lines.description', 'Description')}</Label>
             <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} />

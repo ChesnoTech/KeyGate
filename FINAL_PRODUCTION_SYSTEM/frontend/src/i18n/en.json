@@ -1248,6 +1248,13 @@
     "compliance.col_partitions": "Partitions",
     "compliance.col_drivers": "Drivers",
     "compliance.type_missing_drivers": "Missing Drivers",
+    "compliance.default_partition_enforcement": "Partition Layout",
+    "compliance.default_drivers_enforcement": "Missing Drivers",
+    "compliance.global_defaults_hint": "These are fallback defaults. Product lines can override per-line.",
+    "compliance.inherit": "Inherit (global)",
+
+    "product_lines.qc_enforcement": "QC Enforcement per Check",
+    "product_lines.qc_enforcement_hint": "Set per-check enforcement for this product line. \"Inherit\" uses global defaults.",
 
     "compliance.recheck_historical": "Recheck Historical",
     "compliance.recheck_title": "Recheck Historical Records?",

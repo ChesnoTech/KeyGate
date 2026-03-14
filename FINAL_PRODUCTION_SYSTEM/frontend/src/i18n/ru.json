@@ -1248,6 +1248,13 @@
     "compliance.col_partitions": "Разделы",
     "compliance.col_drivers": "Драйверы",
     "compliance.type_missing_drivers": "Отсутствующие драйверы",
+    "compliance.default_partition_enforcement": "Разметка дисков",
+    "compliance.default_drivers_enforcement": "Отсутствующие драйверы",
+    "compliance.global_defaults_hint": "Глобальные настройки по умолчанию. Продуктовые линейки могут переопределять их.",
+    "compliance.inherit": "Наследовать (глобально)",
+
+    "product_lines.qc_enforcement": "QC проверки по типам",
+    "product_lines.qc_enforcement_hint": "Настройте уровень проверки для каждого типа. \"Наследовать\" использует глобальные настройки.",
 
     "compliance.recheck_historical": "Перепроверить историю",
     "compliance.recheck_title": "Перепроверить исторические записи?",

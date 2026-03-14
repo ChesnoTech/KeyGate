@@ -55,6 +55,8 @@ function GlobalSettingsTab() {
     default_bios_enforcement: '1',
     default_secure_boot_enforcement: '1',
     default_hackbgrt_enforcement: '1',
+    default_partition_enforcement: '2',
+    default_missing_drivers_enforcement: '2',
     blocking_prevents_key: '1',
   })
 
@@ -65,6 +67,8 @@ function GlobalSettingsTab() {
         default_bios_enforcement: data.settings.default_bios_enforcement ?? '1',
         default_secure_boot_enforcement: data.settings.default_secure_boot_enforcement ?? '1',
         default_hackbgrt_enforcement: data.settings.default_hackbgrt_enforcement ?? '1',
+        default_partition_enforcement: data.settings.default_partition_enforcement ?? '2',
+        default_missing_drivers_enforcement: data.settings.default_missing_drivers_enforcement ?? '2',
         blocking_prevents_key: data.settings.blocking_prevents_key ?? '1',
       })
     }
@@ -102,20 +106,10 @@ function GlobalSettingsTab() {
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <p className="text-sm text-muted-foreground">{t('compliance.global_defaults_hint', 'These are fallback defaults. Product lines can override per-line.')}</p>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div className="space-y-2">
-              <Label>{t('compliance.default_bios_enforcement', 'Default BIOS Enforcement')}</Label>
-              <Select value={form.default_bios_enforcement} onValueChange={(v) => v && setForm({ ...form, default_bios_enforcement: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {enforcementOptions.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{t(o.labelKey)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>{t('compliance.default_sb_enforcement', 'Default Secure Boot Enforcement')}</Label>
+              <Label>{t('compliance.default_sb_enforcement', 'Secure Boot')}</Label>
               <Select value={form.default_secure_boot_enforcement} onValueChange={(v) => v && setForm({ ...form, default_secure_boot_enforcement: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -126,8 +120,41 @@ function GlobalSettingsTab() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>{t('compliance.default_hb_enforcement', 'Default Boot Logo Enforcement')}</Label>
+              <Label>{t('compliance.default_bios_enforcement', 'BIOS Version')}</Label>
+              <Select value={form.default_bios_enforcement} onValueChange={(v) => v && setForm({ ...form, default_bios_enforcement: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {enforcementOptions.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{t(o.labelKey)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>{t('compliance.default_hb_enforcement', 'Boot Logo')}</Label>
               <Select value={form.default_hackbgrt_enforcement} onValueChange={(v) => v && setForm({ ...form, default_hackbgrt_enforcement: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {enforcementOptions.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{t(o.labelKey)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>{t('compliance.default_partition_enforcement', 'Partition Layout')}</Label>
+              <Select value={form.default_partition_enforcement} onValueChange={(v) => v && setForm({ ...form, default_partition_enforcement: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {enforcementOptions.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{t(o.labelKey)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>{t('compliance.default_drivers_enforcement', 'Missing Drivers')}</Label>
+              <Select value={form.default_missing_drivers_enforcement} onValueChange={(v) => v && setForm({ ...form, default_missing_drivers_enforcement: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {enforcementOptions.map((o) => (

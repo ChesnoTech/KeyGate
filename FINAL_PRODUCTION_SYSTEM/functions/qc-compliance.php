@@ -72,7 +72,7 @@ function qcAutoRegisterMotherboard(PDO $pdo, ?string $manufacturer, ?string $pro
  * Resolve effective compliance rules for a motherboard.
  * Inheritance: global defaults -> manufacturer defaults -> model overrides (non-NULL only)
  */
-function qcGetEffectiveRules(PDO $pdo, ?string $manufacturer, ?string $product): array {
+function qcGetEffectiveRules(PDO $pdo, ?string $manufacturer, ?string $product, ?string $orderNumber = null): array {
     // Start with global defaults
     $globalSettings = qcGetGlobalSettings($pdo);
     $rules = [
@@ -82,9 +82,35 @@ function qcGetEffectiveRules(PDO $pdo, ?string $manufacturer, ?string $product):
         'recommended_bios_version' => null,
         'bios_enforcement'        => (int) ($globalSettings['default_bios_enforcement'] ?? 1),
         'hackbgrt_enforcement'    => (int) ($globalSettings['default_hackbgrt_enforcement'] ?? 1),
+        'partition_enforcement'   => (int) ($globalSettings['default_partition_enforcement'] ?? 2),
         'missing_drivers_enforcement' => (int) ($globalSettings['default_missing_drivers_enforcement'] ?? 2),
     ];
     $source = 'global';
+
+    // Overlay product line enforcement (matched by order number pattern)
+    if (!empty($orderNumber) && mb_strlen($orderNumber) <= 50) {
+        $stmt = $pdo->query("SELECT id, name, order_pattern, secure_boot_enforcement, bios_enforcement, hackbgrt_enforcement, partition_enforcement, missing_drivers_enforcement FROM product_lines WHERE is_active = 1 ORDER BY LENGTH(order_pattern) DESC");
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $line) {
+            $pattern = $line['order_pattern'] ?? '';
+            if (!preg_match('/^[\p{L}\p{N}#*\-\s]+$/u', $pattern) || mb_strlen($pattern) > 50) continue;
+            $regex = '/^' . preg_replace_callback('/[#*]|[^#*]+/', function ($m) {
+                if ($m[0] === '#') return '\\d';
+                if ($m[0] === '*') return '.+';
+                return preg_quote($m[0], '/');
+            }, $pattern) . '$/u';
+            if (preg_match($regex, $orderNumber)) {
+                $source = 'product_line';
+                foreach (['secure_boot_enforcement', 'bios_enforcement', 'hackbgrt_enforcement', 'partition_enforcement', 'missing_drivers_enforcement'] as $key) {
+                    if (isset($line[$key]) && $line[$key] !== null && $line[$key] !== '') {
+                        $rules[$key] = (int) $line[$key];
+                    }
+                }
+                $rules['_product_line_id'] = (int) $line['id'];
+                $rules['_product_line_name'] = $line['name'];
+                break;
+            }
+        }
+    }
 
     // Overlay manufacturer defaults
     if (!empty($manufacturer)) {
@@ -92,9 +118,9 @@ function qcGetEffectiveRules(PDO $pdo, ?string $manufacturer, ?string $product):
         $stmt->execute([$manufacturer]);
         $mfr = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($mfr) {
-            $source = 'manufacturer';
             foreach (['secure_boot_required', 'secure_boot_enforcement', 'min_bios_version', 'recommended_bios_version', 'bios_enforcement', 'hackbgrt_enforcement', 'missing_drivers_enforcement'] as $key) {
                 if (isset($mfr[$key]) && $mfr[$key] !== null && $mfr[$key] !== '') {
+                    $source = ($source === 'product_line') ? 'product_line+manufacturer' : 'manufacturer';
                     $rules[$key] = is_numeric($mfr[$key]) ? (int) $mfr[$key] : $mfr[$key];
                 }
             }
@@ -170,8 +196,8 @@ function qcRunChecks(PDO $pdo, int $hardwareInfoId, array $hw): array {
     // Auto-register motherboard
     $registryId = qcAutoRegisterMotherboard($pdo, $manufacturer, $product, $biosVersion);
 
-    // Get effective rules
-    $rules = qcGetEffectiveRules($pdo, $manufacturer, $product);
+    // Get effective rules (cascade: global → product line → manufacturer → model)
+    $rules = qcGetEffectiveRules($pdo, $manufacturer, $product, $orderNumber);
     $ruleSource = $rules['_source'];
 
     $checks = [];
@@ -297,7 +323,7 @@ function qcRunChecks(PDO $pdo, int $hardwareInfoId, array $hw): array {
     }
 
     // --- Check 5: Partition Layout ---
-    $partitionCheck = qcCheckPartitionLayout($pdo, $hardwareInfoId, $orderNumber, $hw, $registryId);
+    $partitionCheck = qcCheckPartitionLayout($pdo, $hardwareInfoId, $orderNumber, $hw, $registryId, $rules);
     if ($partitionCheck !== null) {
         $checks[] = $partitionCheck;
         if ($partitionCheck['check_result'] === 'fail') $hasBlocking = true;
@@ -401,7 +427,13 @@ function qcCheckMissingDrivers(PDO $pdo, int $hardwareInfoId, string $orderNumbe
     return $check;
 }
 
-function qcCheckPartitionLayout(PDO $pdo, int $hardwareInfoId, string $orderNumber, array $hw, ?int $registryId): ?array {
+function qcCheckPartitionLayout(PDO $pdo, int $hardwareInfoId, string $orderNumber, array $hw, ?int $registryId, array $rules = []): ?array {
+    // Use partition_enforcement from rules (cascaded: global → product line → mfr → model)
+    $enforcement = (int) ($rules['partition_enforcement'] ?? 2);
+    if ($enforcement === 0) {
+        return null; // Partition check disabled
+    }
+
     if (empty($orderNumber)) {
         return null;
     }
@@ -435,10 +467,7 @@ function qcCheckPartitionLayout(PDO $pdo, int $hardwareInfoId, string $orderNumb
         return null; // No product line configured for this order pattern
     }
 
-    $enforcement = (int) $matchedLine['enforcement_level'];
-    if ($enforcement === 0) {
-        return null; // Disabled for this line
-    }
+    // enforcement is already set from $rules['partition_enforcement'] at the top
 
     // 2. Parse disk layout from hardware data
     $diskLayout = $hw['complete_disk_layout'] ?? null;
@@ -757,7 +786,7 @@ function qcRunChecksRetroactive(PDO $pdo, int $hardwareInfoId, array $hw): array
     $reg = $stmt->fetch(PDO::FETCH_ASSOC);
     $registryId = $reg ? (int) $reg['id'] : null;
 
-    $rules = qcGetEffectiveRules($pdo, $manufacturer, $product);
+    $rules = qcGetEffectiveRules($pdo, $manufacturer, $product, $orderNumber);
     $ruleSource = $rules['_source'];
 
     $checks = [];
@@ -833,7 +862,7 @@ function qcRunChecksRetroactive(PDO $pdo, int $hardwareInfoId, array $hw): array
     }
 
     // Partition Layout check (retroactive — uses stored complete_disk_layout)
-    $partitionCheck = qcCheckPartitionLayout($pdo, $hardwareInfoId, $orderNumber, $hw, $registryId);
+    $partitionCheck = qcCheckPartitionLayout($pdo, $hardwareInfoId, $orderNumber, $hw, $registryId, $rules);
     if ($partitionCheck !== null) {
         $checks[] = $partitionCheck;
         if ($partitionCheck['check_result'] === 'fail') $hasBlocking = true;

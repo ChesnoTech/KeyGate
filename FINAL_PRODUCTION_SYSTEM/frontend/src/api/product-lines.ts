@@ -8,6 +8,11 @@ export interface ProductLine {
   order_pattern: string
   description: string | null
   enforcement_level: number
+  secure_boot_enforcement: number | null
+  bios_enforcement: number | null
+  hackbgrt_enforcement: number | null
+  partition_enforcement: number | null
+  missing_drivers_enforcement: number | null
   is_active: number
   created_at: string
   updated_at: string
@@ -57,6 +62,11 @@ export interface SaveProductLineInput {
   order_pattern: string
   description?: string
   enforcement_level: number
+  secure_boot_enforcement?: number | null
+  bios_enforcement?: number | null
+  hackbgrt_enforcement?: number | null
+  partition_enforcement?: number | null
+  missing_drivers_enforcement?: number | null
 }
 
 export function saveProductLine(data: SaveProductLineInput) {
