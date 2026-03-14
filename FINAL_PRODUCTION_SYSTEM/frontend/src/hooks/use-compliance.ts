@@ -10,8 +10,6 @@ import {
   updateManufacturer,
   listComplianceResults,
   listComplianceGrouped,
-  recheckCount,
-  recheckHistorical,
   getQcStats,
   type ListMotherboardsParams,
   type ListComplianceResultsParams,
@@ -96,29 +94,6 @@ export function useComplianceGrouped(params: ListComplianceGroupedParams = {}) {
   })
 }
 
-export function useRecheckCount() {
-  return useMutation({
-    mutationFn: (data?: { manufacturer?: string; product?: string }) => recheckCount(data),
-    onError: (e: Error) => toast.error(e.message),
-  })
-}
-
-export function useRecheckHistorical() {
-  const qc = useQueryClient()
-  const { t } = useTranslation()
-  return useMutation({
-    mutationFn: (data?: { manufacturer?: string; product?: string; batch_size?: number; after_id?: number }) => recheckHistorical(data),
-    onSuccess: (res) => {
-      if (!res.stats.has_more) {
-        qc.invalidateQueries({ queryKey: ['compliance', 'results'] })
-        qc.invalidateQueries({ queryKey: ['compliance', 'grouped'] })
-        qc.invalidateQueries({ queryKey: ['compliance', 'stats'] })
-        toast.success(t('toast.recheck_started', 'Historical recheck completed'))
-      }
-    },
-    onError: (e: Error) => toast.error(e.message),
-  })
-}
 
 export function useQcStats() {
   return useQuery({
