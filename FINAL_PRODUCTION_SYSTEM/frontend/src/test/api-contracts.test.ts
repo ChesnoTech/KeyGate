@@ -57,6 +57,11 @@ const BACKEND_ACTIONS: Record<string, { method: 'GET' | 'POST'; csrf: boolean }>
   get_session_settings:      { method: 'GET',  csrf: false },
   save_session_settings:     { method: 'POST', csrf: true },
 
+  // smtp / email
+  get_smtp_settings:         { method: 'GET',  csrf: false },
+  save_smtp_settings:        { method: 'POST', csrf: true },
+  test_smtp_connection:      { method: 'POST', csrf: true },
+
   // usb devices
   list_usb_devices:          { method: 'GET',  csrf: false },
   register_usb_device:       { method: 'POST', csrf: true },

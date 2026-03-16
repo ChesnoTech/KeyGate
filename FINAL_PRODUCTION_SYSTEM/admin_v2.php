@@ -208,6 +208,11 @@ $action_registry = [
     'get_session_settings'     => ['SettingsController.php',   'handle_get_session_settings',     false, false],
     'save_session_settings'    => ['SettingsController.php',   'handle_save_session_settings',    true,  true],
 
+    // smtp / email
+    'get_smtp_settings'        => ['SmtpController.php',      'handle_get_smtp_settings',        false, false],
+    'save_smtp_settings'       => ['SmtpController.php',      'handle_save_smtp_settings',       true,  true],
+    'test_smtp_connection'     => ['SmtpController.php',      'handle_test_smtp_connection',      true,  true],
+
     // usb devices
     'list_usb_devices'         => ['UsbDevicesController.php', 'handle_list_usb_devices',         false, false],
     'register_usb_device'      => ['UsbDevicesController.php', 'handle_register_usb_device',      true,  true],
