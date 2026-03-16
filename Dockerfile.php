@@ -41,8 +41,8 @@ RUN { \
     echo 'memory_limit = 128M'; \
     echo 'upload_max_filesize = 50M'; \
     echo 'post_max_size = 50M'; \
-    echo 'max_execution_time = 30'; \
-    echo 'max_input_time = 30'; \
+    echo 'max_execution_time = 120'; \
+    echo 'max_input_time = 120'; \
     echo 'date.timezone = UTC'; \
     echo 'display_errors = Off'; \
     echo 'log_errors = On'; \

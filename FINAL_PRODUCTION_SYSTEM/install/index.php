@@ -583,26 +583,41 @@ async function runEnvCheck() {
     document.getElementById('envResults').classList.add('hidden');
     document.getElementById('envNext').disabled = true;
 
+    // Remove any previous summary banner
+    const oldBanner = document.getElementById('envSummaryBanner');
+    if (oldBanner) oldBanner.remove();
+
     const data = await post('preflight');
 
     document.getElementById('envLoading').classList.add('hidden');
     document.getElementById('envResults').classList.remove('hidden');
 
-    let hasFail = false;
+    let failCount = 0;
+    let warnCount = 0;
+    let warnDetails = [];
 
     function renderChecks(containerId, checks) {
         const ul = document.getElementById(containerId);
         ul.innerHTML = '';
         checks.forEach(c => {
-            if (c.status === 'fail') hasFail = true;
+            if (c.status === 'fail') failCount++;
+            if (c.status === 'warn') {
+                warnCount++;
+                warnDetails.push(c.hint || c.label);
+            }
             const li = document.createElement('li');
             li.className = 'check-item';
+            let hint = '';
+            if (c.hint) {
+                hint = `<div style="font-size:12px;color:#92400e;margin:2px 0 0 36px;">${c.hint}</div>`;
+            }
             li.innerHTML = `
                 <div class="check-icon ${c.status}">
                     ${c.status === 'pass' ? '&#10003;' : c.status === 'warn' ? '!' : '&#10007;'}
                 </div>
                 <span class="check-label">${c.label}</span>
                 <span class="check-value">${c.value || ''}</span>
+                ${hint}
             `;
             ul.appendChild(li);
         });
@@ -613,7 +628,23 @@ async function runEnvCheck() {
     renderChecks('settingsChecks', data.settings || []);
     renderChecks('dirChecks', data.directories || []);
 
-    document.getElementById('envNext').disabled = hasFail;
+    // Show summary banner above the buttons
+    const btnRow = document.querySelector('#step1 .btn-row');
+    if (failCount > 0) {
+        const banner = document.createElement('div');
+        banner.id = 'envSummaryBanner';
+        banner.className = 'alert alert-danger';
+        banner.innerHTML = `<strong>&#10007; ${failCount} critical error(s) found.</strong> Fix the issues marked with <span style="color:#dc2626;">&#10007;</span> before proceeding.`;
+        btnRow.parentNode.insertBefore(banner, btnRow);
+    } else if (warnCount > 0) {
+        const banner = document.createElement('div');
+        banner.id = 'envSummaryBanner';
+        banner.className = 'alert alert-warning';
+        banner.innerHTML = `<strong>&#9888; ${warnCount} warning(s) found.</strong> The system will work but with limited functionality. Review items marked with <span style="color:#d97706;">!</span> above. You may continue, but it is recommended to fix these first.`;
+        btnRow.parentNode.insertBefore(banner, btnRow);
+    }
+
+    document.getElementById('envNext').disabled = failCount > 0;
 }
 
 // ── Step 2: Database Test ────────────────────────────

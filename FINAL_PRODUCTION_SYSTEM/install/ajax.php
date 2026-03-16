@@ -120,7 +120,8 @@ function handlePreflight() {
     $result['settings'][] = [
         'label'  => 'max_execution_time (>= 120s)',
         'value'  => $maxExec . 's',
-        'status' => $maxExec == 0 || $maxExec >= 120 ? 'pass' : ($maxExec >= 30 ? 'warn' : 'fail'),
+        'status' => $maxExec == 0 || $maxExec >= 120 ? 'pass' : ($maxExec >= 60 ? 'warn' : 'fail'),
+        'hint'   => ($maxExec != 0 && $maxExec < 120) ? 'Set max_execution_time = 120 in php.ini. Values below 60s will block installation.' : '',
     ];
 
     $uploads = ini_get('file_uploads');
