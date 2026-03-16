@@ -77,17 +77,19 @@ Secure, database-driven system that automates Windows OEM key distribution, acti
 2. Navigate to http://your-server/install/ in your browser
 
 3. Follow the 6-step setup wizard:
-   Step 1 — Environment check (PHP, extensions, permissions)
-   Step 2 — Database connection (host, port, credentials)
-   Step 3 — Install tables (runs 19 migrations automatically)
-   Step 4 — Create admin account
-   Step 5 — System settings (name, URL, timezone, language)
-   Step 6 — Done! Delete /install/ directory for security
+   Step 1 - Environment check (PHP, extensions, permissions)
+   Step 2 - Database connection (host, port, credentials)
+   Step 3 - Install tables (runs 19 migrations automatically)
+   Step 4 - Create admin account
+   Step 5 - System settings (name, URL, timezone, language)
+   Step 6 - Done! Delete /install/ directory for security
 
 4. Open admin panel at http://your-server/secure-admin.php
 ```
 
-No Docker, no Composer, no npm — just upload and run the installer.
+The installer automatically detects your network and adds it as a **trusted network** (2FA bypass + USB auth enabled) and to the **admin IP whitelist** -- no manual network configuration needed on first setup.
+
+No Docker, no Composer, no npm -- just upload and run the installer.
 
 ### Development (Docker, optional)
 
@@ -134,6 +136,8 @@ OEM_Activation_System/
 |   +-- client/                  #   Technician distribution files
 |
 |-- hardware-bridge/             # Chrome extension + C# native app
+|-- tests/                       # Automated tests
+|   +-- installer-simulation/    #   Docker-based full deployment test
 |-- docs/                        # Development documentation
 |
 |-- Dockerfile.php               # PHP 8.3 + Apache (dev only)
@@ -148,14 +152,16 @@ OEM_Activation_System/
 **Key Management**
 - Bulk CSV import with validation and duplicate detection
 - Atomic single-key distribution (prevents race conditions)
-- Automatic key lifecycle: unused → good/bad/retry
+- Automatic key lifecycle: unused -> good/bad/retry
 - Key recycling rules for failed activations
+- Single-key retry with up to 4 automatic attempts
 
 **QC Compliance**
 - Hardware quality checks: Secure Boot, BIOS version, boot logo (HackBGRT), partitions, drivers
-- Cascade enforcement hierarchy: Global → Product Line → Manufacturer → Model
+- Cascade enforcement hierarchy: Global -> Product Line -> Manufacturer -> Model
 - Motherboard registry with approved BIOS versions
 - Enforcement levels: Disabled / Info / Warning / Blocking
+- Unallocated disk space detection
 
 **Technician Management**
 - Individual accounts with bcrypt password hashing
@@ -169,7 +175,16 @@ OEM_Activation_System/
 - RBAC with configurable roles and ACL permissions
 - CSRF protection, CSP headers, session fixation prevention
 - IP whitelist support for admin panel
+- Trusted network detection (auto-configured during installation)
 - Installer auto-locks after setup (install.lock)
+
+**Web Installer**
+- Joomla-style 6-step setup wizard -- no CLI required
+- Automatic environment validation (PHP version, extensions, permissions)
+- Runs 19 database migrations in order with rollback tracking
+- Auto-detects installer network and adds to trusted networks + admin IP whitelist
+- Generates config.php and locks itself after completion
+- Removes demo data (test technicians) on finalize
 
 **Activation Client**
 - PowerShell 7 auto-install (USB MSI or winget)
@@ -180,7 +195,7 @@ OEM_Activation_System/
 - Full hardware inventory collection (MB, CPU, RAM, GPU, disks, drivers)
 
 **Admin Dashboard (React)**
-- Real-time statistics and charts
+- Real-time statistics and charts (with extended trend ranges: 7d/30d/90d/6mo/1yr/all)
 - Full audit log with filtering
 - QC compliance management with product lines
 - Integration framework (osTicket, 1C ERP)
@@ -188,6 +203,38 @@ OEM_Activation_System/
 - Bilingual interface (English / Russian)
 - Database backup management
 - Responsive design (mobile/tablet/desktop)
+
+---
+
+## Testing
+
+### Frontend Tests
+
+```bash
+cd FINAL_PRODUCTION_SYSTEM/frontend && npm test
+```
+
+Runs i18n completeness, API contract, and route permission tests via Vitest.
+
+### Installer Simulation Test
+
+A full end-to-end deployment test that simulates a production install inside Docker:
+
+```bash
+cd tests/installer-simulation
+docker compose up --build
+```
+
+This spins up Ubuntu 22.04 with systemd, installs a full LAMP stack (Apache, PHP 8.3, MariaDB), deploys the application, runs the web installer via curl (simulating a browser), and executes 29 verification tests covering:
+
+- All 19 database migrations applied
+- 38 tables created with correct schema
+- Admin account and system config populated
+- Trusted network auto-detection working
+- Admin IP whitelist auto-populated
+- Installer lock file prevents re-runs
+- API endpoints responding correctly
+- Demo data cleaned up
 
 ---
 
@@ -204,7 +251,7 @@ OEM_Activation_System/
 
 | Document | Location |
 |----------|----------|
-| **Web installer** | Upload `FINAL_PRODUCTION_SYSTEM/` → navigate to `/install/` |
+| **Web installer** | Upload `FINAL_PRODUCTION_SYSTEM/` -> navigate to `/install/` |
 | **Production deployment (aaPanel)** | [`docs/PRODUCTION_DEPLOYMENT_GUIDE.md`](docs/PRODUCTION_DEPLOYMENT_GUIDE.md) |
 | Web application details | [`FINAL_PRODUCTION_SYSTEM/README.md`](FINAL_PRODUCTION_SYSTEM/README.md) |
 | Hardware bridge setup | [`hardware-bridge/README.md`](hardware-bridge/README.md) |

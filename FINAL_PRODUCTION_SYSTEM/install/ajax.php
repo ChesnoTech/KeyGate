@@ -527,6 +527,52 @@ function handleFinalize() {
             try {
                 $pdo->exec("DELETE FROM technicians WHERE technician_id = 'demo' AND notes LIKE '%Demo account%'");
             } catch (PDOException $e) { /* ignore */ }
+
+            // ── Auto-detect installer's network and add as trusted ──
+            try {
+                $clientIp = getClientIp();
+                if ($clientIp && $clientIp !== 'unknown') {
+                    // Get admin ID for foreign key
+                    $adminStmt = $pdo->prepare("SELECT id FROM admin_users WHERE username = ? LIMIT 1");
+                    $adminStmt->execute([$adminUser]);
+                    $adminRow = $adminStmt->fetch(PDO::FETCH_ASSOC);
+                    $adminId = $adminRow ? $adminRow['id'] : null;
+
+                    // Calculate /24 subnet from the IP
+                    $subnet = calculateSubnet($clientIp, 24);
+
+                    // Add to trusted_networks (for 2FA bypass + USB auth)
+                    try {
+                        $stmt = $pdo->prepare("
+                            INSERT INTO trusted_networks (network_name, ip_range, bypass_2fa, allow_usb_auth, description, created_by_admin_id)
+                            VALUES (?, ?, 1, 1, ?, ?)
+                        ");
+                        $stmt->execute([
+                            'Installation Network',
+                            $subnet,
+                            "Auto-detected during installation from IP {$clientIp}",
+                            $adminId,
+                        ]);
+                    } catch (PDOException $e) { /* table may not exist */ }
+
+                    // Add to admin_ip_whitelist (for admin panel access)
+                    try {
+                        $stmt = $pdo->prepare("
+                            INSERT INTO admin_ip_whitelist (ip_address, ip_range, description, created_by)
+                            VALUES (?, ?, ?, ?)
+                        ");
+                        $stmt->execute([
+                            $clientIp,
+                            $subnet,
+                            "Auto-detected during installation",
+                            $adminId,
+                        ]);
+                    } catch (PDOException $e) { /* table may not exist */ }
+                }
+            } catch (Exception $e) {
+                // Non-fatal — network detection is best-effort
+                error_log("Installer: network auto-detection failed: " . $e->getMessage());
+            }
         }
     } catch (PDOException $e) {
         // Non-fatal — config.php is already written
@@ -553,6 +599,8 @@ function handleFinalize() {
             'Admin User'    => $adminUser,
             'Database'      => $name . '@' . $host . ':' . $port,
             'Timezone'      => $timezone,
+            'Trusted Net'   => isset($subnet) ? $subnet : 'Not detected',
+            'Installer IP'  => isset($clientIp) ? $clientIp : 'Unknown',
             'Installed'     => date('Y-m-d H:i:s'),
         ],
     ]);
@@ -604,6 +652,41 @@ function returnBytes(string $val): int {
         case 'k': $val *= 1024;
     }
     return $val;
+}
+
+/**
+ * Get the real client IP, accounting for proxies
+ */
+function getClientIp(): string {
+    // Check common proxy headers (trusted only in installer context)
+    $headers = ['HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'HTTP_CLIENT_IP'];
+    foreach ($headers as $header) {
+        if (!empty($_SERVER[$header])) {
+            // X-Forwarded-For may contain multiple IPs — take the first (client)
+            $ip = trim(explode(',', $_SERVER[$header])[0]);
+            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                return $ip;
+            }
+            // Accept private range IPs too (common in LAN setups)
+            if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                return $ip;
+            }
+        }
+    }
+    return $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+}
+
+/**
+ * Calculate /N subnet from an IP address (e.g., 192.168.1.57 + /24 → 192.168.1.0/24)
+ */
+function calculateSubnet(string $ip, int $prefix = 24): string {
+    $long = ip2long($ip);
+    if ($long === false) {
+        return $ip . '/' . $prefix;
+    }
+    $mask = -1 << (32 - $prefix);
+    $network = long2ip($long & $mask);
+    return $network . '/' . $prefix;
 }
 
 /**

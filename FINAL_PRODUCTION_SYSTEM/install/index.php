@@ -520,6 +520,15 @@ $serverUrl = $protocol . '://' . $host . $baseUrl;
                 <dl class="info-grid" id="completeInfo"></dl>
             </div>
 
+            <div class="alert alert-success" style="text-align:left;">
+                <strong>&#128274; Network Auto-Detected:</strong>
+                <p style="margin:6px 0 0;font-size:13px;">
+                    Your current network has been automatically added as a <strong>Trusted Network</strong>
+                    (2FA bypass + USB auth enabled) and to the <strong>Admin IP Whitelist</strong>.
+                    You can manage these in the admin panel under Security settings.
+                </p>
+            </div>
+
             <div class="alert alert-warning" style="text-align:left;">
                 <strong>&#9888; Security Reminder:</strong>
                 <ul style="margin:8px 0 0 20px;font-size:13px;">

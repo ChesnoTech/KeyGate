@@ -1,0 +1,3 @@
+# The app/ directory is a copy of FINAL_PRODUCTION_SYSTEM/ created by build.sh
+# It should not be tracked in git -- rebuild with: ./build.sh
+app/

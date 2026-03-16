@@ -1,0 +1,62 @@
+# ═══════════════════════════════════════════════════════════════════
+# OEM Installer Simulation — Docker Compose
+#
+# Simulates full production deployment on Ubuntu 22.04 + aaPanel
+#
+# Quick start:
+#   docker compose up --build                     # Fast install (~15 min)
+#   INSTALL_MODE=compile docker compose up --build # Compile mode (~2-4 hrs)
+#
+# Monitor progress:
+#   docker compose logs -f simulation
+#   docker exec -it oem-installer-sim journalctl -u oem-simulation -f
+#
+# Access aaPanel after setup:
+#   http://localhost:8888  (credentials shown in logs)
+#
+# Access OEM app after installer completes:
+#   http://localhost:8080
+# ═══════════════════════════════════════════════════════════════════
+
+services:
+  simulation:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: oem-installer-sim
+    hostname: oem-server
+    privileged: true
+    environment:
+      - INSTALL_MODE=${INSTALL_MODE:-fast}         # fast | compile
+      - AAPANEL_PORT=8888
+      - SITE_PORT=8080
+      - DB_NAME=oem_activation
+      - DB_USER=oem_user
+      - DB_PASS=oem_password_123
+      - DB_ROOT_PASS=root_password_123
+      - ADMIN_USER=admin
+      - ADMIN_PASS=Admin2024!
+      - ADMIN_EMAIL=admin@oem-system.local
+      - SITE_DOMAIN=oem-system.local
+    ports:
+      - "9080:80"         # OEM app (9080 to avoid dev stack conflict)
+      - "9888:8888"       # aaPanel
+      - "9443:443"        # HTTPS
+      - "9306:3306"       # MariaDB
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - simulation-data:/www              # aaPanel's data directory
+      - simulation-db:/var/lib/mysql      # MariaDB data
+    tmpfs:
+      - /run
+      - /run/lock
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost/api/health.php", "-o", "/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 600s    # Give time for full setup
+
+volumes:
+  simulation-data:
+  simulation-db:
