@@ -21,7 +21,7 @@ function handle_get_branding(PDO $pdo, array $admin_session): void {
 }
 
 function handle_save_branding(PDO $pdo, array $admin_session, ?array $json_input = null): void {
-    requirePermission('manage_settings', $admin_session);
+    requirePermission('system_settings', $admin_session);
 
     if (!$json_input) {
         echo json_encode(['success' => false, 'error' => 'Invalid JSON input']);
@@ -75,7 +75,7 @@ function handle_save_branding(PDO $pdo, array $admin_session, ?array $json_input
 }
 
 function handle_upload_brand_asset(PDO $pdo, array $admin_session): void {
-    requirePermission('manage_settings', $admin_session);
+    requirePermission('system_settings', $admin_session);
 
     $assetType = $_POST['asset_type'] ?? '';
     if (!in_array($assetType, ['logo', 'favicon'])) {
@@ -174,7 +174,7 @@ function handle_upload_brand_asset(PDO $pdo, array $admin_session): void {
 }
 
 function handle_delete_brand_asset(PDO $pdo, array $admin_session, ?array $json_input = null): void {
-    requirePermission('manage_settings', $admin_session);
+    requirePermission('system_settings', $admin_session);
 
     $assetType = $json_input['asset_type'] ?? '';
     if (!in_array($assetType, ['logo', 'favicon'])) {

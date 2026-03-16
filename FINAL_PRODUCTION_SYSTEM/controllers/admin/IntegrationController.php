@@ -7,7 +7,7 @@
 require_once dirname(__DIR__, 2) . '/functions/integration-helpers.php';
 
 function handle_list_integrations(PDO $pdo, array $admin_session): void {
-    requirePermission('manage_settings', $admin_session);
+    requirePermission('system_settings', $admin_session);
 
     $stmt = $pdo->query("SELECT * FROM integrations ORDER BY id ASC");
     $rows = $stmt->fetchAll();
@@ -40,7 +40,7 @@ function handle_list_integrations(PDO $pdo, array $admin_session): void {
 }
 
 function handle_get_integration(PDO $pdo, array $admin_session): void {
-    requirePermission('manage_settings', $admin_session);
+    requirePermission('system_settings', $admin_session);
 
     $key = $_GET['integration_key'] ?? '';
     if (empty($key)) {
@@ -72,7 +72,7 @@ function handle_get_integration(PDO $pdo, array $admin_session): void {
 }
 
 function handle_save_integration(PDO $pdo, array $admin_session, ?array $json_input = null): void {
-    requirePermission('manage_settings', $admin_session);
+    requirePermission('system_settings', $admin_session);
 
     if (!$json_input) {
         echo json_encode(['success' => false, 'error' => 'Invalid JSON input']);
@@ -137,7 +137,7 @@ function handle_save_integration(PDO $pdo, array $admin_session, ?array $json_in
 }
 
 function handle_test_integration(PDO $pdo, array $admin_session, ?array $json_input = null): void {
-    requirePermission('manage_settings', $admin_session);
+    requirePermission('system_settings', $admin_session);
 
     $key = $json_input['integration_key'] ?? '';
     if (empty($key)) {
@@ -200,7 +200,7 @@ function handle_test_integration(PDO $pdo, array $admin_session, ?array $json_in
 }
 
 function handle_retry_integration_events(PDO $pdo, array $admin_session, ?array $json_input = null): void {
-    requirePermission('manage_settings', $admin_session);
+    requirePermission('system_settings', $admin_session);
 
     $key = $json_input['integration_key'] ?? '';
     if (empty($key)) {
