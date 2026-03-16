@@ -100,7 +100,7 @@ EXPOSE 80 443
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \
-  CMD curl -f http://localhost/ || exit 1
+  CMD curl -f http://localhost/api/health.php || curl -f http://localhost/install/ || exit 1
 
 # Start cron (for log rotation) then Apache
 CMD ["sh", "-c", "cron && apache2-foreground"]

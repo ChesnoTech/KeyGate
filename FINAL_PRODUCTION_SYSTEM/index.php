@@ -6,7 +6,7 @@
  */
 
 // Check if install.lock exists (installer completed)
-if (!file_exists(__DIR__ . '/install/install.lock') && is_dir(__DIR__ . '/install')) {
+if (!file_exists(__DIR__ . '/install.lock') && is_dir(__DIR__ . '/install')) {
     header('Location: install/');
     exit;
 }
