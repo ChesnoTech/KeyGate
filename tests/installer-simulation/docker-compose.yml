@@ -12,10 +12,10 @@
 #   docker exec -it oem-installer-sim journalctl -u oem-simulation -f
 #
 # Access aaPanel after setup:
-#   http://localhost:8888  (credentials shown in logs)
+#   http://localhost:9888  (credentials shown in logs)
 #
 # Access OEM app after installer completes:
-#   http://localhost:8080
+#   http://localhost:9080
 # ═══════════════════════════════════════════════════════════════════
 
 services:
@@ -51,7 +51,7 @@ services:
       - /run
       - /run/lock
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost/api/health.php", "-o", "/dev/null"]
+      test: ["CMD-SHELL", "curl -sf http://localhost/api/health.php -o /dev/null || curl -sf http://localhost/ -o /dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
