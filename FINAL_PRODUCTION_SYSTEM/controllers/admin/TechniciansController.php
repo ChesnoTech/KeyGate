@@ -40,7 +40,7 @@ function handle_list_techs(PDO $pdo, array $admin_session): void {
     $stmt->execute($params);
     $techs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'technicians' => $techs,
         'total' => $total,
@@ -59,7 +59,7 @@ function handle_list_technicians(PDO $pdo, array $admin_session): void {
     ");
     $technicians = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'technicians' => $technicians
     ]);
@@ -78,12 +78,12 @@ function handle_add_tech(PDO $pdo, array $admin_session): void {
     if (empty($preferred_language)) $preferred_language = 'en';
 
     if (strlen($tech_id) !== TECH_ID_LENGTH || !preg_match(TECH_ID_PATTERN, $tech_id)) {
-        echo json_encode(['success' => false, 'error' => 'Technician ID must be exactly 5 alphanumeric characters']);
+        jsonResponse(['success' => false, 'error' => 'Technician ID must be exactly 5 alphanumeric characters']);
         return;
     }
 
     if (strlen($password) < PASSWORD_MIN_LENGTH) {
-        echo json_encode(['success' => false, 'error' => 'Password must be at least ' . PASSWORD_MIN_LENGTH . ' characters']);
+        jsonResponse(['success' => false, 'error' => 'Password must be at least ' . PASSWORD_MIN_LENGTH . ' characters']);
         return;
     }
 
@@ -97,7 +97,7 @@ function handle_add_tech(PDO $pdo, array $admin_session): void {
         $stmt->execute([$tech_id]);
         if ($stmt->fetchColumn() > 0) {
             $pdo->rollBack();
-            echo json_encode(['success' => false, 'error' => 'Technician ID already exists']);
+            jsonResponse(['success' => false, 'error' => 'Technician ID already exists']);
             return;
         }
 
@@ -112,7 +112,7 @@ function handle_add_tech(PDO $pdo, array $admin_session): void {
         $pdo->rollBack();
         // Handle duplicate key constraint violation gracefully
         if ($e->getCode() == '23000') {
-            echo json_encode(['success' => false, 'error' => 'Technician ID already exists']);
+            jsonResponse(['success' => false, 'error' => 'Technician ID already exists']);
             return;
         }
         throw $e;
@@ -125,7 +125,7 @@ function handle_add_tech(PDO $pdo, array $admin_session): void {
         "Created technician: $tech_id"
     );
 
-    echo json_encode(['success' => true, 'message' => 'Technician created successfully']);
+    jsonResponse(['success' => true, 'message' => 'Technician created successfully']);
 }
 
 function handle_edit_tech(PDO $pdo, array $admin_session): void {
@@ -150,13 +150,13 @@ function handle_edit_tech(PDO $pdo, array $admin_session): void {
         "Updated technician ID: $id"
     );
 
-    echo json_encode(['success' => true, 'message' => 'Technician updated successfully']);
+    jsonResponse(['success' => true, 'message' => 'Technician updated successfully']);
 }
 
 function handle_get_tech(PDO $pdo, array $admin_session): void {
     $techId = intval($_GET['id'] ?? 0);
     if ($techId <= 0) {
-        echo json_encode(['success' => false, 'error' => 'Invalid technician ID']);
+        jsonResponse(['success' => false, 'error' => 'Invalid technician ID']);
         return;
     }
 
@@ -169,17 +169,17 @@ function handle_get_tech(PDO $pdo, array $admin_session): void {
     $tech = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$tech) {
-        echo json_encode(['success' => false, 'error' => 'Technician not found']);
+        jsonResponse(['success' => false, 'error' => 'Technician not found']);
         return;
     }
 
-    echo json_encode(['success' => true, 'technician' => $tech]);
+    jsonResponse(['success' => true, 'technician' => $tech]);
 }
 
 function handle_update_tech(PDO $pdo, array $admin_session, ?array $json_input = null): void {
     $input = $json_input;
     if (!$input) {
-        echo json_encode(['success' => false, 'error' => 'Invalid JSON input']);
+        jsonResponse(['success' => false, 'error' => 'Invalid JSON input']);
         return;
     }
 
@@ -192,17 +192,17 @@ function handle_update_tech(PDO $pdo, array $admin_session, ?array $json_input =
     $isActive = intval($input['is_active'] ?? 0);
 
     if ($techId <= 0) {
-        echo json_encode(['success' => false, 'error' => 'Invalid technician ID']);
+        jsonResponse(['success' => false, 'error' => 'Invalid technician ID']);
         return;
     }
 
     if (empty($fullName)) {
-        echo json_encode(['success' => false, 'error' => 'Full name is required']);
+        jsonResponse(['success' => false, 'error' => 'Full name is required']);
         return;
     }
 
     if (!in_array($preferredServer, ['oem', 'alternative'], true)) {
-        echo json_encode(['success' => false, 'error' => 'Invalid preferred server']);
+        jsonResponse(['success' => false, 'error' => 'Invalid preferred server']);
         return;
     }
 
@@ -220,7 +220,7 @@ function handle_update_tech(PDO $pdo, array $admin_session, ?array $json_input =
         "Updated technician ID {$techId}"
     );
 
-    echo json_encode(['success' => true]);
+    jsonResponse(['success' => true]);
 }
 
 function handle_reset_password(PDO $pdo, array $admin_session): void {
@@ -230,7 +230,7 @@ function handle_reset_password(PDO $pdo, array $admin_session): void {
     $new_password = $_POST['new_password'] ?? '';
 
     if (strlen($new_password) < PASSWORD_MIN_LENGTH) {
-        echo json_encode(['success' => false, 'error' => 'Password must be at least ' . PASSWORD_MIN_LENGTH . ' characters']);
+        jsonResponse(['success' => false, 'error' => 'Password must be at least ' . PASSWORD_MIN_LENGTH . ' characters']);
         return;
     }
 
@@ -250,7 +250,7 @@ function handle_reset_password(PDO $pdo, array $admin_session): void {
         "Reset password for technician ID: $id"
     );
 
-    echo json_encode(['success' => true, 'message' => 'Password reset successfully']);
+    jsonResponse(['success' => true, 'message' => 'Password reset successfully']);
 }
 
 function handle_toggle_tech(PDO $pdo, array $admin_session): void {
@@ -272,7 +272,7 @@ function handle_toggle_tech(PDO $pdo, array $admin_session): void {
         "Toggled active status for technician ID: $id"
     );
 
-    echo json_encode(['success' => true, 'message' => 'Technician status updated']);
+    jsonResponse(['success' => true, 'message' => 'Technician status updated']);
 }
 
 function handle_delete_tech(PDO $pdo, array $admin_session): void {
@@ -290,5 +290,5 @@ function handle_delete_tech(PDO $pdo, array $admin_session): void {
         "Deleted technician ID: $id"
     );
 
-    echo json_encode(['success' => true, 'message' => 'Technician deleted successfully']);
+    jsonResponse(['success' => true, 'message' => 'Technician deleted successfully']);
 }

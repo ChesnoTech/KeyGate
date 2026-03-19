@@ -13,7 +13,7 @@ define('PAGINATION_COMPLIANCE', 20);
 function handle_qc_get_settings(PDO $pdo, array $admin_session, ?array $json_input = null): void {
     requirePermission('view_compliance', $admin_session);
     $settings = qcGetGlobalSettings($pdo);
-    echo json_encode(['success' => true, 'settings' => $settings]);
+    jsonResponse(['success' => true, 'settings' => $settings]);
 }
 
 function handle_qc_save_settings(PDO $pdo, array $admin_session, ?array $json_input = null): void {
@@ -29,7 +29,7 @@ function handle_qc_save_settings(PDO $pdo, array $admin_session, ?array $json_in
     }
 
     logAdminActivity($admin_session['admin_id'], $admin_session['id'], 'QC_SETTINGS_UPDATE', 'Updated QC global settings');
-    echo json_encode(['success' => true]);
+    jsonResponse(['success' => true]);
 }
 
 // ── Motherboard Registry ─────────────────────────────────────
@@ -97,7 +97,7 @@ function handle_qc_list_motherboards(PDO $pdo, array $admin_session, ?array $jso
     // Distinct manufacturers for filter dropdown
     $mfrs = $pdo->query("SELECT DISTINCT manufacturer FROM qc_motherboard_registry ORDER BY manufacturer")->fetchAll(PDO::FETCH_COLUMN);
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'motherboards' => $rows,
         'total' => $total,
@@ -116,14 +116,14 @@ function handle_qc_get_motherboard(PDO $pdo, array $admin_session, ?array $json_
     $board = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$board) {
-        echo json_encode(['success' => false, 'error' => 'Motherboard not found']);
+        jsonResponse(['success' => false, 'error' => 'Motherboard not found']);
         return;
     }
 
     $board['known_bios_versions'] = json_decode($board['known_bios_versions'] ?: '[]', true);
     $rules = qcGetEffectiveRules($pdo, $board['manufacturer'], $board['product']);
 
-    echo json_encode(['success' => true, 'motherboard' => $board, 'effective_rules' => $rules]);
+    jsonResponse(['success' => true, 'motherboard' => $board, 'effective_rules' => $rules]);
 }
 
 function handle_qc_update_motherboard(PDO $pdo, array $admin_session, ?array $json_input = null): void {
@@ -131,7 +131,7 @@ function handle_qc_update_motherboard(PDO $pdo, array $admin_session, ?array $js
 
     $id = (int) ($json_input['id'] ?? 0);
     if (!$id) {
-        echo json_encode(['success' => false, 'error' => 'Missing motherboard ID']);
+        jsonResponse(['success' => false, 'error' => 'Missing motherboard ID']);
         return;
     }
 
@@ -153,7 +153,7 @@ function handle_qc_update_motherboard(PDO $pdo, array $admin_session, ?array $js
     }
 
     if (empty($fields)) {
-        echo json_encode(['success' => false, 'error' => 'No fields to update']);
+        jsonResponse(['success' => false, 'error' => 'No fields to update']);
         return;
     }
 
@@ -165,7 +165,7 @@ function handle_qc_update_motherboard(PDO $pdo, array $admin_session, ?array $js
     $stmt->execute($params);
 
     logAdminActivity($admin_session['admin_id'], $admin_session['id'], 'QC_MOTHERBOARD_UPDATE', "Updated motherboard registry #$id");
-    echo json_encode(['success' => true]);
+    jsonResponse(['success' => true]);
 }
 
 // ── Manufacturer Defaults ────────────────────────────────────
@@ -187,7 +187,7 @@ function handle_qc_list_manufacturers(PDO $pdo, array $admin_session, ?array $js
     ");
     $unconfigured = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
-    echo json_encode(['success' => true, 'manufacturers' => $configured, 'unconfigured' => $unconfigured]);
+    jsonResponse(['success' => true, 'manufacturers' => $configured, 'unconfigured' => $unconfigured]);
 }
 
 function handle_qc_update_manufacturer(PDO $pdo, array $admin_session, ?array $json_input = null): void {
@@ -195,7 +195,7 @@ function handle_qc_update_manufacturer(PDO $pdo, array $admin_session, ?array $j
 
     $manufacturer = trim($json_input['manufacturer'] ?? '');
     if (empty($manufacturer)) {
-        echo json_encode(['success' => false, 'error' => 'Manufacturer name required']);
+        jsonResponse(['success' => false, 'error' => 'Manufacturer name required']);
         return;
     }
 
@@ -225,7 +225,7 @@ function handle_qc_update_manufacturer(PDO $pdo, array $admin_session, ?array $j
     ]);
 
     logAdminActivity($admin_session['admin_id'], $admin_session['id'], 'QC_MANUFACTURER_UPDATE', "Updated manufacturer defaults: $manufacturer");
-    echo json_encode(['success' => true]);
+    jsonResponse(['success' => true]);
 }
 
 // ── Compliance Results ───────────────────────────────────────
@@ -273,7 +273,7 @@ function handle_qc_list_compliance_results(PDO $pdo, array $admin_session, ?arra
     $stmt->execute($params);
     $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'results' => $results,
         'total' => $total,
@@ -413,7 +413,7 @@ function handle_qc_list_compliance_grouped(PDO $pdo, array $admin_session, ?arra
         unset($o);
     }
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'results' => $orders,
         'total' => $total,
@@ -493,7 +493,7 @@ function handle_qc_get_stats(PDO $pdo, array $admin_session, ?array $json_input 
         $byType[$row['check_type']][$row['check_result']] = (int) $row['cnt'];
     }
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'stats' => [
             'total_checks' => $total,

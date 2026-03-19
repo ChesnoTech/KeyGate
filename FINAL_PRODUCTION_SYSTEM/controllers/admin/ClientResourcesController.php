@@ -22,13 +22,7 @@ function handle_upload_client_resource(PDO $pdo, array $admin_session): void {
 
     if (!isset($_FILES['resource_file']) || $_FILES['resource_file']['error'] !== UPLOAD_ERR_OK) {
         $errCode = $_FILES['resource_file']['error'] ?? -1;
-        $errMap = [
-            UPLOAD_ERR_INI_SIZE => 'File exceeds server upload limit',
-            UPLOAD_ERR_FORM_SIZE => 'File exceeds form upload limit',
-            UPLOAD_ERR_PARTIAL => 'File was only partially uploaded',
-            UPLOAD_ERR_NO_FILE => 'No file was uploaded',
-        ];
-        jsonResponse(['success' => false, 'error' => $errMap[$errCode] ?? 'Upload failed (code: ' . $errCode . ')']);
+        jsonResponse(['success' => false, 'error' => getUploadErrorMessage($errCode)]);
         return;
     }
 
@@ -225,15 +219,5 @@ function handle_download_client_resource(PDO $pdo, array $admin_session): void {
         return;
     }
 
-    // Sanitize filename for Content-Disposition header
-    $safeName = preg_replace('/[^a-zA-Z0-9._\-]/', '_', $resource['original_filename']);
-
-    header('Content-Type: ' . ($resource['mime_type'] ?: 'application/octet-stream'));
-    header('Content-Disposition: attachment; filename="' . $safeName . '"');
-    header('Content-Length: ' . $resource['file_size']);
-    header('X-Checksum-SHA256: ' . $resource['checksum_sha256']);
-    header('Cache-Control: no-store');
-
-    readfile($filePath);
-    exit;
+    streamFileDownload($filePath, $resource['original_filename'], $resource['mime_type'], (int) $resource['file_size'], $resource['checksum_sha256']);
 }

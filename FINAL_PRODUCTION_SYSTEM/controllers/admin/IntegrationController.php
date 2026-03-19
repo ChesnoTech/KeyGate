@@ -36,7 +36,7 @@ function handle_list_integrations(PDO $pdo, array $admin_session): void {
     }
     unset($row);
 
-    echo json_encode(['success' => true, 'integrations' => $rows]);
+    jsonResponse(['success' => true, 'integrations' => $rows]);
 }
 
 function handle_get_integration(PDO $pdo, array $admin_session): void {
@@ -44,7 +44,7 @@ function handle_get_integration(PDO $pdo, array $admin_session): void {
 
     $key = $_GET['integration_key'] ?? '';
     if (empty($key)) {
-        echo json_encode(['success' => false, 'error' => 'integration_key required']);
+        jsonResponse(['success' => false, 'error' => 'integration_key required']);
         return;
     }
 
@@ -52,7 +52,7 @@ function handle_get_integration(PDO $pdo, array $admin_session): void {
     $stmt->execute([$key]);
     $intg = $stmt->fetch();
     if (!$intg) {
-        echo json_encode(['success' => false, 'error' => 'Integration not found']);
+        jsonResponse(['success' => false, 'error' => 'Integration not found']);
         return;
     }
 
@@ -68,20 +68,20 @@ function handle_get_integration(PDO $pdo, array $admin_session): void {
     $evtStmt->execute([$intg['id']]);
     $intg['recent_events'] = $evtStmt->fetchAll();
 
-    echo json_encode(['success' => true, 'integration' => $intg]);
+    jsonResponse(['success' => true, 'integration' => $intg]);
 }
 
 function handle_save_integration(PDO $pdo, array $admin_session, ?array $json_input = null): void {
     requirePermission('system_settings', $admin_session);
 
     if (!$json_input) {
-        echo json_encode(['success' => false, 'error' => 'Invalid JSON input']);
+        jsonResponse(['success' => false, 'error' => 'Invalid JSON input']);
         return;
     }
 
     $key = $json_input['integration_key'] ?? '';
     if (empty($key)) {
-        echo json_encode(['success' => false, 'error' => 'integration_key required']);
+        jsonResponse(['success' => false, 'error' => 'integration_key required']);
         return;
     }
 
@@ -89,7 +89,7 @@ function handle_save_integration(PDO $pdo, array $admin_session, ?array $json_in
     $stmt->execute([$key]);
     $intg = $stmt->fetch();
     if (!$intg) {
-        echo json_encode(['success' => false, 'error' => 'Integration not found']);
+        jsonResponse(['success' => false, 'error' => 'Integration not found']);
         return;
     }
 
@@ -106,7 +106,7 @@ function handle_save_integration(PDO $pdo, array $admin_session, ?array $json_in
 
     // Validate: if enabling, require base_url
     if ($enabled && empty($config['base_url'] ?? '')) {
-        echo json_encode(['success' => false, 'error' => 'Base URL is required to enable this integration']);
+        jsonResponse(['success' => false, 'error' => 'Base URL is required to enable this integration']);
         return;
     }
 
@@ -133,7 +133,7 @@ function handle_save_integration(PDO $pdo, array $admin_session, ?array $json_in
         "Updated integration: $key (enabled: $enabled)"
     );
 
-    echo json_encode(['success' => true]);
+    jsonResponse(['success' => true]);
 }
 
 function handle_test_integration(PDO $pdo, array $admin_session, ?array $json_input = null): void {
@@ -141,20 +141,20 @@ function handle_test_integration(PDO $pdo, array $admin_session, ?array $json_in
 
     $key = $json_input['integration_key'] ?? '';
     if (empty($key)) {
-        echo json_encode(['success' => false, 'error' => 'integration_key required']);
+        jsonResponse(['success' => false, 'error' => 'integration_key required']);
         return;
     }
 
     $intg = getIntegration($key);
     if (!$intg) {
-        echo json_encode(['success' => false, 'error' => 'Integration not found']);
+        jsonResponse(['success' => false, 'error' => 'Integration not found']);
         return;
     }
 
     $config = $intg['config'];
     $baseUrl = $config['base_url'] ?? '';
     if (empty($baseUrl)) {
-        echo json_encode(['success' => false, 'error' => 'Base URL not configured']);
+        jsonResponse(['success' => false, 'error' => 'Base URL not configured']);
         return;
     }
 
@@ -170,7 +170,7 @@ function handle_test_integration(PDO $pdo, array $admin_session, ?array $json_in
             } else {
                 updateIntegrationStatus($intg['id'], 'error', $result['error'] ?? 'Connection test failed');
             }
-            echo json_encode($result);
+            jsonResponse($result);
             return;
         }
     }
@@ -191,11 +191,11 @@ function handle_test_integration(PDO $pdo, array $admin_session, ?array $json_in
 
     if ($httpCode >= 200 && $httpCode < 500) {
         updateIntegrationStatus($intg['id'], 'connected');
-        echo json_encode(['success' => true, 'message' => "Connection successful (HTTP $httpCode)"]);
+        jsonResponse(['success' => true, 'message' => "Connection successful (HTTP $httpCode)"]);
     } else {
         $msg = $error ?: "HTTP $httpCode";
         updateIntegrationStatus($intg['id'], 'error', $msg);
-        echo json_encode(['success' => false, 'error' => "Connection failed: $msg"]);
+        jsonResponse(['success' => false, 'error' => "Connection failed: $msg"]);
     }
 }
 
@@ -204,7 +204,7 @@ function handle_retry_integration_events(PDO $pdo, array $admin_session, ?array 
 
     $key = $json_input['integration_key'] ?? '';
     if (empty($key)) {
-        echo json_encode(['success' => false, 'error' => 'integration_key required']);
+        jsonResponse(['success' => false, 'error' => 'integration_key required']);
         return;
     }
 
@@ -217,5 +217,5 @@ function handle_retry_integration_events(PDO $pdo, array $admin_session, ?array 
         "Retried events for $key: {$result['retried']} retried, {$result['succeeded']} succeeded"
     );
 
-    echo json_encode($result);
+    jsonResponse($result);
 }

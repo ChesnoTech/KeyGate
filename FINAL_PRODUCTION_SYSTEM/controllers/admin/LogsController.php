@@ -47,7 +47,7 @@ function handle_list_logs(PDO $pdo, array $admin_session): void {
     $stmt->execute($params);
     $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'logs' => $logs,
         'total' => $total,

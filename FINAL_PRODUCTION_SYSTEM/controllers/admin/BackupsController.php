@@ -14,7 +14,7 @@ function handle_list_backups(PDO $pdo, array $admin_session): void {
     ");
     $backups = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    echo json_encode(['success' => true, 'backups' => $backups]);
+    jsonResponse(['success' => true, 'backups' => $backups]);
 }
 
 function handle_trigger_manual_backup(PDO $pdo, array $admin_session): void {
@@ -24,7 +24,7 @@ function handle_trigger_manual_backup(PDO $pdo, array $admin_session): void {
     $scriptPath = $webRoot . '/scripts/backup-database.sh';
 
     if (!file_exists($scriptPath)) {
-        echo json_encode(['success' => false, 'error' => 'Backup script not found']);
+        jsonResponse(['success' => false, 'error' => 'Backup script not found']);
         return;
     }
 
@@ -40,13 +40,13 @@ function handle_trigger_manual_backup(PDO $pdo, array $admin_session): void {
             'Triggered manual database backup'
         );
 
-        echo json_encode([
+        jsonResponse([
             'success' => true,
             'message' => 'Backup completed successfully',
             'output' => implode("\n", $output)
         ]);
     } else {
-        echo json_encode([
+        jsonResponse([
             'success' => false,
             'error' => 'Backup failed',
             'output' => implode("\n", $output)

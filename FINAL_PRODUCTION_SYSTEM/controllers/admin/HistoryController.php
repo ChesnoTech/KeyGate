@@ -56,7 +56,7 @@ function handle_list_history(PDO $pdo, array $admin_session): void {
     $stmt->execute($params);
     $history = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'history' => $history,
         'total' => $total,
@@ -81,9 +81,9 @@ function handle_get_hardware(PDO $pdo, array $admin_session): void {
     $hardware = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($hardware) {
-        echo json_encode(['success' => true, 'hardware' => $hardware]);
+        jsonResponse(['success' => true, 'hardware' => $hardware]);
     } else {
-        echo json_encode(['success' => false, 'error' => 'Hardware information not found']);
+        jsonResponse(['success' => false, 'error' => 'Hardware information not found']);
     }
 }
 
@@ -91,7 +91,7 @@ function handle_get_hardware_by_order(PDO $pdo, array $admin_session): void {
     $orderNumber = $_GET['order_number'] ?? '';
 
     if (empty($orderNumber)) {
-        echo json_encode(['success' => false, 'error' => 'Order number is required']);
+        jsonResponse(['success' => false, 'error' => 'Order number is required']);
         return;
     }
 
@@ -113,8 +113,8 @@ function handle_get_hardware_by_order(PDO $pdo, array $admin_session): void {
     $hardware = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($hardware) {
-        echo json_encode(['success' => true, 'hardware' => $hardware]);
+        jsonResponse(['success' => true, 'hardware' => $hardware]);
     } else {
-        echo json_encode(['success' => false, 'error' => 'No hardware information found for this order']);
+        jsonResponse(['success' => false, 'error' => 'No hardware information found for this order']);
     }
 }

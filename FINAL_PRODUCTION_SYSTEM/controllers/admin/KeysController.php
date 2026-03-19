@@ -90,7 +90,7 @@ function handle_list_keys(PDO $pdo, array $admin_session): void {
         $key['product_key'] = formatProductKeySecure($key['product_key'], 'admin');
     }
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'keys' => $keys,
         'total' => $total,
@@ -118,7 +118,7 @@ function handle_recycle_key(PDO $pdo, array $admin_session): void {
         "Recycled key ID: $id"
     );
 
-    echo json_encode(['success' => true, 'message' => 'Key recycled successfully']);
+    jsonResponse(['success' => true, 'message' => 'Key recycled successfully']);
 }
 
 function handle_delete_key(PDO $pdo, array $admin_session): void {
@@ -136,14 +136,14 @@ function handle_delete_key(PDO $pdo, array $admin_session): void {
         "Deleted key ID: $id"
     );
 
-    echo json_encode(['success' => true, 'message' => 'Key deleted successfully']);
+    jsonResponse(['success' => true, 'message' => 'Key deleted successfully']);
 }
 
 function handle_import_keys(PDO $pdo, array $admin_session): void {
     requirePermission('import_keys', $admin_session);
 
     if (!isset($_FILES['csv_file'])) {
-        echo json_encode(['success' => false, 'error' => 'No file uploaded']);
+        jsonResponse(['success' => false, 'error' => 'No file uploaded']);
         return;
     }
 
@@ -156,9 +156,9 @@ function handle_import_keys(PDO $pdo, array $admin_session): void {
     $result = handleCSVImport($file);
 
     if (isset($result['error'])) {
-        echo json_encode(['success' => false, 'error' => $result['error']]);
+        jsonResponse(['success' => false, 'error' => $result['error']]);
     } else {
-        echo json_encode([
+        jsonResponse([
             'success' => true,
             'imported' => $result['imported'],
             'updated' => $result['updated'],
@@ -248,12 +248,12 @@ function handle_add_keys(PDO $pdo, array $admin_session, ?array $json_input = nu
     $keys = $json_input['keys'] ?? [];
 
     if (!is_array($keys) || empty($keys)) {
-        echo json_encode(['success' => false, 'error' => 'No keys provided']);
+        jsonResponse(['success' => false, 'error' => 'No keys provided']);
         return;
     }
 
     if (count($keys) > 500) {
-        echo json_encode(['success' => false, 'error' => 'Maximum 500 keys per request']);
+        jsonResponse(['success' => false, 'error' => 'Maximum 500 keys per request']);
         return;
     }
 
@@ -310,7 +310,7 @@ function handle_add_keys(PDO $pdo, array $admin_session, ?array $json_input = nu
     } catch (Exception $e) {
         $pdo->rollback();
         error_log("Add keys error: " . $e->getMessage() . "\n" . $e->getTraceAsString());
-        echo json_encode(['success' => false, 'error' => 'A database error occurred while importing keys.']);
+        jsonResponse(['success' => false, 'error' => 'A database error occurred while importing keys.']);
         return;
     }
 
@@ -321,7 +321,7 @@ function handle_add_keys(PDO $pdo, array $admin_session, ?array $json_input = nu
         "Added $imported keys manually" . ($skipped > 0 ? " ($skipped skipped)" : "")
     );
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'imported' => $imported,
         'skipped' => $skipped,

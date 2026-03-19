@@ -17,20 +17,20 @@ function handle_get_branding(PDO $pdo, array $admin_session): void {
         'brand_accent_color'  => getConfig('brand_accent_color') ?? '',
     ];
 
-    echo json_encode(['success' => true, 'config' => $config]);
+    jsonResponse(['success' => true, 'config' => $config]);
 }
 
 function handle_save_branding(PDO $pdo, array $admin_session, ?array $json_input = null): void {
     requirePermission('system_settings', $admin_session);
 
     if (!$json_input) {
-        echo json_encode(['success' => false, 'error' => 'Invalid JSON input']);
+        jsonResponse(['success' => false, 'error' => 'Invalid JSON input']);
         return;
     }
 
     $companyName = trim($json_input['brand_company_name'] ?? '');
     if ($companyName === '') {
-        echo json_encode(['success' => false, 'error' => 'Company name cannot be empty']);
+        jsonResponse(['success' => false, 'error' => 'Company name cannot be empty']);
         return;
     }
 
@@ -39,7 +39,7 @@ function handle_save_branding(PDO $pdo, array $admin_session, ?array $json_input
     foreach ($colorKeys as $ck) {
         $val = trim($json_input[$ck] ?? '');
         if ($val !== '' && !preg_match('/^#[0-9a-fA-F]{3,8}$/', $val)) {
-            echo json_encode(['success' => false, 'error' => "Invalid color format for $ck"]);
+            jsonResponse(['success' => false, 'error' => "Invalid color format for $ck"]);
             return;
         }
     }
@@ -54,14 +54,7 @@ function handle_save_branding(PDO $pdo, array $admin_session, ?array $json_input
         'brand_accent_color'   => trim($json_input['brand_accent_color'] ?? ''),
     ];
 
-    foreach ($configs as $key => $value) {
-        $stmt = $pdo->prepare("
-            INSERT INTO system_config (config_key, config_value, description, updated_at)
-            VALUES (?, ?, '', NOW())
-            ON DUPLICATE KEY UPDATE config_value = ?, updated_at = NOW()
-        ");
-        $stmt->execute([$key, $value, $value]);
-    }
+    saveConfigBatch($pdo, $configs);
 
     logAdminActivity(
         $admin_session['admin_id'],
@@ -71,7 +64,7 @@ function handle_save_branding(PDO $pdo, array $admin_session, ?array $json_input
     );
 
     // Return updated config
-    echo json_encode(['success' => true, 'config' => $configs]);
+    jsonResponse(['success' => true, 'config' => $configs]);
 }
 
 function handle_upload_brand_asset(PDO $pdo, array $admin_session): void {
@@ -79,19 +72,13 @@ function handle_upload_brand_asset(PDO $pdo, array $admin_session): void {
 
     $assetType = $_POST['asset_type'] ?? '';
     if (!in_array($assetType, ['logo', 'favicon'])) {
-        echo json_encode(['success' => false, 'error' => 'Invalid asset type (must be logo or favicon)']);
+        jsonResponse(['success' => false, 'error' => 'Invalid asset type (must be logo or favicon)']);
         return;
     }
 
     if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
         $errCode = $_FILES['file']['error'] ?? -1;
-        $errMap = [
-            UPLOAD_ERR_INI_SIZE  => 'File exceeds server upload limit',
-            UPLOAD_ERR_FORM_SIZE => 'File exceeds form upload limit',
-            UPLOAD_ERR_PARTIAL   => 'File was only partially uploaded',
-            UPLOAD_ERR_NO_FILE   => 'No file was uploaded',
-        ];
-        echo json_encode(['success' => false, 'error' => $errMap[$errCode] ?? "Upload failed (code: $errCode)"]);
+        jsonResponse(['success' => false, 'error' => getUploadErrorMessage($errCode)]);
         return;
     }
 
@@ -102,7 +89,7 @@ function handle_upload_brand_asset(PDO $pdo, array $admin_session): void {
 
     // Max 2MB
     if ($fileSize > 2 * 1024 * 1024) {
-        echo json_encode(['success' => false, 'error' => 'File too large (max 2MB)']);
+        jsonResponse(['success' => false, 'error' => 'File too large (max 2MB)']);
         return;
     }
 
@@ -112,7 +99,7 @@ function handle_upload_brand_asset(PDO $pdo, array $admin_session): void {
         ? ['png', 'ico', 'svg']
         : ['png', 'jpg', 'jpeg', 'svg', 'webp'];
     if (!in_array($ext, $allowedExts)) {
-        echo json_encode(['success' => false, 'error' => 'Unsupported file type. Allowed: ' . implode(', ', $allowedExts)]);
+        jsonResponse(['success' => false, 'error' => 'Unsupported file type. Allowed: ' . implode(', ', $allowedExts)]);
         return;
     }
 
@@ -121,7 +108,7 @@ function handle_upload_brand_asset(PDO $pdo, array $admin_session): void {
     $mimeType = $finfo->file($tmpPath);
     $allowedMimes = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/x-icon', 'image/vnd.microsoft.icon', 'image/webp'];
     if (!in_array($mimeType, $allowedMimes)) {
-        echo json_encode(['success' => false, 'error' => 'Invalid file content type']);
+        jsonResponse(['success' => false, 'error' => 'Invalid file content type']);
         return;
     }
 
@@ -146,7 +133,7 @@ function handle_upload_brand_asset(PDO $pdo, array $admin_session): void {
     $destPath = $uploadDir . '/' . $storedFilename;
 
     if (!move_uploaded_file($tmpPath, $destPath)) {
-        echo json_encode(['success' => false, 'error' => 'Failed to save uploaded file']);
+        jsonResponse(['success' => false, 'error' => 'Failed to save uploaded file']);
         return;
     }
 
@@ -170,7 +157,7 @@ function handle_upload_brand_asset(PDO $pdo, array $admin_session): void {
         "Uploaded branding $assetType: $originalName"
     );
 
-    echo json_encode(['success' => true, 'path' => $relativePath]);
+    jsonResponse(['success' => true, 'path' => $relativePath]);
 }
 
 function handle_delete_brand_asset(PDO $pdo, array $admin_session, ?array $json_input = null): void {
@@ -178,7 +165,7 @@ function handle_delete_brand_asset(PDO $pdo, array $admin_session, ?array $json_
 
     $assetType = $json_input['asset_type'] ?? '';
     if (!in_array($assetType, ['logo', 'favicon'])) {
-        echo json_encode(['success' => false, 'error' => 'Invalid asset type']);
+        jsonResponse(['success' => false, 'error' => 'Invalid asset type']);
         return;
     }
 
@@ -210,5 +197,5 @@ function handle_delete_brand_asset(PDO $pdo, array $admin_session, ?array $json_
         "Deleted branding $assetType"
     );
 
-    echo json_encode(['success' => true]);
+    jsonResponse(['success' => true]);
 }

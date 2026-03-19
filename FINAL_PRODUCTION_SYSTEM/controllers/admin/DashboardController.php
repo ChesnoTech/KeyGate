@@ -196,14 +196,14 @@ function handle_get_stats(PDO $pdo, array $admin_session): void {
     $stmt->execute();
     $stats['recent_activity'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    echo json_encode(['success' => true, 'stats' => $stats]);
+    jsonResponse(['success' => true, 'stats' => $stats]);
 }
 
 function handle_generate_report(PDO $pdo, array $admin_session): void {
     requirePermission('view_reports', $admin_session);
     $reportType = $_GET['type'] ?? 'summary';
     $html = buildReportHtml($pdo, $reportType);
-    echo json_encode(['success' => true, 'html' => $html]);
+    jsonResponse(['success' => true, 'html' => $html]);
 }
 
 function handle_download_report(PDO $pdo, array $admin_session): void {
@@ -213,14 +213,14 @@ function handle_download_report(PDO $pdo, array $admin_session): void {
     $reportType = $_GET['type'] ?? 'summary';
     if (!in_array($reportType, $allowedTypes, true)) {
         http_response_code(400);
-        echo json_encode(['success' => false, 'error' => 'Invalid report type']);
+        jsonResponse(['success' => false, 'error' => 'Invalid report type']);
         exit;
     }
 
     $reportHtml = buildReportHtml($pdo, $reportType);
     if (empty($reportHtml)) {
         http_response_code(400);
-        echo json_encode(['success' => false, 'error' => 'No report data available']);
+        jsonResponse(['success' => false, 'error' => 'No report data available']);
         exit;
     }
 
