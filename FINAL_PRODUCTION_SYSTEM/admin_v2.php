@@ -239,10 +239,11 @@ $action_registry = [
     'mark_notifications_read'  => ['NotificationsController.php', 'handle_mark_notifications_read', true, true],
     'send_test_notification'   => ['NotificationsController.php', 'handle_send_test_notification',  true, true],
 
-    // client resources
-    'list_client_resources'    => ['ClientResourcesController.php', 'handle_list_client_resources',  false, false],
-    'upload_client_resource'   => ['ClientResourcesController.php', 'handle_upload_client_resource', true,  false],
-    'delete_client_resource'   => ['ClientResourcesController.php', 'handle_delete_client_resource', true,  true],
+    // client resources / downloads
+    'list_client_resources'      => ['ClientResourcesController.php', 'handle_list_client_resources',      false, false],
+    'upload_client_resource'     => ['ClientResourcesController.php', 'handle_upload_client_resource',     true,  false],
+    'delete_client_resource'     => ['ClientResourcesController.php', 'handle_delete_client_resource',     true,  true],
+    'download_client_resource'   => ['ClientResourcesController.php', 'handle_download_client_resource',   false, false],
 
     // acl / roles
     'acl_list_roles'           => ['AclController.php',        'handle_acl_list_roles',           false, false],
@@ -294,8 +295,13 @@ $action_registry = [
 // ── Action Dispatcher ────────────────────────────────────────
 $json_input = json_decode(file_get_contents('php://input'), true);
 if (isset($_GET['action']) || isset($_POST['action']) || isset($json_input['action'])) {
-    header('Content-Type: application/json');
     $action = $_GET['action'] ?? $_POST['action'] ?? $json_input['action'] ?? '';
+
+    // File-streaming actions set their own Content-Type; everything else is JSON
+    $file_download_actions = ['download_report', 'download_client_resource'];
+    if (!in_array($action, $file_download_actions, true)) {
+        header('Content-Type: application/json');
+    }
 
     if (!isset($action_registry[$action])) {
         echo json_encode(['success' => false, 'error' => 'Unknown action']);

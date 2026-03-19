@@ -22,6 +22,7 @@ import {
   LogOut,
   Languages,
   Plug2,
+  Download,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -84,6 +85,7 @@ const navGroups = [
     items: [
       { path: '/settings', labelKey: 'nav.settings', icon: Settings, minRole: 'admin' as const },
       { path: '/integrations', labelKey: 'nav.integrations', icon: Plug2, minRole: 'admin' as const },
+      { path: '/downloads', labelKey: 'nav.downloads', icon: Download, minRole: 'admin' as const },
       { path: '/backups', labelKey: 'nav.backups', icon: Database, minRole: 'super_admin' as const },
       { path: '/logs', labelKey: 'nav.logs', icon: ScrollText },
       { path: '/notifications', labelKey: 'nav.notifications', icon: Bell },
@@ -162,44 +164,47 @@ export function AppSidebar() {
         })}
       </SidebarContent>
 
-      <SidebarFooter className="p-3">
-        <Separator className="mb-3" />
-        <div className="flex items-center gap-1">
-          <DropdownMenu>
-            <DropdownMenuTrigger className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground h-8 w-8">
-              <ThemeIcon className="h-4 w-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuItem onClick={() => setTheme('light')}>
-                <Sun className="mr-2 h-4 w-4" /> {t('theme.light', 'Light')}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setTheme('dark')}>
-                <Moon className="mr-2 h-4 w-4" /> {t('theme.dark', 'Dark')}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setTheme('system')}>
-                <Monitor className="mr-2 h-4 w-4" /> {t('theme.system', 'System')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+      <SidebarFooter className="p-2">
+        <Separator className="mb-2" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground h-7 w-7">
+                <ThemeIcon className="h-3.5 w-3.5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onClick={() => setTheme('light')}>
+                  <Sun className="mr-2 h-4 w-4" /> {t('theme.light', 'Light')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme('dark')}>
+                  <Moon className="mr-2 h-4 w-4" /> {t('theme.dark', 'Dark')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme('system')}>
+                  <Monitor className="mr-2 h-4 w-4" /> {t('theme.system', 'System')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleLanguage}>
-            <Languages className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <div className="mt-2 flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium">{user?.full_name}</span>
-            <span className="text-xs text-muted-foreground">{user?.role}</span>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={toggleLanguage}>
+              <Languages className="h-3.5 w-3.5" />
+            </Button>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => logout().then(() => navigate('/login'))}
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
+
+          <div className="flex items-center gap-2">
+            <div className="flex flex-col items-end">
+              <span className="text-xs font-medium leading-tight">{user?.full_name}</span>
+              <span className="text-[10px] text-muted-foreground leading-tight">{user?.role}</span>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              title={t('nav.logout', 'Logout')}
+              onClick={() => logout().then(() => navigate('/login'))}
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
       </SidebarFooter>
     </Sidebar>

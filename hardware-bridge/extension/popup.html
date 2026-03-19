@@ -1,75 +1,226 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OEM Hardware Bridge</title>
   <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      width: 300px;
-      padding: 15px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      margin: 0;
-    }
-    h3 {
-      margin: 0 0 10px 0;
-      font-size: 16px;
-      color: #2c3e50;
-    }
-    .status {
-      padding: 10px;
-      border-radius: 6px;
-      margin-bottom: 10px;
-    }
-    .status.connected {
-      background: #d4edda;
-      color: #155724;
-      border: 1px solid #c3e6cb;
-    }
-    .status.disconnected {
-      background: #f8d7da;
-      color: #721c24;
-      border: 1px solid #f5c6cb;
-    }
-    .info {
+      width: 420px;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #f8f9fa;
+      color: #1a1a2e;
       font-size: 13px;
-      color: #666;
-      line-height: 1.5;
     }
-    button {
-      background: #007bff;
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
-      border: none;
-      padding: 8px 16px;
-      border-radius: 4px;
-      cursor: pointer;
-      width: 100%;
-      margin-top: 10px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
-    button:hover {
-      background: #0056b3;
+    .header svg { flex-shrink: 0; }
+    .header h1 { font-size: 15px; font-weight: 600; }
+    .header p { font-size: 11px; opacity: 0.85; margin-top: 2px; }
+    .content { padding: 12px; }
+
+    /* Native bridge status banner */
+    .bridge-status {
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      font-size: 12px;
     }
-    .version {
+    .bridge-status.connected { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .bridge-status.disconnected { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+    .bridge-status.checking { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+    .bridge-status .label { font-weight: 600; }
+    .bridge-status .hint { font-size: 10px; opacity: 0.8; margin-top: 2px; }
+
+    .section {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+    .section-header {
+      background: #f1f5f9;
+      padding: 8px 12px;
+      font-weight: 600;
       font-size: 11px;
-      color: #999;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 12px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .row:last-child { border-bottom: none; }
+    .row-label { color: #64748b; font-size: 12px; }
+    .row-value {
+      font-weight: 500;
+      font-size: 12px;
+      max-width: 260px;
+      text-align: right;
+      word-break: break-word;
+    }
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .btn {
+      flex: 1;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .btn-secondary {
+      background: white;
+      color: #475569;
+      border: 1px solid #e2e8f0;
+    }
+    .btn-secondary:hover { background: #f8fafc; }
+    .status-msg {
       text-align: center;
-      margin-top: 10px;
+      padding: 6px;
+      font-size: 11px;
+      color: #22c55e;
+      font-weight: 500;
+      display: none;
+    }
+    .status-msg.visible { display: block; }
+    .loading { color: #94a3b8; font-style: italic; }
+    .footer {
+      text-align: center;
+      padding: 8px;
+      font-size: 10px;
+      color: #94a3b8;
+      border-top: 1px solid #e2e8f0;
     }
   </style>
 </head>
 <body>
-  <h3>🔌 OEM Hardware Bridge</h3>
-
-  <div id="status" class="status disconnected">
-    <strong>Status:</strong> Checking...
+  <div class="header">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+      <line x1="8" y1="21" x2="16" y2="21"/>
+      <line x1="12" y1="17" x2="12" y2="21"/>
+    </svg>
+    <div>
+      <h1>OEM Hardware Bridge</h1>
+      <p>USB detection &amp; browser hardware info</p>
+    </div>
   </div>
 
-  <div class="info">
-    <p>This extension allows the OEM Activation admin panel to detect USB hardware information securely.</p>
+  <div class="content">
+    <!-- Native Bridge Status -->
+    <div id="bridge-status" class="bridge-status checking">
+      <div class="label">Native Bridge: Checking...</div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="actions">
+      <button class="btn btn-primary" id="btn-test-usb" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="7" r="1"/><circle cx="14" cy="7" r="1"/><path d="M12 2v5m-2 5v5a2 2 0 002 2h0a2 2 0 002-2v-5"/><path d="M8 12h8"/></svg>
+        Test USB
+      </button>
+      <button class="btn btn-secondary" id="btn-copy">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        Copy JSON
+      </button>
+      <button class="btn btn-secondary" id="btn-refresh">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+        Refresh
+      </button>
+    </div>
+    <div class="status-msg" id="status-msg"></div>
+
+    <!-- Browser Hardware Info -->
+    <div class="section">
+      <div class="section-header">Processor</div>
+      <div class="row">
+        <span class="row-label">Logical Cores</span>
+        <span class="row-value" id="cpu-cores"><span class="loading">detecting...</span></span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">Memory</div>
+      <div class="row">
+        <span class="row-label">Device Memory</span>
+        <span class="row-value" id="ram"><span class="loading">detecting...</span></span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">Graphics</div>
+      <div class="row">
+        <span class="row-label">GPU Vendor</span>
+        <span class="row-value" id="gpu-vendor"><span class="loading">detecting...</span></span>
+      </div>
+      <div class="row">
+        <span class="row-label">GPU Renderer</span>
+        <span class="row-value" id="gpu-renderer"><span class="loading">detecting...</span></span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">Display</div>
+      <div class="row">
+        <span class="row-label">Screen Resolution</span>
+        <span class="row-value" id="screen-res"><span class="loading">detecting...</span></span>
+      </div>
+      <div class="row">
+        <span class="row-label">Device Pixel Ratio</span>
+        <span class="row-value" id="pixel-ratio"><span class="loading">detecting...</span></span>
+      </div>
+      <div class="row">
+        <span class="row-label">Color Depth</span>
+        <span class="row-value" id="color-depth"><span class="loading">detecting...</span></span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">Platform</div>
+      <div class="row">
+        <span class="row-label">Platform</span>
+        <span class="row-value" id="platform"><span class="loading">detecting...</span></span>
+      </div>
+      <div class="row">
+        <span class="row-label">Language</span>
+        <span class="row-value" id="language"><span class="loading">detecting...</span></span>
+      </div>
+      <div class="row">
+        <span class="row-label">Touch Support</span>
+        <span class="row-value" id="touch"><span class="loading">detecting...</span></span>
+      </div>
+    </div>
   </div>
 
-  <button id="testBtn">🔍 Test Connection</button>
-
-  <div class="version">Version 1.0.0</div>
+  <div class="footer">OEM Activation System &mdash; Hardware Bridge v1.0.1</div>
 
   <script src="popup.js"></script>
 </body>

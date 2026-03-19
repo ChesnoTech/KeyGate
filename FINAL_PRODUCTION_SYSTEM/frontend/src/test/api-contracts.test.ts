@@ -88,10 +88,11 @@ const BACKEND_ACTIONS: Record<string, { method: 'GET' | 'POST'; csrf: boolean }>
   mark_notifications_read:   { method: 'POST', csrf: true },
   send_test_notification:    { method: 'POST', csrf: true },
 
-  // client resources
+  // client resources / downloads
   list_client_resources:     { method: 'GET',  csrf: false },
   upload_client_resource:    { method: 'POST', csrf: true },
   delete_client_resource:    { method: 'POST', csrf: true },
+  download_client_resource:  { method: 'GET',  csrf: false },
 
   // acl / roles
   acl_list_roles:            { method: 'GET',  csrf: false },

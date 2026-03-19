@@ -40,6 +40,7 @@ const VALID_PERMISSIONS = new Set([
   'view_backups', 'view_logs', 'view_audit_trail', 'delete_logs',
   'manage_roles', 'view_acl_changelog',
   'view_compliance', 'manage_compliance_rules', 'manage_compliance',
+  'view_downloads', 'manage_downloads',
 ])
 
 // Parse routes from App.tsx

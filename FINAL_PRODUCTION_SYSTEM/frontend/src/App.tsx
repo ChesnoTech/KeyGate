@@ -27,6 +27,7 @@ const CompliancePage = lazy(() => import('@/pages/compliance').then(m => ({ defa
 const ComplianceResultsPage = lazy(() => import('@/pages/compliance/results').then(m => ({ default: m.ComplianceResultsPage })))
 const IntegrationsPage = lazy(() => import('@/pages/integrations').then(m => ({ default: m.IntegrationsPage })))
 const ProductLinesPage = lazy(() => import('@/pages/product-lines').then(m => ({ default: m.ProductLinesPage })))
+const DownloadsPage = lazy(() => import('@/pages/downloads').then(m => ({ default: m.DownloadsPage })))
 
 function PageLoader() {
   return (
@@ -73,6 +74,7 @@ export default function App() {
                   <Route path="compliance/results" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="view_compliance"><ComplianceResultsPage /></RequirePermission></Suspense>} />
                   <Route path="product-lines" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="view_compliance"><ProductLinesPage /></RequirePermission></Suspense>} />
                   <Route path="integrations" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="system_settings"><IntegrationsPage /></RequirePermission></Suspense>} />
+                  <Route path="downloads" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="view_downloads"><DownloadsPage /></RequirePermission></Suspense>} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

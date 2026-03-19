@@ -44,7 +44,7 @@ function handle_get_2fa_status(PDO $pdo, array $admin_session): void {
 }
 
 function handle_list_trusted_networks(PDO $pdo, array $admin_session): void {
-    requirePermission('manage_trusted_networks', $admin_session);
+    requirePermission('manage_trusted_nets', $admin_session);
 
     $stmt = $pdo->query("
         SELECT tn.*, au.username as created_by_username
@@ -58,7 +58,7 @@ function handle_list_trusted_networks(PDO $pdo, array $admin_session): void {
 }
 
 function handle_add_trusted_network(PDO $pdo, array $admin_session, ?array $json_input = null): void {
-    requirePermission('manage_trusted_networks', $admin_session);
+    requirePermission('manage_trusted_nets', $admin_session);
 
     $networkName = $json_input['network_name'] ?? '';
     $ipRange = $json_input['ip_range'] ?? '';
@@ -95,7 +95,7 @@ function handle_add_trusted_network(PDO $pdo, array $admin_session, ?array $json
 }
 
 function handle_delete_trusted_network(PDO $pdo, array $admin_session, ?array $json_input = null): void {
-    requirePermission('manage_trusted_networks', $admin_session);
+    requirePermission('manage_trusted_nets', $admin_session);
 
     $networkId = intval($json_input['network_id'] ?? 0);
 

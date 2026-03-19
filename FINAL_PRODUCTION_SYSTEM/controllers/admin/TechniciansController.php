@@ -224,7 +224,7 @@ function handle_update_tech(PDO $pdo, array $admin_session, ?array $json_input =
 }
 
 function handle_reset_password(PDO $pdo, array $admin_session): void {
-    requirePermission('reset_technician_password', $admin_session);
+    requirePermission('reset_tech_password', $admin_session);
 
     $id = intval($_POST['id'] ?? 0);
     $new_password = $_POST['new_password'] ?? '';

@@ -90,6 +90,9 @@ run_sql "product_variants_migration.sql"      17
 run_sql "missing_drivers_migration.sql"       18
 run_sql "unallocated_space_migration.sql"     19
 
+# Phase 8: Downloads ACL permissions
+run_sql "downloads_acl_migration.sql"         20
+
 echo ""
 echo "=== Database initialization complete ==="
 echo ""
