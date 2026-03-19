@@ -185,10 +185,7 @@ function handle_save_session_settings(PDO $pdo, array $admin_session, ?array $js
         'admin_force_password_change_days' => (string) $passwordDays,
     ];
 
-    $stmt = $pdo->prepare("INSERT INTO system_config (config_key, config_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE config_value = VALUES(config_value)");
-    foreach ($configs as $key => $value) {
-        $stmt->execute([$key, $value]);
-    }
+    saveConfigBatch($pdo, $configs);
 
     jsonResponse(['success' => true, 'config' => [
         'admin_session_timeout_minutes' => $timeout,

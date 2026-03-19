@@ -1051,7 +1051,7 @@ export function SettingsPage() {
                     <Label htmlFor="smtp_encryption">{t('settings.smtp_encryption', 'Encryption')}</Label>
                     <Select
                       value={smtpForm.smtp_encryption}
-                      onValueChange={(val) => setSmtpForm({ ...smtpForm, smtp_encryption: val })}
+                      onValueChange={(val) => val && setSmtpForm({ ...smtpForm, smtp_encryption: val })}
                     >
                       <SelectTrigger id="smtp_encryption">
                         {smtpForm.smtp_encryption === 'tls' ? 'STARTTLS' : smtpForm.smtp_encryption === 'ssl' ? 'SSL/TLS' : 'None'}

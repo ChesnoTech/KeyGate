@@ -214,12 +214,6 @@ function handle_save_smtp_settings(PDO $pdo, array $admin_session, ?array $json_
     try {
         $pdo->beginTransaction();
 
-        $stmt = $pdo->prepare("
-            INSERT INTO system_config (config_key, config_value, description, updated_at)
-            VALUES (?, ?, ?, NOW())
-            ON DUPLICATE KEY UPDATE config_value = ?, updated_at = NOW()
-        ");
-
         $descriptions = [
             'smtp_enabled'             => 'Enable email notifications',
             'smtp_server'              => 'SMTP server hostname',
@@ -236,10 +230,7 @@ function handle_save_smtp_settings(PDO $pdo, array $admin_session, ?array $json_
             'email_on_daily_summary'   => 'Send daily summary email',
         ];
 
-        foreach ($configs as $key => $value) {
-            $desc = $descriptions[$key] ?? '';
-            $stmt->execute([$key, $value, $desc, $value]);
-        }
+        saveConfigBatch($pdo, $configs, $descriptions);
 
         $pdo->commit();
 

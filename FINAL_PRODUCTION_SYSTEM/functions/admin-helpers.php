@@ -214,14 +214,15 @@ function getUploadErrorMessage(int $errorCode): string {
 /**
  * Batch-save key-value pairs to system_config using UPSERT.
  */
-function saveConfigBatch(PDO $pdo, array $configs): void {
+function saveConfigBatch(PDO $pdo, array $configs, array $descriptions = []): void {
     $stmt = $pdo->prepare("
         INSERT INTO system_config (config_key, config_value, description, updated_at)
-        VALUES (?, ?, '', NOW())
+        VALUES (?, ?, ?, NOW())
         ON DUPLICATE KEY UPDATE config_value = ?, updated_at = NOW()
     ");
     foreach ($configs as $key => $value) {
-        $stmt->execute([$key, $value, $value]);
+        $desc = $descriptions[$key] ?? '';
+        $stmt->execute([$key, $value, $desc, $value]);
     }
 }
 
