@@ -55,7 +55,10 @@ function GlobalSettingsTab() {
     default_bios_enforcement: '1',
     default_secure_boot_enforcement: '1',
     default_hackbgrt_enforcement: '1',
+    default_partition_enforcement: '2',
+    default_missing_drivers_enforcement: '2',
     blocking_prevents_key: '1',
+    max_unallocated_mb: '1024',
   })
 
   useEffect(() => {
@@ -65,7 +68,10 @@ function GlobalSettingsTab() {
         default_bios_enforcement: data.settings.default_bios_enforcement ?? '1',
         default_secure_boot_enforcement: data.settings.default_secure_boot_enforcement ?? '1',
         default_hackbgrt_enforcement: data.settings.default_hackbgrt_enforcement ?? '1',
+        default_partition_enforcement: data.settings.default_partition_enforcement ?? '2',
+        default_missing_drivers_enforcement: data.settings.default_missing_drivers_enforcement ?? '2',
         blocking_prevents_key: data.settings.blocking_prevents_key ?? '1',
+        max_unallocated_mb: data.settings.max_unallocated_mb ?? '1024',
       })
     }
   }, [data])
@@ -102,40 +108,43 @@ function GlobalSettingsTab() {
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="space-y-2">
-              <Label>{t('compliance.default_bios_enforcement', 'Default BIOS Enforcement')}</Label>
-              <Select value={form.default_bios_enforcement} onValueChange={(v) => v && setForm({ ...form, default_bios_enforcement: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {enforcementOptions.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{t(o.labelKey)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>{t('compliance.default_sb_enforcement', 'Default Secure Boot Enforcement')}</Label>
-              <Select value={form.default_secure_boot_enforcement} onValueChange={(v) => v && setForm({ ...form, default_secure_boot_enforcement: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {enforcementOptions.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{t(o.labelKey)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>{t('compliance.default_hb_enforcement', 'Default HackBGRT Enforcement')}</Label>
-              <Select value={form.default_hackbgrt_enforcement} onValueChange={(v) => v && setForm({ ...form, default_hackbgrt_enforcement: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {enforcementOptions.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{t(o.labelKey)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <p className="text-sm text-muted-foreground">{t('compliance.global_defaults_hint', 'These are fallback defaults. Product lines can override per-line.')}</p>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {([
+              { formKey: 'default_secure_boot_enforcement' as const, label: t('compliance.default_sb_enforcement', 'Secure Boot') },
+              { formKey: 'default_bios_enforcement' as const, label: t('compliance.default_bios_enforcement', 'BIOS Version') },
+              { formKey: 'default_hackbgrt_enforcement' as const, label: t('compliance.default_hb_enforcement', 'Boot Logo') },
+              { formKey: 'default_partition_enforcement' as const, label: t('compliance.default_partition_enforcement', 'Partition Layout') },
+              { formKey: 'default_missing_drivers_enforcement' as const, label: t('compliance.default_drivers_enforcement', 'Missing Drivers') },
+            ]).map(({ formKey, label }) => (
+              <div key={formKey} className="space-y-2">
+                <Label>{label}</Label>
+                <Select value={form[formKey]} onValueChange={(v) => v && setForm({ ...form, [formKey]: v })}>
+                  <SelectTrigger>
+                    <SelectValue>
+                      {t(enforcementOptions.find(o => o.value === form[formKey])?.labelKey ?? 'compliance.enforcement_1')}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {enforcementOptions.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{t(o.labelKey)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-2 max-w-xs">
+            <Label>{t('compliance.max_unallocated_mb', 'Max Unallocated Space (MB)')}</Label>
+            <p className="text-sm text-muted-foreground">{t('compliance.max_unallocated_mb_desc', 'Fail partition check if unallocated disk space exceeds this limit. Set to 0 to disable.')}</p>
+            <Input
+              type="number"
+              min="0"
+              step="128"
+              value={form.max_unallocated_mb}
+              onChange={(e) => setForm({ ...form, max_unallocated_mb: e.target.value })}
+            />
           </div>
 
           <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending}>
@@ -176,6 +185,7 @@ function MotherboardRegistryTab() {
         recommended_bios_version: editBoard.recommended_bios_version ?? '',
         bios_enforcement: editBoard.bios_enforcement?.toString() ?? '',
         hackbgrt_enforcement: editBoard.hackbgrt_enforcement?.toString() ?? '',
+        missing_drivers_enforcement: editBoard.missing_drivers_enforcement?.toString() ?? '',
         notes: editBoard.notes ?? '',
       })
     }
@@ -191,6 +201,7 @@ function MotherboardRegistryTab() {
       recommended_bios_version: editForm.recommended_bios_version || null,
       bios_enforcement: editForm.bios_enforcement || null,
       hackbgrt_enforcement: editForm.hackbgrt_enforcement || null,
+      missing_drivers_enforcement: editForm.missing_drivers_enforcement || null,
       notes: editForm.notes || null,
     }, { onSuccess: () => setEditBoard(null) })
   }
@@ -308,8 +319,20 @@ function MotherboardRegistryTab() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>{t('compliance.hb_enforcement', 'HackBGRT Enforcement')}</Label>
+                <Label>{t('compliance.hb_enforcement', 'Boot Logo Enforcement')}</Label>
                 <Select value={editForm.hackbgrt_enforcement ?? ''} onValueChange={(v) => setEditForm({ ...editForm, hackbgrt_enforcement: !v || v === '__inherit__' ? '' : v })}>
+                  <SelectTrigger><SelectValue placeholder={t('compliance.inherit', 'Inherit')} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__inherit__">{t('compliance.inherit', 'Inherit')}</SelectItem>
+                    {enforcementOptions.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{t(o.labelKey)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>{t('compliance.drivers_enforcement', 'Missing Drivers Enforcement')}</Label>
+                <Select value={editForm.missing_drivers_enforcement ?? ''} onValueChange={(v) => setEditForm({ ...editForm, missing_drivers_enforcement: !v || v === '__inherit__' ? '' : v })}>
                   <SelectTrigger><SelectValue placeholder={t('compliance.inherit', 'Inherit')} /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__inherit__">{t('compliance.inherit', 'Inherit')}</SelectItem>
@@ -459,7 +482,7 @@ function ManufacturerDefaultsTab() {
                 <span>{t(`compliance.enforcement_${mfr.bios_enforcement}`)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">{t('compliance.hb_enforcement', 'HackBGRT')}</span>
+                <span className="text-muted-foreground">{t('compliance.hb_enforcement', 'Boot Logo')}</span>
                 <span>{t(`compliance.enforcement_${mfr.hackbgrt_enforcement}`)}</span>
               </div>
               {mfr.min_bios_version && (
@@ -540,7 +563,7 @@ function ManufacturerDefaultsTab() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>{t('compliance.hb_enforcement', 'HackBGRT Enforcement')}</Label>
+              <Label>{t('compliance.hb_enforcement', 'Boot Logo Enforcement')}</Label>
               <Select value={editForm.hackbgrt_enforcement} onValueChange={(v) => v && setEditForm({ ...editForm, hackbgrt_enforcement: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>

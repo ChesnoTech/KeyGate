@@ -41,8 +41,8 @@ RUN { \
     echo 'memory_limit = 128M'; \
     echo 'upload_max_filesize = 50M'; \
     echo 'post_max_size = 50M'; \
-    echo 'max_execution_time = 30'; \
-    echo 'max_input_time = 30'; \
+    echo 'max_execution_time = 120'; \
+    echo 'max_input_time = 120'; \
     echo 'date.timezone = UTC'; \
     echo 'display_errors = Off'; \
     echo 'log_errors = On'; \
@@ -100,7 +100,7 @@ EXPOSE 80 443
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \
-  CMD curl -f http://localhost/ || exit 1
+  CMD curl -f http://localhost/api/health.php || curl -f http://localhost/install/ || exit 1
 
 # Start cron (for log rotation) then Apache
 CMD ["sh", "-c", "cron && apache2-foreground"]

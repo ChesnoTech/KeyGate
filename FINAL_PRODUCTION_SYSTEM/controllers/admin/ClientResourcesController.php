@@ -1,30 +1,28 @@
 <?php
 /**
  * Client Resources Controller
- * Phase 9: Manages uploaded client resources (e.g., PowerShell 7 MSI installer)
+ * Manages uploaded client resources (launcher, PS7 installer, Chrome extension, etc.)
+ * with ACL permission enforcement.
  */
 
 /**
- * Upload a client resource file (e.g., PS7 MSI installer).
+ * Upload a client resource file.
+ * Permission: manage_downloads
  */
 function handle_upload_client_resource(PDO $pdo, array $admin_session): void {
+    requirePermission('manage_downloads', $admin_session);
+
     $adminId = (int)$admin_session['admin_id'];
     $resourceKey = $_POST['resource_key'] ?? '';
 
     if (empty($resourceKey) || !preg_match('/^[a-z0-9_]+$/', $resourceKey)) {
-        echo json_encode(['success' => false, 'error' => 'Invalid resource key']);
+        jsonResponse(['success' => false, 'error' => 'Invalid resource key']);
         return;
     }
 
     if (!isset($_FILES['resource_file']) || $_FILES['resource_file']['error'] !== UPLOAD_ERR_OK) {
         $errCode = $_FILES['resource_file']['error'] ?? -1;
-        $errMap = [
-            UPLOAD_ERR_INI_SIZE => 'File exceeds server upload limit',
-            UPLOAD_ERR_FORM_SIZE => 'File exceeds form upload limit',
-            UPLOAD_ERR_PARTIAL => 'File was only partially uploaded',
-            UPLOAD_ERR_NO_FILE => 'No file was uploaded',
-        ];
-        echo json_encode(['success' => false, 'error' => $errMap[$errCode] ?? 'Upload failed (code: ' . $errCode . ')']);
+        jsonResponse(['success' => false, 'error' => getUploadErrorMessage($errCode)]);
         return;
     }
 
@@ -33,10 +31,11 @@ function handle_upload_client_resource(PDO $pdo, array $admin_session): void {
     $fileSize = $file['size'];
     $tmpPath = $file['tmp_name'];
 
-    // Validate file extension (only MSI, EXE allowed)
+    // Validate file extension
     $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
-    if (!in_array($ext, ['msi', 'exe'])) {
-        echo json_encode(['success' => false, 'error' => 'Only .msi and .exe files are allowed']);
+    $allowedExtensions = ['msi', 'exe', 'zip', 'cmd', 'bat', 'ps1', 'txt', 'crx'];
+    if (!in_array($ext, $allowedExtensions)) {
+        jsonResponse(['success' => false, 'error' => 'Allowed file types: ' . implode(', ', $allowedExtensions)]);
         return;
     }
 
@@ -45,10 +44,13 @@ function handle_upload_client_resource(PDO $pdo, array $admin_session): void {
     $mimeType = $finfo->file($tmpPath);
     $allowedMimes = [
         'application/x-msi', 'application/x-ole-storage', 'application/octet-stream',
-        'application/x-dosexec', 'application/x-msdownload', 'application/x-msdos-program'
+        'application/x-dosexec', 'application/x-msdownload', 'application/x-msdos-program',
+        'application/zip', 'application/x-zip-compressed',
+        'application/x-chrome-extension',
+        'text/plain', 'text/x-msdos-batch', 'text/x-shellscript',
     ];
     if (!in_array($mimeType, $allowedMimes)) {
-        // MSI files often report as application/octet-stream or x-ole-storage — allow those
+        // Many file types report as application/octet-stream — allow it
         $mimeType = 'application/octet-stream';
     }
 
@@ -79,26 +81,40 @@ function handle_upload_client_resource(PDO $pdo, array $admin_session): void {
 
     // Move uploaded file
     if (!move_uploaded_file($tmpPath, $destPath)) {
-        echo json_encode(['success' => false, 'error' => 'Failed to store uploaded file']);
+        jsonResponse(['success' => false, 'error' => 'Failed to store uploaded file']);
         return;
     }
+
+    // Auto-generate description based on resource key
+    $descriptionMap = [
+        'ps7_installer'     => 'PowerShell 7 MSI Installer',
+        'oem_activator_cmd' => 'OEM Activator Launcher (CMD)',
+        'chrome_hw_bridge'  => 'Chrome Hardware Bridge Extension',
+    ];
+    $description = $descriptionMap[$resourceKey] ?? $originalName;
 
     // Insert DB record
     $stmt = $pdo->prepare("
         INSERT INTO client_resources (resource_key, filename, original_filename, file_size, mime_type, checksum_sha256, description, uploaded_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ");
-    $description = $resourceKey === 'ps7_installer' ? 'PowerShell 7 MSI Installer' : $originalName;
     $stmt->execute([$resourceKey, $storedFilename, $originalName, $fileSize, $mimeType, $checksum, $description, $adminId]);
 
-    echo json_encode([
+    logAdminActivity(
+        $admin_session['admin_id'],
+        $admin_session['id'],
+        'UPLOAD_CLIENT_RESOURCE',
+        "Uploaded client resource: $resourceKey ($originalName, " . round($fileSize / 1024) . " KB)"
+    );
+
+    jsonResponse([
         'success' => true,
         'resource' => [
             'resource_key' => $resourceKey,
             'original_filename' => $originalName,
             'file_size' => $fileSize,
             'checksum_sha256' => $checksum,
-            'uploaded_by' => $admin_session['username'] ?? 'admin',
+            'uploaded_by_name' => $admin_session['username'] ?? 'admin',
             'created_at' => date('Y-m-d H:i:s'),
         ]
     ]);
@@ -106,12 +122,15 @@ function handle_upload_client_resource(PDO $pdo, array $admin_session): void {
 
 /**
  * Delete a client resource by key.
+ * Permission: manage_downloads
  */
 function handle_delete_client_resource(PDO $pdo, array $admin_session, ?array $json_input = null): void {
+    requirePermission('manage_downloads', $admin_session);
+
     $resourceKey = $json_input['resource_key'] ?? '';
 
     if (empty($resourceKey)) {
-        echo json_encode(['success' => false, 'error' => 'Missing resource_key']);
+        jsonResponse(['success' => false, 'error' => 'Missing resource_key']);
         return;
     }
 
@@ -120,7 +139,7 @@ function handle_delete_client_resource(PDO $pdo, array $admin_session, ?array $j
     $filename = $stmt->fetchColumn();
 
     if (!$filename) {
-        echo json_encode(['success' => false, 'error' => 'Resource not found']);
+        jsonResponse(['success' => false, 'error' => 'Resource not found']);
         return;
     }
 
@@ -134,13 +153,23 @@ function handle_delete_client_resource(PDO $pdo, array $admin_session, ?array $j
     // Delete DB record
     $pdo->prepare("DELETE FROM client_resources WHERE resource_key = ?")->execute([$resourceKey]);
 
-    echo json_encode(['success' => true]);
+    logAdminActivity(
+        $admin_session['admin_id'],
+        $admin_session['id'],
+        'DELETE_CLIENT_RESOURCE',
+        "Deleted client resource: $resourceKey"
+    );
+
+    jsonResponse(['success' => true]);
 }
 
 /**
  * List all client resources.
+ * Permission: view_downloads
  */
 function handle_list_client_resources(PDO $pdo, array $admin_session): void {
+    requirePermission('view_downloads', $admin_session);
+
     $stmt = $pdo->prepare("
         SELECT cr.*, au.username AS uploaded_by_name
         FROM client_resources cr
@@ -150,9 +179,45 @@ function handle_list_client_resources(PDO $pdo, array $admin_session): void {
     $stmt->execute();
     $resources = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'resources' => $resources,
     ]);
 }
 
+/**
+ * Download a client resource (admin panel download via session auth).
+ * Permission: view_downloads
+ */
+function handle_download_client_resource(PDO $pdo, array $admin_session): void {
+    requirePermission('view_downloads', $admin_session);
+
+    $resourceKey = $_GET['resource_key'] ?? '';
+
+    if (empty($resourceKey) || !preg_match('/^[a-z0-9_]+$/', $resourceKey)) {
+        http_response_code(400);
+        jsonResponse(['success' => false, 'error' => 'Invalid resource key']);
+        return;
+    }
+
+    $stmt = $pdo->prepare("SELECT filename, original_filename, mime_type, file_size, checksum_sha256 FROM client_resources WHERE resource_key = ?");
+    $stmt->execute([$resourceKey]);
+    $resource = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$resource) {
+        http_response_code(404);
+        jsonResponse(['success' => false, 'error' => 'Resource not found']);
+        return;
+    }
+
+    $uploadDir = dirname(__DIR__, 2) . '/uploads/client-resources';
+    $filePath = $uploadDir . '/' . $resource['filename'];
+
+    if (!file_exists($filePath)) {
+        http_response_code(404);
+        jsonResponse(['success' => false, 'error' => 'File not found on disk']);
+        return;
+    }
+
+    streamFileDownload($filePath, $resource['original_filename'], $resource['mime_type'], (int) $resource['file_size'], $resource['checksum_sha256']);
+}

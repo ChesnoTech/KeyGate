@@ -85,7 +85,7 @@ define('CSV_MAX_ERRORS_DISPLAY', 10);
 define('ALT_SERVER_DEFAULT_TIMEOUT', 300);             // seconds
 
 // ── Max key fail counter before skip ───────────────────────────────
-define('MAX_KEY_FAIL_COUNTER', 3);
+define('MAX_KEY_FAIL_COUNTER', 4);  // Must match $MaxRetryAttempts in main_v3.PS1
 
 // ── Default Redis ──────────────────────────────────────────────────
 define('REDIS_DEFAULT_PORT', 6379);

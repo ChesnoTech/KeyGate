@@ -11,7 +11,7 @@ function handle_acl_list_roles(PDO $pdo, array $admin_session): void {
     requirePermission('view_system_info', $admin_session);
     $roleType = $_GET['role_type'] ?? null;
     $roles = aclListRoles($roleType);
-    echo json_encode(['success' => true, 'roles' => $roles]);
+    jsonResponse(['success' => true, 'roles' => $roles]);
 }
 
 function handle_acl_get_role(PDO $pdo, array $admin_session): void {
@@ -19,9 +19,9 @@ function handle_acl_get_role(PDO $pdo, array $admin_session): void {
     $roleId = (int)($_GET['role_id'] ?? 0);
     $role = aclGetRoleById($roleId);
     if ($role) {
-        echo json_encode(['success' => true, 'role' => $role]);
+        jsonResponse(['success' => true, 'role' => $role]);
     } else {
-        echo json_encode(['success' => false, 'error' => 'Role not found']);
+        jsonResponse(['success' => false, 'error' => 'Role not found']);
     }
 }
 
@@ -37,7 +37,7 @@ function handle_acl_list_permissions(PDO $pdo, array $admin_session): void {
         }
         unset($cat, $p);
     }
-    echo json_encode(['success' => true, 'categories' => $categories]);
+    jsonResponse(['success' => true, 'categories' => $categories]);
 }
 
 function handle_acl_create_role(PDO $pdo, array $admin_session, ?array $json_input = null): void {
@@ -57,7 +57,7 @@ function handle_acl_create_role(PDO $pdo, array $admin_session, ?array $json_inp
     $permIds = filterDangerousPermissions($permIds, $admin_session['admin_id']);
 
     if (empty($name) || empty($displayName)) {
-        echo json_encode(['success' => false, 'error' => 'Role name and display name are required']);
+        jsonResponse(['success' => false, 'error' => 'Role name and display name are required']);
         return;
     }
 
@@ -65,15 +65,15 @@ function handle_acl_create_role(PDO $pdo, array $admin_session, ?array $json_inp
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM acl_roles WHERE is_system_role = 0");
     $stmt->execute();
     if ((int)$stmt->fetchColumn() >= 20) {
-        echo json_encode(['success' => false, 'error' => 'Maximum custom roles limit reached (20)']);
+        jsonResponse(['success' => false, 'error' => 'Maximum custom roles limit reached (20)']);
         return;
     }
 
     $newId = aclCreateRole($name, $displayName, $description, $roleType, $color, $permIds, $admin_session['admin_id']);
     if ($newId) {
-        echo json_encode(['success' => true, 'role_id' => $newId, 'message' => 'Role created successfully']);
+        jsonResponse(['success' => true, 'role_id' => $newId, 'message' => 'Role created successfully']);
     } else {
-        echo json_encode(['success' => false, 'error' => 'Failed to create role (name may already exist)']);
+        jsonResponse(['success' => false, 'error' => 'Failed to create role (name may already exist)']);
     }
 }
 
@@ -85,7 +85,7 @@ function handle_acl_update_role(PDO $pdo, array $admin_session, ?array $json_inp
     $roleId = (int)($data['role_id'] ?? 0);
 
     if (!$roleId) {
-        echo json_encode(['success' => false, 'error' => 'Role ID required']);
+        jsonResponse(['success' => false, 'error' => 'Role ID required']);
         return;
     }
 
@@ -114,9 +114,9 @@ function handle_acl_update_role(PDO $pdo, array $admin_session, ?array $json_inp
 
     $result = aclUpdateRole($roleId, $data, $admin_session['admin_id']);
     if (is_array($result) && isset($result['error']) && $result['error'] === 'conflict') {
-        echo json_encode(['success' => false, 'error' => $result['message']]);
+        jsonResponse(['success' => false, 'error' => $result['message']]);
     } else {
-        echo json_encode(['success' => (bool)$result, 'message' => $result ? 'Role updated' : 'Update failed']);
+        jsonResponse(['success' => (bool)$result, 'message' => $result ? 'Role updated' : 'Update failed']);
     }
 }
 
@@ -124,7 +124,7 @@ function handle_acl_delete_role(PDO $pdo, array $admin_session): void {
     requirePermission('manage_admins', $admin_session);
     $roleId = (int)($_GET['role_id'] ?? $_POST['role_id'] ?? 0);
     $result = aclDeleteRole($roleId, $admin_session['admin_id']);
-    echo json_encode($result);
+    jsonResponse($result);
 }
 
 function handle_acl_clone_role(PDO $pdo, array $admin_session, ?array $json_input = null): void {
@@ -138,12 +138,12 @@ function handle_acl_clone_role(PDO $pdo, array $admin_session, ?array $json_inpu
     $newDisplayName = htmlspecialchars(strip_tags($data['new_display_name'] ?? ''), ENT_QUOTES, 'UTF-8');
 
     if (!$sourceId || !$newName || !$newDisplayName) {
-        echo json_encode(['success' => false, 'error' => 'Source role, new name, and display name required']);
+        jsonResponse(['success' => false, 'error' => 'Source role, new name, and display name required']);
         return;
     }
 
     $newId = aclCloneRole($sourceId, $newName, $newDisplayName, $admin_session['admin_id']);
-    echo json_encode(['success' => (bool)$newId, 'role_id' => $newId, 'message' => $newId ? 'Role cloned' : 'Clone failed']);
+    jsonResponse(['success' => (bool)$newId, 'role_id' => $newId, 'message' => $newId ? 'Role cloned' : 'Clone failed']);
 }
 
 function handle_acl_get_user_effective(PDO $pdo, array $admin_session): void {
@@ -154,14 +154,14 @@ function handle_acl_get_user_effective(PDO $pdo, array $admin_session): void {
     // Non-super-admins can only query their own permissions or technician permissions they manage
     if (!isActorSuperAdmin($admin_session['admin_id'])) {
         if ($userType === 'admin' && $userId !== (int)$admin_session['admin_id']) {
-            echo json_encode(['success' => false, 'error' => 'You can only view your own permissions']);
+            jsonResponse(['success' => false, 'error' => 'You can only view your own permissions']);
             return;
         }
     }
 
     $permissions = aclGetEffectivePermissions($userType, $userId);
     $overrides = aclGetUserOverrides($userType, $userId);
-    echo json_encode(['success' => true, 'permissions' => $permissions, 'overrides' => $overrides]);
+    jsonResponse(['success' => true, 'permissions' => $permissions, 'overrides' => $overrides]);
 }
 
 function handle_acl_set_user_override(PDO $pdo, array $admin_session, ?array $json_input = null): void {
@@ -174,7 +174,7 @@ function handle_acl_set_user_override(PDO $pdo, array $admin_session, ?array $js
     $targetUserType = $data['user_type'] ?? 'admin';
     $targetUserId = (int)($data['user_id'] ?? 0);
     if ($targetUserType === 'admin' && $targetUserId === (int)$admin_session['admin_id']) {
-        echo json_encode(['success' => false, 'error' => 'Cannot modify your own permission overrides']);
+        jsonResponse(['success' => false, 'error' => 'Cannot modify your own permission overrides']);
         return;
     }
 
@@ -191,7 +191,7 @@ function handle_acl_set_user_override(PDO $pdo, array $admin_session, ?array $js
         $safeExpiry,
         $admin_session['admin_id']
     );
-    echo json_encode(['success' => $result]);
+    jsonResponse(['success' => $result]);
 }
 
 function handle_acl_remove_user_override(PDO $pdo, array $admin_session, ?array $json_input = null): void {
@@ -204,7 +204,7 @@ function handle_acl_remove_user_override(PDO $pdo, array $admin_session, ?array 
     $targetUserType = $data['user_type'] ?? 'admin';
     $targetUserId = (int)($data['user_id'] ?? 0);
     if ($targetUserType === 'admin' && $targetUserId === (int)$admin_session['admin_id']) {
-        echo json_encode(['success' => false, 'error' => 'Cannot modify your own permission overrides']);
+        jsonResponse(['success' => false, 'error' => 'Cannot modify your own permission overrides']);
         return;
     }
 
@@ -214,12 +214,12 @@ function handle_acl_remove_user_override(PDO $pdo, array $admin_session, ?array 
         (int)($data['permission_id'] ?? 0),
         $admin_session['admin_id']
     );
-    echo json_encode(['success' => $result]);
+    jsonResponse(['success' => $result]);
 }
 
 function handle_acl_get_changelog(PDO $pdo, array $admin_session): void {
     requirePermission('view_logs', $admin_session);
     $page = (int)($_GET['page'] ?? 1);
     $result = aclGetChangelog([], $page, 30);
-    echo json_encode(['success' => true, 'data' => $result]);
+    jsonResponse(['success' => true, 'data' => $result]);
 }

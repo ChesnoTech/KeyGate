@@ -27,14 +27,14 @@ function handle_get_2fa_status(PDO $pdo, array $admin_session): void {
             $backupCount = is_array($codes) ? count($codes) : 0;
         }
 
-        echo json_encode([
+        jsonResponse([
             'success' => true,
             'enabled' => (bool)$totp['totp_enabled'],
             'verified_at' => $totp['verified_at'],
             'backup_codes_remaining' => $backupCount
         ]);
     } else {
-        echo json_encode([
+        jsonResponse([
             'success' => true,
             'enabled' => false,
             'verified_at' => null,
@@ -44,7 +44,7 @@ function handle_get_2fa_status(PDO $pdo, array $admin_session): void {
 }
 
 function handle_list_trusted_networks(PDO $pdo, array $admin_session): void {
-    requirePermission('manage_trusted_networks', $admin_session);
+    requirePermission('manage_trusted_nets', $admin_session);
 
     $stmt = $pdo->query("
         SELECT tn.*, au.username as created_by_username
@@ -54,11 +54,11 @@ function handle_list_trusted_networks(PDO $pdo, array $admin_session): void {
     ");
     $networks = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    echo json_encode(['success' => true, 'networks' => $networks]);
+    jsonResponse(['success' => true, 'networks' => $networks]);
 }
 
 function handle_add_trusted_network(PDO $pdo, array $admin_session, ?array $json_input = null): void {
-    requirePermission('manage_trusted_networks', $admin_session);
+    requirePermission('manage_trusted_nets', $admin_session);
 
     $networkName = $json_input['network_name'] ?? '';
     $ipRange = $json_input['ip_range'] ?? '';
@@ -67,13 +67,13 @@ function handle_add_trusted_network(PDO $pdo, array $admin_session, ?array $json
     $description = $json_input['description'] ?? null;
 
     if (empty($networkName) || empty($ipRange)) {
-        echo json_encode(['success' => false, 'error' => 'Network name and IP range required']);
+        jsonResponse(['success' => false, 'error' => 'Network name and IP range required']);
         return;
     }
 
     // Validate CIDR format
     if (!preg_match('/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(\/\d{1,2})?$/', $ipRange)) {
-        echo json_encode(['success' => false, 'error' => 'Invalid CIDR format (use 192.168.1.0/24)']);
+        jsonResponse(['success' => false, 'error' => 'Invalid CIDR format (use 192.168.1.0/24)']);
         return;
     }
 
@@ -91,11 +91,11 @@ function handle_add_trusted_network(PDO $pdo, array $admin_session, ?array $json
         "Added trusted network: $networkName ($ipRange)"
     );
 
-    echo json_encode(['success' => true, 'network_id' => $pdo->lastInsertId()]);
+    jsonResponse(['success' => true, 'network_id' => $pdo->lastInsertId()]);
 }
 
 function handle_delete_trusted_network(PDO $pdo, array $admin_session, ?array $json_input = null): void {
-    requirePermission('manage_trusted_networks', $admin_session);
+    requirePermission('manage_trusted_nets', $admin_session);
 
     $networkId = intval($json_input['network_id'] ?? 0);
 
@@ -104,7 +104,7 @@ function handle_delete_trusted_network(PDO $pdo, array $admin_session, ?array $j
     $network = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$network) {
-        echo json_encode(['success' => false, 'error' => 'Network not found']);
+        jsonResponse(['success' => false, 'error' => 'Network not found']);
         return;
     }
 
@@ -118,5 +118,5 @@ function handle_delete_trusted_network(PDO $pdo, array $admin_session, ?array $j
         "Deleted trusted network: {$network['network_name']} (ID: $networkId)"
     );
 
-    echo json_encode(['success' => true]);
+    jsonResponse(['success' => true]);
 }

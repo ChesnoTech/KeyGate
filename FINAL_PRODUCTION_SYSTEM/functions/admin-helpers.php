@@ -196,6 +196,49 @@ function authenticateAdmin($username, $password) {
     return $admin;
 }
 
+// ── Shared Upload / Config / Download Helpers ────────────────────────
+
+/**
+ * Get a human-readable error message for a PHP file upload error code.
+ */
+function getUploadErrorMessage(int $errorCode): string {
+    $errMap = [
+        UPLOAD_ERR_INI_SIZE  => 'File exceeds server upload limit',
+        UPLOAD_ERR_FORM_SIZE => 'File exceeds form upload limit',
+        UPLOAD_ERR_PARTIAL   => 'File was only partially uploaded',
+        UPLOAD_ERR_NO_FILE   => 'No file was uploaded',
+    ];
+    return $errMap[$errorCode] ?? 'Upload failed (code: ' . $errorCode . ')';
+}
+
+/**
+ * Batch-save key-value pairs to system_config using UPSERT.
+ */
+function saveConfigBatch(PDO $pdo, array $configs): void {
+    $stmt = $pdo->prepare("
+        INSERT INTO system_config (config_key, config_value, description, updated_at)
+        VALUES (?, ?, '', NOW())
+        ON DUPLICATE KEY UPDATE config_value = ?, updated_at = NOW()
+    ");
+    foreach ($configs as $key => $value) {
+        $stmt->execute([$key, $value, $value]);
+    }
+}
+
+/**
+ * Stream a file download with proper headers and exit.
+ */
+function streamFileDownload(string $filePath, string $filename, string $mimeType, int $fileSize, string $checksum): void {
+    $safeName = preg_replace('/[^a-zA-Z0-9._\-]/', '_', $filename);
+    header('Content-Type: ' . ($mimeType ?: 'application/octet-stream'));
+    header('Content-Disposition: attachment; filename="' . $safeName . '"');
+    header('Content-Length: ' . $fileSize);
+    header('X-Checksum-SHA256: ' . $checksum);
+    header('Cache-Control: no-store');
+    readfile($filePath);
+    exit;
+}
+
 /**
  * Check if the actor is a super_admin (needed for dangerous permission operations).
  *

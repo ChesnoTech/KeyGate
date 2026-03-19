@@ -83,6 +83,16 @@ run_sql "integrations_migration.sql"          15
 # Phase 5: Temp password column widening (allows bcrypt hashes)
 run_sql "temp_password_hash_migration.sql"    16
 
+# Phase 6: Product variants & partition QC
+run_sql "product_variants_migration.sql"      17
+
+# Phase 7: Missing drivers & unallocated space
+run_sql "missing_drivers_migration.sql"       18
+run_sql "unallocated_space_migration.sql"     19
+
+# Phase 8: Downloads ACL permissions
+run_sql "downloads_acl_migration.sql"         20
+
 echo ""
 echo "=== Database initialization complete ==="
 echo ""

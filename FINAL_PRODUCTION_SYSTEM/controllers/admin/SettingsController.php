@@ -17,19 +17,19 @@ function handle_get_alt_server_settings(PDO $pdo, array $admin_session): void {
         'alt_server_verify_activation' => getConfig('alt_server_verify_activation') ?? '1'
     ];
 
-    echo json_encode(['success' => true, 'config' => $config]);
+    jsonResponse(['success' => true, 'config' => $config]);
 }
 
 function handle_save_alt_server_settings(PDO $pdo, array $admin_session, ?array $json_input = null): void {
     $input = $json_input;
     if (!$input) {
-        echo json_encode(['success' => false, 'error' => 'Invalid JSON input']);
+        jsonResponse(['success' => false, 'error' => 'Invalid JSON input']);
         return;
     }
 
     // Validate
     if ($input['alt_server_enabled'] === '1' && empty($input['alt_server_script_path'])) {
-        echo json_encode(['success' => false, 'error' => 'Script path is required when alternative server is enabled']);
+        jsonResponse(['success' => false, 'error' => 'Script path is required when alternative server is enabled']);
         return;
     }
 
@@ -46,14 +46,7 @@ function handle_save_alt_server_settings(PDO $pdo, array $admin_session, ?array 
         'alt_server_verify_activation' => $input['alt_server_verify_activation']
     ];
 
-    foreach ($configs as $key => $value) {
-        $stmt = $pdo->prepare("
-            INSERT INTO system_config (config_key, config_value, description, updated_at)
-            VALUES (?, ?, '', NOW())
-            ON DUPLICATE KEY UPDATE config_value = ?, updated_at = NOW()
-        ");
-        $stmt->execute([$key, $value, $value]);
-    }
+    saveConfigBatch($pdo, $configs);
 
     logAdminActivity(
         $admin_session['admin_id'],
@@ -62,7 +55,7 @@ function handle_save_alt_server_settings(PDO $pdo, array $admin_session, ?array 
         'Updated alternative server configuration'
     );
 
-    echo json_encode(['success' => true]);
+    jsonResponse(['success' => true]);
 }
 
 // ── Order Field Configuration ────────────────────────────────
@@ -71,7 +64,7 @@ function handle_get_order_field_settings(PDO $pdo, array $admin_session): void {
     $config = getOrderFieldConfig();
     $pattern = buildOrderNumberPattern($config);
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'config' => $config,
         'computed_pattern' => $pattern,
@@ -80,7 +73,7 @@ function handle_get_order_field_settings(PDO $pdo, array $admin_session): void {
 
 function handle_save_order_field_settings(PDO $pdo, array $admin_session, ?array $json_input = null): void {
     if (!$json_input) {
-        echo json_encode(['success' => false, 'error' => 'Invalid JSON input']);
+        jsonResponse(['success' => false, 'error' => 'Invalid JSON input']);
         return;
     }
 
@@ -89,11 +82,11 @@ function handle_save_order_field_settings(PDO $pdo, array $admin_session, ?array
     $maxLen = (int) ($json_input['order_field_max_length'] ?? 10);
 
     if ($minLen < 1 || $maxLen > ORDER_NUMBER_MAX_DB_LENGTH) {
-        echo json_encode(['success' => false, 'error' => "Length must be between 1 and " . ORDER_NUMBER_MAX_DB_LENGTH]);
+        jsonResponse(['success' => false, 'error' => "Length must be between 1 and " . ORDER_NUMBER_MAX_DB_LENGTH]);
         return;
     }
     if ($minLen > $maxLen) {
-        echo json_encode(['success' => false, 'error' => 'Minimum length cannot exceed maximum length']);
+        jsonResponse(['success' => false, 'error' => 'Minimum length cannot exceed maximum length']);
         return;
     }
 
@@ -101,7 +94,7 @@ function handle_save_order_field_settings(PDO $pdo, array $admin_session, ?array
     $allowedTypes = ['digits_only', 'alphanumeric', 'alphanumeric_dash', 'custom'];
     $charType = $json_input['order_field_char_type'] ?? 'alphanumeric';
     if (!in_array($charType, $allowedTypes)) {
-        echo json_encode(['success' => false, 'error' => 'Invalid character type']);
+        jsonResponse(['success' => false, 'error' => 'Invalid character type']);
         return;
     }
 
@@ -109,11 +102,11 @@ function handle_save_order_field_settings(PDO $pdo, array $admin_session, ?array
     if ($charType === 'custom') {
         $customRegex = $json_input['order_field_custom_regex'] ?? '';
         if (empty($customRegex)) {
-            echo json_encode(['success' => false, 'error' => 'Custom regex is required when character type is "custom"']);
+            jsonResponse(['success' => false, 'error' => 'Custom regex is required when character type is "custom"']);
             return;
         }
         if (@preg_match($customRegex, '') === false) {
-            echo json_encode(['success' => false, 'error' => 'Invalid regex pattern: ' . preg_last_error_msg()]);
+            jsonResponse(['success' => false, 'error' => 'Invalid regex pattern: ' . preg_last_error_msg()]);
             return;
         }
     }
@@ -122,7 +115,7 @@ function handle_save_order_field_settings(PDO $pdo, array $admin_session, ?array
     $labelEn = trim($json_input['order_field_label_en'] ?? '');
     $labelRu = trim($json_input['order_field_label_ru'] ?? '');
     if ($labelEn === '' || $labelRu === '') {
-        echo json_encode(['success' => false, 'error' => 'Labels cannot be empty']);
+        jsonResponse(['success' => false, 'error' => 'Labels cannot be empty']);
         return;
     }
 
@@ -138,14 +131,7 @@ function handle_save_order_field_settings(PDO $pdo, array $admin_session, ?array
         'order_field_custom_regex' => $json_input['order_field_custom_regex'] ?? '',
     ];
 
-    foreach ($configs as $key => $value) {
-        $stmt = $pdo->prepare("
-            INSERT INTO system_config (config_key, config_value, description, updated_at)
-            VALUES (?, ?, '', NOW())
-            ON DUPLICATE KEY UPDATE config_value = ?, updated_at = NOW()
-        ");
-        $stmt->execute([$key, $value, $value]);
-    }
+    saveConfigBatch($pdo, $configs);
 
     logAdminActivity(
         $admin_session['admin_id'],
@@ -156,9 +142,58 @@ function handle_save_order_field_settings(PDO $pdo, array $admin_session, ?array
 
     // Return updated config with computed pattern
     $newConfig = getOrderFieldConfig();
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'config' => $newConfig,
         'computed_pattern' => buildOrderNumberPattern($newConfig),
     ]);
+}
+
+// ── Session Settings ────────────────────────────────────────
+
+function handle_get_session_settings(PDO $pdo, array $admin_session): void {
+    $config = [
+        'admin_session_timeout_minutes' => getConfigWithDefault('admin_session_timeout_minutes', defined('DEFAULT_ADMIN_SESSION_TIMEOUT_MINUTES') ? DEFAULT_ADMIN_SESSION_TIMEOUT_MINUTES : 30),
+        'admin_max_failed_logins' => getConfigWithDefault('admin_max_failed_logins', defined('DEFAULT_MAX_FAILED_LOGINS') ? DEFAULT_MAX_FAILED_LOGINS : 3),
+        'admin_lockout_duration_minutes' => getConfigWithDefault('admin_lockout_duration_minutes', defined('DEFAULT_LOCKOUT_DURATION_MINUTES') ? DEFAULT_LOCKOUT_DURATION_MINUTES : 30),
+        'admin_force_password_change_days' => getConfigWithDefault('admin_force_password_change_days', 90),
+    ];
+    jsonResponse(['success' => true, 'config' => $config]);
+}
+
+function handle_save_session_settings(PDO $pdo, array $admin_session, ?array $json_input = null): void {
+    if (!$json_input) {
+        jsonResponse(['success' => false, 'error' => 'Invalid JSON input'], 400);
+        return;
+    }
+
+    // Validate session timeout (5-1440 minutes = 5 min to 24 hours)
+    $timeout = (int) ($json_input['admin_session_timeout_minutes'] ?? 30);
+    if ($timeout < 5 || $timeout > 1440) {
+        jsonResponse(['success' => false, 'error' => 'Session timeout must be between 5 and 1440 minutes'], 400);
+        return;
+    }
+
+    $maxFailed = max(1, min(20, (int) ($json_input['admin_max_failed_logins'] ?? 3)));
+    $lockoutDuration = max(1, min(1440, (int) ($json_input['admin_lockout_duration_minutes'] ?? 30)));
+    $passwordDays = max(0, min(365, (int) ($json_input['admin_force_password_change_days'] ?? 90)));
+
+    $configs = [
+        'admin_session_timeout_minutes' => (string) $timeout,
+        'admin_max_failed_logins' => (string) $maxFailed,
+        'admin_lockout_duration_minutes' => (string) $lockoutDuration,
+        'admin_force_password_change_days' => (string) $passwordDays,
+    ];
+
+    $stmt = $pdo->prepare("INSERT INTO system_config (config_key, config_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE config_value = VALUES(config_value)");
+    foreach ($configs as $key => $value) {
+        $stmt->execute([$key, $value]);
+    }
+
+    jsonResponse(['success' => true, 'config' => [
+        'admin_session_timeout_minutes' => $timeout,
+        'admin_max_failed_logins' => $maxFailed,
+        'admin_lockout_duration_minutes' => $lockoutDuration,
+        'admin_force_password_change_days' => $passwordDays,
+    ]]);
 }

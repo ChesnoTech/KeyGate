@@ -6,7 +6,7 @@ param(
 )
 
 $ActivationDelaySeconds = 10
-$MaxRetryAttempts = 3
+$MaxRetryAttempts = 4  # Retry same key up to 4 times (failures are usually network issues, not bad keys)
 
 # === Adaptive Network Timing ===
 # Activation delays exist because Microsoft's servers (not our LAN API) need time to
@@ -1082,6 +1082,42 @@ function Collect-HardwareInfo {
         # === Computer Name ===
         $hardwareInfo['computer_name'] = $env:COMPUTERNAME
 
+        # === Missing / Problematic Drivers ===
+        Write-Host "  • Driver status..." -ForegroundColor Gray
+        try {
+            $problemDevices = @(Get-PnpDevice -ErrorAction SilentlyContinue |
+                Where-Object { $_.Status -ne 'OK' -and $_.Status -ne 'Unknown' -and $_.Class -ne $null } |
+                Select-Object -Property @{N='device_name';E={$_.FriendlyName}},
+                                         @{N='device_id';E={$_.InstanceId}},
+                                         @{N='status';E={$_.Status}},
+                                         @{N='class';E={$_.Class}},
+                                         @{N='error_code';E={$_.ConfigManagerErrorCode}})
+
+            # Fallback for older Windows: WMI query for devices with errors
+            if (-not $problemDevices -and $problemDevices.Count -eq 0) {
+                $problemDevices = @(Get-WmiObject Win32_PnPEntity -ErrorAction SilentlyContinue |
+                    Where-Object { $_.ConfigManagerErrorCode -ne 0 } |
+                    Select-Object -Property @{N='device_name';E={$_.Name}},
+                                             @{N='device_id';E={$_.DeviceID}},
+                                             @{N='status';E={$_.Status}},
+                                             @{N='class';E={$_.PNPClass}},
+                                             @{N='error_code';E={$_.ConfigManagerErrorCode}})
+            }
+
+            $hardwareInfo['missing_drivers_count'] = $problemDevices.Count
+            if ($problemDevices.Count -gt 0) {
+                $hardwareInfo['missing_drivers'] = ($problemDevices | ConvertTo-Json -Compress)
+                Write-Host "    ⚠️ Found $($problemDevices.Count) device(s) with driver issues" -ForegroundColor Yellow
+            } else {
+                $hardwareInfo['missing_drivers'] = '[]'
+                Write-Host "    ✅ All drivers OK" -ForegroundColor Green
+            }
+        } catch {
+            Write-Host "    ⚠️ Could not check driver status: $($_.Exception.Message)" -ForegroundColor Yellow
+            $hardwareInfo['missing_drivers_count'] = $null
+            $hardwareInfo['missing_drivers'] = $null
+        }
+
         Write-Host "✅ Hardware information collected successfully" -ForegroundColor Green
 
         return $hardwareInfo
@@ -1294,20 +1330,14 @@ function Main-ActivationLoop {
             } else {
                 Write-Host "`n❌ Activation failed: $($reportResponse.message)" -ForegroundColor Red
 
-                if ($reportResponse.continue_session -and $currentAttempt -lt $MaxRetryAttempts) {
-                    $retry = Read-Host "`nRetry with same key? (Y/N)"
-                    if ($retry -in @('Y', 'y', 'yes', 'Yes')) {
-                        $currentAttempt++
-                        $retryDelay = Get-AdaptiveDelay -BaseSeconds 5 -MinSeconds 2
-                        Write-Host "⏳ Waiting $retryDelay seconds before retry..." -ForegroundColor Yellow
-                        Start-Sleep -Seconds $retryDelay
-                        continue
-                    } else {
-                        Write-Host "🔄 Getting next available key..." -ForegroundColor Yellow
-                        return $false
-                    }
+                if ($currentAttempt -lt $MaxRetryAttempts) {
+                    $currentAttempt++
+                    $retryDelay = Get-AdaptiveDelay -BaseSeconds 8 -MinSeconds 4
+                    Write-Host "⏳ Retrying same key in $retryDelay seconds... (attempt $currentAttempt of $MaxRetryAttempts)" -ForegroundColor Yellow
+                    Start-Sleep -Seconds $retryDelay
+                    continue
                 } else {
-                    Write-Host "⚠️ Maximum retry attempts reached for this key." -ForegroundColor Yellow
+                    Write-Host "⚠️ All $MaxRetryAttempts retry attempts exhausted for this key." -ForegroundColor Yellow
                     return $false
                 }
             }
@@ -1351,16 +1381,61 @@ if (-not $SessionInfo) {
 # Measure network latency to Microsoft servers and configure adaptive timing
 Test-NetworkLatency
 
-# Get order number (use server-configured field settings if available)
-$orderFieldParams = @{}
-if ($SessionInfo.order_field) {
-    $of = $SessionInfo.order_field
-    if ($of.prompt)     { $orderFieldParams['Prompt']  = $of.prompt }
-    if ($of.pattern)    { $orderFieldParams['Pattern'] = "^$($of.pattern)$" -replace '\^\^', '^' -replace '\$\$', '$' }
-    if ($of.min_length) { $orderFieldParams['MinLen']  = [int]$of.min_length }
-    if ($of.max_length) { $orderFieldParams['MaxLen']  = [int]$of.max_length }
+# Get order number — product lines menu + 6 digits, or legacy field settings
+if ($SessionInfo.product_lines -and $SessionInfo.product_lines.Count -gt 0) {
+    # New flow: technician picks order type from product lines, then enters 6 digits
+    $lines = $SessionInfo.product_lines
+    Write-Host ""
+    Write-Host "═══════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "  $($Lang['select_order_type'])" -ForegroundColor Cyan
+    Write-Host "═══════════════════════════════════════" -ForegroundColor Cyan
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $num = $i + 1
+        Write-Host "  [$num] $($lines[$i].name)" -ForegroundColor White
+        Write-Host "      $($lines[$i].prefix)######" -ForegroundColor DarkGray
+    }
+    Write-Host "═══════════════════════════════════════" -ForegroundColor Cyan
+
+    # Get selection
+    $selectedLine = $null
+    while (-not $selectedLine) {
+        $choice = Read-Host "  (1-$($lines.Count))"
+        if ($choice -match '^\d+$') {
+            $idx = [int]$choice - 1
+            if ($idx -ge 0 -and $idx -lt $lines.Count) {
+                $selectedLine = $lines[$idx]
+            }
+        }
+        if (-not $selectedLine) {
+            Write-Host "  ⚠️ Invalid choice. Enter 1-$($lines.Count)" -ForegroundColor Yellow
+        }
+    }
+    Write-Host "  ✅ $($selectedLine.name)" -ForegroundColor Green
+
+    # Get 6-digit order number
+    $digits = $null
+    while (-not $digits) {
+        $input = Read-Host "  $($Lang['prompt_6_digits'])"
+        if ($input -match '^\d{6}$') {
+            $digits = $input
+        } else {
+            Write-Host "  $($Lang['order_6_digits_invalid'])" -ForegroundColor Yellow
+        }
+    }
+    $OrderNumber = "$($selectedLine.prefix)$digits"
+    Write-Host "  📋 $OrderNumber" -ForegroundColor Cyan
+} else {
+    # Legacy flow: use server-configured field settings
+    $orderFieldParams = @{}
+    if ($SessionInfo.order_field) {
+        $of = $SessionInfo.order_field
+        if ($of.prompt)     { $orderFieldParams['Prompt']  = $of.prompt }
+        if ($of.pattern)    { $orderFieldParams['Pattern'] = "^$($of.pattern)$" -replace '\^\^', '^' -replace '\$\$', '$' }
+        if ($of.min_length) { $orderFieldParams['MinLen']  = [int]$of.min_length }
+        if ($of.max_length) { $orderFieldParams['MaxLen']  = [int]$of.max_length }
+    }
+    $OrderNumber = Get-Valid-OrderNumber @orderFieldParams
 }
-$OrderNumber = Get-Valid-OrderNumber @orderFieldParams
 
 # === COLLECT HARDWARE IMMEDIATELY (Regardless of activation status) ===
 Write-Host "`n🔧 Starting hardware collection..." -ForegroundColor Cyan
@@ -1460,12 +1535,12 @@ Write-Host "`n🔧 Using OEM Activation Server (Primary)..." -ForegroundColor Gr
 
 $activationComplete = $false
 $keyAttempts = 0
-$maxKeyAttempts = 3  # Conservative: legacy timing gives more time per key, fewer keys needed
+$maxKeyAttempts = 1  # Single key per PC — retry same key up to $MaxRetryAttempts times
 
 while (-not $activationComplete -and $keyAttempts -lt $maxKeyAttempts) {
     $keyAttempts++
 
-    Write-Host "`n🔍 Getting activation key... (Key attempt #$keyAttempts)" -ForegroundColor Cyan
+    Write-Host "`n🔍 Requesting activation key..." -ForegroundColor Cyan
 
     # Get key from API
     $keyBody = @{
@@ -1582,8 +1657,9 @@ while (-not $activationComplete -and $keyAttempts -lt $maxKeyAttempts) {
 }
 
 if (-not $activationComplete) {
-    Write-Host "`n⚠️ Activation failed after trying $keyAttempts keys." -ForegroundColor Red
-    Write-Host "However, hardware information was collected successfully." -ForegroundColor Cyan
+    Write-Host "`n⚠️ Activation failed after $MaxRetryAttempts attempts." -ForegroundColor Red
+    Write-Host "This may be a network issue. Try again later or contact your supervisor." -ForegroundColor Yellow
+    Write-Host "Hardware information was collected successfully." -ForegroundColor Cyan
     Write-Host "`nPress any key to close..." -ForegroundColor Gray
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     exit 1

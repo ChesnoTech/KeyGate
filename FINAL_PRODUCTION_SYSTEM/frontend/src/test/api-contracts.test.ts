@@ -54,6 +54,13 @@ const BACKEND_ACTIONS: Record<string, { method: 'GET' | 'POST'; csrf: boolean }>
   save_alt_server_settings:  { method: 'POST', csrf: true },
   get_order_field_settings:  { method: 'GET',  csrf: false },
   save_order_field_settings: { method: 'POST', csrf: true },
+  get_session_settings:      { method: 'GET',  csrf: false },
+  save_session_settings:     { method: 'POST', csrf: true },
+
+  // smtp / email
+  get_smtp_settings:         { method: 'GET',  csrf: false },
+  save_smtp_settings:        { method: 'POST', csrf: true },
+  test_smtp_connection:      { method: 'POST', csrf: true },
 
   // usb devices
   list_usb_devices:          { method: 'GET',  csrf: false },
@@ -81,10 +88,11 @@ const BACKEND_ACTIONS: Record<string, { method: 'GET' | 'POST'; csrf: boolean }>
   mark_notifications_read:   { method: 'POST', csrf: true },
   send_test_notification:    { method: 'POST', csrf: true },
 
-  // client resources
+  // client resources / downloads
   list_client_resources:     { method: 'GET',  csrf: false },
   upload_client_resource:    { method: 'POST', csrf: true },
   delete_client_resource:    { method: 'POST', csrf: true },
+  download_client_resource:  { method: 'GET',  csrf: false },
 
   // acl / roles
   acl_list_roles:            { method: 'GET',  csrf: false },
@@ -121,8 +129,16 @@ const BACKEND_ACTIONS: Record<string, { method: 'GET' | 'POST'; csrf: boolean }>
   qc_list_manufacturers:       { method: 'GET',  csrf: false },
   qc_update_manufacturer:      { method: 'POST', csrf: true },
   qc_list_compliance_results:  { method: 'GET',  csrf: false },
-  qc_recheck_historical:       { method: 'POST', csrf: true },
+  qc_list_compliance_grouped:  { method: 'GET',  csrf: false },
   qc_get_stats:                { method: 'GET',  csrf: false },
+
+  // product lines & variants (partition QC)
+  get_product_lines:           { method: 'GET',  csrf: false },
+  get_product_line:            { method: 'GET',  csrf: false },
+  save_product_line:           { method: 'POST', csrf: true },
+  delete_product_line:         { method: 'POST', csrf: true },
+  save_product_variant:        { method: 'POST', csrf: true },
+  delete_product_variant:      { method: 'POST', csrf: true },
 
   // pre-auth (no registry — handled directly in admin_v2.php)
   check_session:               { method: 'GET',  csrf: false },

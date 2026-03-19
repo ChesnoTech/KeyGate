@@ -10,11 +10,11 @@
 function handle_push_get_vapid_key(PDO $pdo, array $admin_session): void {
     $keys = getVapidKeys();
     if (!$keys) {
-        echo json_encode(['success' => false, 'error' => 'VAPID keys unavailable']);
+        jsonResponse(['success' => false, 'error' => 'VAPID keys unavailable']);
         return;
     }
     $enabled = getConfig('push_notifications_enabled') === '1';
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'vapidPublicKey' => $keys['publicKey'],
         'pushEnabled' => $enabled,
@@ -30,7 +30,7 @@ function handle_push_subscribe(PDO $pdo, array $admin_session, ?array $json_inpu
     $auth = $json_input['auth'] ?? '';
 
     if (empty($endpoint) || empty($p256dh) || empty($auth)) {
-        echo json_encode(['success' => false, 'error' => 'Missing subscription data']);
+        jsonResponse(['success' => false, 'error' => 'Missing subscription data']);
         return;
     }
 
@@ -46,7 +46,7 @@ function handle_push_subscribe(PDO $pdo, array $admin_session, ?array $json_inpu
     ");
     $stmt->execute([$adminId, $endpoint, $p256dh, $auth, $userAgent]);
 
-    echo json_encode(['success' => true]);
+    jsonResponse(['success' => true]);
 }
 
 /**
@@ -65,7 +65,7 @@ function handle_push_unsubscribe(PDO $pdo, array $admin_session, ?array $json_in
         $stmt->execute([$adminId, $endpoint]);
     }
 
-    echo json_encode(['success' => true]);
+    jsonResponse(['success' => true]);
 }
 
 /**
@@ -94,7 +94,7 @@ function handle_get_push_preferences(PDO $pdo, array $admin_session): void {
     $subStmt->execute([$adminId]);
     $hasSubscription = (int)$subStmt->fetchColumn() > 0;
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'preferences' => $prefs,
         'subscribed' => $hasSubscription,
@@ -110,7 +110,7 @@ function handle_save_push_preferences(PDO $pdo, array $admin_session, ?array $js
     $preferences = $json_input['preferences'] ?? [];
 
     if (!is_array($preferences)) {
-        echo json_encode(['success' => false, 'error' => 'Invalid preferences format']);
+        jsonResponse(['success' => false, 'error' => 'Invalid preferences format']);
         return;
     }
 
@@ -129,7 +129,7 @@ function handle_save_push_preferences(PDO $pdo, array $admin_session, ?array $js
         }
     }
 
-    echo json_encode(['success' => true]);
+    jsonResponse(['success' => true]);
 }
 
 /**
@@ -154,7 +154,7 @@ function handle_get_notifications(PDO $pdo, array $admin_session): void {
     $countStmt->execute([$adminId]);
     $unreadCount = (int)$countStmt->fetchColumn();
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'notifications' => $notifications,
         'unread_count' => $unreadCount,
@@ -228,7 +228,7 @@ function handle_send_test_notification(PDO $pdo, array $admin_session, ?array $j
         }
     }
 
-    echo json_encode(['success' => true, 'type' => $type]);
+    jsonResponse(['success' => true, 'type' => $type]);
 }
 
 /**
@@ -249,5 +249,5 @@ function handle_mark_notifications_read(PDO $pdo, array $admin_session, ?array $
         $stmt->execute(array_merge([$adminId], $intIds));
     }
 
-    echo json_encode(['success' => true]);
+    jsonResponse(['success' => true]);
 }

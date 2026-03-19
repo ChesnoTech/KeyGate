@@ -6,8 +6,15 @@ import {
   saveAltServerSettings,
   getOrderFieldSettings,
   saveOrderFieldSettings,
+  getSessionSettings,
+  saveSessionSettings,
+  getSmtpSettings,
+  saveSmtpSettings,
+  testSmtpConnection,
   type AltServerConfig,
   type OrderFieldConfig,
+  type SessionConfig,
+  type SmtpConfig,
 } from '@/api/settings'
 
 export function useAltServerSettings() {
@@ -45,6 +52,59 @@ export function useSaveOrderFieldSettings() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['settings', 'order-fields'] })
       toast.success(t('toast.settings_saved', 'Settings saved successfully'))
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+export function useSessionSettings() {
+  return useQuery({
+    queryKey: ['settings', 'session'],
+    queryFn: () => getSessionSettings(),
+  })
+}
+
+export function useSaveSessionSettings() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: (config: SessionConfig) => saveSessionSettings(config),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings', 'session'] })
+      toast.success(t('settings.session_saved', 'Session settings saved'))
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+// ── SMTP / Email ──────────────────────────────────────────────────
+
+export function useSmtpSettings() {
+  return useQuery({
+    queryKey: ['settings', 'smtp'],
+    queryFn: () => getSmtpSettings(),
+  })
+}
+
+export function useSaveSmtpSettings() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: (config: SmtpConfig) => saveSmtpSettings(config),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings', 'smtp'] })
+      toast.success(t('settings.smtp_saved', 'Email settings saved'))
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+export function useTestSmtpConnection() {
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: (params: Record<string, unknown>) => testSmtpConnection(params),
+    onSuccess: (data) => {
+      toast.success(data.message || t('settings.smtp_test_ok', 'Test email sent successfully'))
     },
     onError: (e: Error) => toast.error(e.message),
   })

@@ -133,7 +133,7 @@ if (!$admin_session) {
         echo json_encode(['authenticated' => false, 'error' => 'Session expired']);
         exit;
     }
-    header('Location: secure-admin.php');
+    header('Location: /');
     exit;
 }
 
@@ -205,6 +205,13 @@ $action_registry = [
     'save_alt_server_settings' => ['SettingsController.php',   'handle_save_alt_server_settings', true,  true],
     'get_order_field_settings' => ['SettingsController.php',   'handle_get_order_field_settings', false, false],
     'save_order_field_settings'=> ['SettingsController.php',   'handle_save_order_field_settings',true,  true],
+    'get_session_settings'     => ['SettingsController.php',   'handle_get_session_settings',     false, false],
+    'save_session_settings'    => ['SettingsController.php',   'handle_save_session_settings',    true,  true],
+
+    // smtp / email
+    'get_smtp_settings'        => ['SmtpController.php',      'handle_get_smtp_settings',        false, false],
+    'save_smtp_settings'       => ['SmtpController.php',      'handle_save_smtp_settings',       true,  true],
+    'test_smtp_connection'     => ['SmtpController.php',      'handle_test_smtp_connection',      true,  true],
 
     // usb devices
     'list_usb_devices'         => ['UsbDevicesController.php', 'handle_list_usb_devices',         false, false],
@@ -232,10 +239,11 @@ $action_registry = [
     'mark_notifications_read'  => ['NotificationsController.php', 'handle_mark_notifications_read', true, true],
     'send_test_notification'   => ['NotificationsController.php', 'handle_send_test_notification',  true, true],
 
-    // client resources
-    'list_client_resources'    => ['ClientResourcesController.php', 'handle_list_client_resources',  false, false],
-    'upload_client_resource'   => ['ClientResourcesController.php', 'handle_upload_client_resource', true,  false],
-    'delete_client_resource'   => ['ClientResourcesController.php', 'handle_delete_client_resource', true,  true],
+    // client resources / downloads
+    'list_client_resources'      => ['ClientResourcesController.php', 'handle_list_client_resources',      false, false],
+    'upload_client_resource'     => ['ClientResourcesController.php', 'handle_upload_client_resource',     true,  false],
+    'delete_client_resource'     => ['ClientResourcesController.php', 'handle_delete_client_resource',     true,  true],
+    'download_client_resource'   => ['ClientResourcesController.php', 'handle_download_client_resource',   false, false],
 
     // acl / roles
     'acl_list_roles'           => ['AclController.php',        'handle_acl_list_roles',           false, false],
@@ -272,15 +280,28 @@ $action_registry = [
     'qc_list_manufacturers'    => ['ComplianceController.php', 'handle_qc_list_manufacturers',    false, true],
     'qc_update_manufacturer'   => ['ComplianceController.php', 'handle_qc_update_manufacturer',   true,  true],
     'qc_list_compliance_results' => ['ComplianceController.php', 'handle_qc_list_compliance_results', false, true],
-    'qc_recheck_historical'    => ['ComplianceController.php', 'handle_qc_recheck_historical',    true,  true],
+    'qc_list_compliance_grouped' => ['ComplianceController.php', 'handle_qc_list_compliance_grouped', false, true],
     'qc_get_stats'             => ['ComplianceController.php', 'handle_qc_get_stats',             false, true],
+
+    // product lines & variants (partition QC)
+    'get_product_lines'        => ['ProductVariantsController.php', 'handle_get_product_lines',        false, true],
+    'get_product_line'         => ['ProductVariantsController.php', 'handle_get_product_line',         false, true],
+    'save_product_line'        => ['ProductVariantsController.php', 'handle_save_product_line',        true,  true],
+    'delete_product_line'      => ['ProductVariantsController.php', 'handle_delete_product_line',      true,  true],
+    'save_product_variant'     => ['ProductVariantsController.php', 'handle_save_product_variant',     true,  true],
+    'delete_product_variant'   => ['ProductVariantsController.php', 'handle_delete_product_variant',   true,  true],
 ];
 
 // ── Action Dispatcher ────────────────────────────────────────
 $json_input = json_decode(file_get_contents('php://input'), true);
 if (isset($_GET['action']) || isset($_POST['action']) || isset($json_input['action'])) {
-    header('Content-Type: application/json');
     $action = $_GET['action'] ?? $_POST['action'] ?? $json_input['action'] ?? '';
+
+    // File-streaming actions set their own Content-Type; everything else is JSON
+    $file_download_actions = ['download_report', 'download_client_resource'];
+    if (!in_array($action, $file_download_actions, true)) {
+        header('Content-Type: application/json');
+    }
 
     if (!isset($action_registry[$action])) {
         echo json_encode(['success' => false, 'error' => 'Unknown action']);
@@ -322,11 +343,18 @@ if (isset($_GET['action']) || isset($_POST['action']) || isset($json_input['acti
 
 // Handle logout
 if (isset($_GET['logout'])) {
-    $stmt = $pdo->prepare("UPDATE admin_sessions SET is_active = 0 WHERE session_token = ?");
-    $stmt->execute([$_SESSION['admin_token']]);
-
+    if (isset($_SESSION['admin_token'])) {
+        $stmt = $pdo->prepare("UPDATE admin_sessions SET is_active = 0 WHERE session_token = ?");
+        $stmt->execute([$_SESSION['admin_token']]);
+    }
     session_destroy();
-    header('Location: secure-admin.php');
+    // Return JSON for API calls, redirect for browser
+    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) || str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json')) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => true, 'message' => 'Logged out']);
+    } else {
+        header('Location: /');
+    }
     exit;
 }
 

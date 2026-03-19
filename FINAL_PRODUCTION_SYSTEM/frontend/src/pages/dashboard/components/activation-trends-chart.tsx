@@ -23,7 +23,7 @@ interface ActivationTrendsChartProps {
   data?: DailyTrend[]
 }
 
-type RangeOption = '7' | '14' | '30'
+type RangeOption = '7' | '14' | '30' | '90' | '180' | '365' | 'all'
 
 export function ActivationTrendsChart({ data }: ActivationTrendsChartProps) {
   const { t } = useTranslation()
@@ -48,10 +48,13 @@ export function ActivationTrendsChart({ data }: ActivationTrendsChartProps) {
     '7': t('dashboard.last_7_days', 'Last 7 days'),
     '14': t('dashboard.last_14_days', 'Last 14 days'),
     '30': t('dashboard.last_30_days', 'Last 30 days'),
+    '90': t('dashboard.last_90_days', 'Last 90 days'),
+    '180': t('dashboard.last_6_months', 'Last 6 months'),
+    '365': t('dashboard.last_year', 'Last year'),
+    'all': t('dashboard.all_time', 'All time'),
   }
 
-  const days = parseInt(range)
-  const filtered = data.slice(-days)
+  const filtered = range === 'all' ? data : data.slice(-parseInt(range))
 
   const formatDate = (dateStr: unknown) => {
     const d = new Date(String(dateStr) + 'T00:00:00')
@@ -65,13 +68,17 @@ export function ActivationTrendsChart({ data }: ActivationTrendsChartProps) {
           {t('dashboard.activation_trends', 'Activation Trends')}
         </CardTitle>
         <Select value={range} onValueChange={(v) => setRange((v ?? '30') as RangeOption)}>
-          <SelectTrigger className="w-[130px] h-8 text-xs">
+          <SelectTrigger className="w-[140px] h-8 text-xs">
             <span className="truncate">{rangeLabels[range]}</span>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="7">{t('dashboard.last_7_days', 'Last 7 days')}</SelectItem>
-            <SelectItem value="14">{t('dashboard.last_14_days', 'Last 14 days')}</SelectItem>
-            <SelectItem value="30">{t('dashboard.last_30_days', 'Last 30 days')}</SelectItem>
+            <SelectItem value="7">{rangeLabels['7']}</SelectItem>
+            <SelectItem value="14">{rangeLabels['14']}</SelectItem>
+            <SelectItem value="30">{rangeLabels['30']}</SelectItem>
+            <SelectItem value="90">{rangeLabels['90']}</SelectItem>
+            <SelectItem value="180">{rangeLabels['180']}</SelectItem>
+            <SelectItem value="365">{rangeLabels['365']}</SelectItem>
+            <SelectItem value="all">{rangeLabels['all']}</SelectItem>
           </SelectContent>
         </Select>
       </CardHeader>
@@ -94,7 +101,7 @@ export function ActivationTrendsChart({ data }: ActivationTrendsChartProps) {
               tickFormatter={formatDate}
               tick={{ fontSize: 11 }}
               className="fill-muted-foreground"
-              interval={days <= 7 ? 0 : days <= 14 ? 1 : 'preserveStartEnd'}
+              interval={filtered.length <= 7 ? 0 : filtered.length <= 14 ? 1 : filtered.length <= 30 ? 2 : 'preserveStartEnd'}
             />
             <YAxis
               allowDecimals={false}

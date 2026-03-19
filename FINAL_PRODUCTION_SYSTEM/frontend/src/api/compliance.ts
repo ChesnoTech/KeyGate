@@ -7,7 +7,10 @@ export interface QcGlobalSettings {
   default_bios_enforcement: string
   default_secure_boot_enforcement: string
   default_hackbgrt_enforcement: string
+  default_partition_enforcement: string
+  default_missing_drivers_enforcement: string
   blocking_prevents_key: string
+  max_unallocated_mb: string
 }
 
 export interface MotherboardRow {
@@ -23,6 +26,7 @@ export interface MotherboardRow {
   recommended_bios_version: string | null
   bios_enforcement: number | null
   hackbgrt_enforcement: number | null
+  missing_drivers_enforcement: number | null
   known_bios_versions: string[]
   notes: string | null
   is_active: number
@@ -30,6 +34,8 @@ export interface MotherboardRow {
   effective_secure_boot_enforcement: number
   effective_bios_enforcement: number
   effective_hackbgrt_enforcement: number
+  effective_partition_enforcement: number
+  effective_missing_drivers_enforcement: number
   effective_secure_boot_required: number
   effective_min_bios: string | null
   effective_rec_bios: string | null
@@ -52,7 +58,7 @@ export interface ComplianceResult {
   id: number
   hardware_info_id: number
   order_number: string
-  check_type: 'bios_version' | 'secure_boot' | 'hackbgrt_boot_priority'
+  check_type: 'bios_version' | 'secure_boot' | 'hackbgrt_boot_priority' | 'partition_layout'
   check_result: 'pass' | 'info' | 'warning' | 'fail'
   enforcement_level: number
   expected_value: string | null
@@ -125,6 +131,7 @@ export interface UpdateMotherboardInput {
   recommended_bios_version?: string | null
   bios_enforcement?: string | null
   hackbgrt_enforcement?: string | null
+  missing_drivers_enforcement?: string | null
   notes?: string | null
 }
 
@@ -172,12 +179,46 @@ export function listComplianceResults(params: ListComplianceResultsParams = {}) 
   }>('qc_list_compliance_results', params as Record<string, string | number | boolean>)
 }
 
-export function recheckHistorical(data?: { manufacturer?: string; product?: string }) {
-  return apiPostJson<{
-    success: boolean
-    stats: { rechecked: number; deleted: number }
-  }>('qc_recheck_historical', data)
+// ── Grouped by Order ────────────────────────────────────
+
+export interface CheckSummary {
+  result: 'pass' | 'info' | 'warning' | 'fail'
+  enforcement_level: number
+  expected_value: string | null
+  actual_value: string | null
+  message: string | null
+  rule_source: string
 }
+
+export interface GroupedComplianceRow {
+  order_number: string
+  hardware_info_id: number
+  motherboard_manufacturer: string | null
+  motherboard_product: string | null
+  hw_bios_version: string | null
+  detected_variant_name: string | null
+  detected_line_name: string | null
+  checked_at: string
+  worst_result: 'pass' | 'info' | 'warning' | 'fail'
+  checks: Record<string, CheckSummary>
+}
+
+export interface ListComplianceGroupedParams {
+  page?: number
+  search?: string
+  check_result?: string
+}
+
+export function listComplianceGrouped(params: ListComplianceGroupedParams = {}) {
+  return apiGet<{
+    success: boolean
+    results: GroupedComplianceRow[]
+    total: number
+    page: number
+    total_pages: number
+  }>('qc_list_compliance_grouped', params as Record<string, string | number | boolean>)
+}
+
 
 export function getQcStats() {
   return apiGet<{ success: boolean; stats: QcStats }>('qc_get_stats')

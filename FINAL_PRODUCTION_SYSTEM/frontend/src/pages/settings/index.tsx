@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Save, Upload, Trash2, RotateCcw, Palette } from 'lucide-react'
+import { Save, Upload, Trash2, RotateCcw, Palette, Timer, Mail, Send, CheckCircle2, XCircle, Eye, EyeOff } from 'lucide-react'
 import { AppHeader } from '@/components/layout/app-header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,6 +20,11 @@ import {
   useSaveAltServerSettings,
   useOrderFieldSettings,
   useSaveOrderFieldSettings,
+  useSessionSettings,
+  useSaveSessionSettings,
+  useSmtpSettings,
+  useSaveSmtpSettings,
+  useTestSmtpConnection,
 } from '@/hooks/use-settings'
 import {
   useBranding,
@@ -27,7 +32,7 @@ import {
   useUploadBrandAsset,
   useDeleteBrandAsset,
 } from '@/hooks/use-branding'
-import type { AltServerConfig, OrderFieldConfig } from '@/api/settings'
+import type { AltServerConfig, OrderFieldConfig, SessionConfig, SmtpConfig } from '@/api/settings'
 import type { BrandingConfig } from '@/api/branding'
 
 // Labels are now provided via i18n (settings.script_type_cmd / settings.script_type_powershell)
@@ -179,6 +184,105 @@ export function SettingsPage() {
       brand_sidebar_color: '',
       brand_accent_color: '',
     }))
+  }
+
+  // Session settings
+  const { data: sessionData, isLoading: sessionLoading } = useSessionSettings()
+  const saveSessionMutation = useSaveSessionSettings()
+
+  const [sessionForm, setSessionForm] = useState<SessionConfig>({
+    admin_session_timeout_minutes: 30,
+    admin_max_failed_logins: 3,
+    admin_lockout_duration_minutes: 30,
+    admin_force_password_change_days: 90,
+  })
+
+  useEffect(() => {
+    if (sessionData?.config) {
+      setSessionForm(sessionData.config)
+    }
+  }, [sessionData])
+
+  const handleSessionSave = () => {
+    saveSessionMutation.mutate(sessionForm)
+  }
+
+  // SMTP / Email settings
+  const { data: smtpData, isLoading: smtpLoading } = useSmtpSettings()
+  const saveSmtpMutation = useSaveSmtpSettings()
+  const testSmtpMutation = useTestSmtpConnection()
+
+  const [smtpForm, setSmtpForm] = useState<SmtpConfig>({
+    smtp_enabled: false,
+    smtp_server: '',
+    smtp_port: 587,
+    smtp_encryption: 'tls',
+    smtp_username: '',
+    smtp_password: '',
+    smtp_auth: true,
+    email_from: '',
+    email_from_name: '',
+    email_to: '',
+    email_on_activation_fail: true,
+    email_on_key_exhausted: true,
+    email_on_daily_summary: false,
+  })
+  const [showSmtpPassword, setShowSmtpPassword] = useState(false)
+  const [testRecipient, setTestRecipient] = useState('')
+
+  useEffect(() => {
+    if (smtpData?.config) {
+      const c = smtpData.config
+      setSmtpForm({
+        smtp_enabled: c.smtp_enabled === true || c.smtp_enabled === '1' as unknown as boolean,
+        smtp_server: c.smtp_server ?? '',
+        smtp_port: Number(c.smtp_port) || 587,
+        smtp_encryption: c.smtp_encryption ?? 'tls',
+        smtp_username: c.smtp_username ?? '',
+        smtp_password: c.smtp_password ?? '',
+        smtp_auth: c.smtp_auth === true || c.smtp_auth === '1' as unknown as boolean,
+        email_from: c.email_from ?? '',
+        email_from_name: c.email_from_name ?? '',
+        email_to: c.email_to ?? '',
+        email_on_activation_fail: c.email_on_activation_fail === true || c.email_on_activation_fail === '1' as unknown as boolean,
+        email_on_key_exhausted: c.email_on_key_exhausted === true || c.email_on_key_exhausted === '1' as unknown as boolean,
+        email_on_daily_summary: c.email_on_daily_summary === true || c.email_on_daily_summary === '1' as unknown as boolean,
+      })
+    }
+  }, [smtpData])
+
+  const handleSmtpSave = () => {
+    saveSmtpMutation.mutate(smtpForm)
+  }
+
+  const handleSmtpTest = () => {
+    testSmtpMutation.mutate({
+      ...smtpForm,
+      test_recipient: testRecipient || smtpForm.email_to,
+    } as unknown as Record<string, unknown>)
+  }
+
+  const smtpPresets: Record<string, { server: string; port: number; encryption: string }> = {
+    gmail:    { server: 'smtp.gmail.com',       port: 587, encryption: 'tls' },
+    outlook:  { server: 'smtp.office365.com',   port: 587, encryption: 'tls' },
+    yahoo:    { server: 'smtp.mail.yahoo.com',  port: 465, encryption: 'ssl' },
+    zoho:     { server: 'smtp.zoho.com',        port: 587, encryption: 'tls' },
+    sendgrid: { server: 'smtp.sendgrid.net',    port: 587, encryption: 'tls' },
+    mailgun:  { server: 'smtp.mailgun.org',     port: 587, encryption: 'tls' },
+    yandex:   { server: 'smtp.yandex.com',      port: 465, encryption: 'ssl' },
+    custom:   { server: '',                     port: 587, encryption: 'tls' },
+  }
+
+  const applySmtpPreset = (preset: string) => {
+    const p = smtpPresets[preset]
+    if (p) {
+      setSmtpForm((prev) => ({
+        ...prev,
+        smtp_server: p.server,
+        smtp_port: p.port,
+        smtp_encryption: p.encryption,
+      }))
+    }
   }
 
   return (
@@ -440,6 +544,87 @@ export function SettingsPage() {
                 <Button onClick={handleBrandSave} disabled={saveBrandMutation.isPending}>
                   <Save className="mr-2 h-4 w-4" />
                   {saveBrandMutation.isPending ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Session Settings Card */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Timer className="h-5 w-5 text-primary" />
+              <div>
+                <CardTitle>{t('settings.session_title', 'Session Settings')}</CardTitle>
+                <CardDescription>
+                  {t('settings.session_desc', 'Configure admin session timeout and inactivity limits.')}
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {sessionLoading ? (
+              <div className="space-y-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-8 w-full" />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>{t('settings.session_timeout', 'Session Timeout (minutes)')}</Label>
+                    <Input
+                      type="number"
+                      min={5}
+                      max={1440}
+                      value={sessionForm.admin_session_timeout_minutes}
+                      onChange={(e) => setSessionForm({ ...sessionForm, admin_session_timeout_minutes: Number(e.target.value) })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {t('settings.session_timeout_desc', 'Maximum session lifetime before forced re-login.')}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t('settings.max_failed_logins', 'Max Failed Login Attempts')}</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={sessionForm.admin_max_failed_logins}
+                      onChange={(e) => setSessionForm({ ...sessionForm, admin_max_failed_logins: Number(e.target.value) })}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>{t('settings.lockout_duration', 'Lockout Duration (minutes)')}</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={1440}
+                      value={sessionForm.admin_lockout_duration_minutes}
+                      onChange={(e) => setSessionForm({ ...sessionForm, admin_lockout_duration_minutes: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t('settings.password_change_days', 'Force Password Change (days)')}</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={365}
+                      value={sessionForm.admin_force_password_change_days}
+                      onChange={(e) => setSessionForm({ ...sessionForm, admin_force_password_change_days: Number(e.target.value) })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {t('settings.password_change_days_desc', '0 = never require password change')}
+                    </p>
+                  </div>
+                </div>
+                <Button onClick={handleSessionSave} disabled={saveSessionMutation.isPending}>
+                  <Save className="mr-2 h-4 w-4" />
+                  {saveSessionMutation.isPending ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
                 </Button>
               </div>
             )}
@@ -777,6 +962,287 @@ export function SettingsPage() {
                     ? t('common.saving', 'Saving...')
                     : t('common.save', 'Save')}
                 </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ── SMTP / Email Settings Card ────────────────────────── */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Mail className="h-5 w-5 text-primary" />
+              <div>
+                <CardTitle>{t('settings.smtp_title', 'Email / SMTP')}</CardTitle>
+                <CardDescription>
+                  {t('settings.smtp_desc', 'Configure email delivery for notifications and alerts.')}
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {smtpLoading ? (
+              <div className="space-y-4">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-8 w-full" />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Enable toggle */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="smtp_enabled">
+                      {t('settings.smtp_enabled', 'Enable Email Notifications')}
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      {t('settings.smtp_enabled_desc', 'Send email alerts for activation failures, key exhaustion, etc.')}
+                    </p>
+                  </div>
+                  <Switch
+                    id="smtp_enabled"
+                    checked={smtpForm.smtp_enabled}
+                    onCheckedChange={(checked) => setSmtpForm({ ...smtpForm, smtp_enabled: checked })}
+                  />
+                </div>
+
+                <Separator />
+
+                {/* Provider Preset */}
+                <div className="space-y-2">
+                  <Label>{t('settings.smtp_provider', 'Provider Preset')}</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.keys(smtpPresets).map((key) => (
+                      <Button
+                        key={key}
+                        variant={smtpForm.smtp_server === smtpPresets[key].server && smtpPresets[key].server !== '' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => applySmtpPreset(key)}
+                      >
+                        {key.charAt(0).toUpperCase() + key.slice(1)}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Server Settings */}
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="smtp_server">{t('settings.smtp_server', 'SMTP Server')}</Label>
+                    <Input
+                      id="smtp_server"
+                      value={smtpForm.smtp_server}
+                      onChange={(e) => setSmtpForm({ ...smtpForm, smtp_server: e.target.value })}
+                      placeholder="smtp.gmail.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="smtp_port">{t('settings.smtp_port', 'Port')}</Label>
+                    <Input
+                      id="smtp_port"
+                      type="number"
+                      value={smtpForm.smtp_port}
+                      onChange={(e) => setSmtpForm({ ...smtpForm, smtp_port: Number(e.target.value) })}
+                      min={1}
+                      max={65535}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="smtp_encryption">{t('settings.smtp_encryption', 'Encryption')}</Label>
+                    <Select
+                      value={smtpForm.smtp_encryption}
+                      onValueChange={(val) => setSmtpForm({ ...smtpForm, smtp_encryption: val })}
+                    >
+                      <SelectTrigger id="smtp_encryption">
+                        {smtpForm.smtp_encryption === 'tls' ? 'STARTTLS' : smtpForm.smtp_encryption === 'ssl' ? 'SSL/TLS' : 'None'}
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="tls">STARTTLS (port 587)</SelectItem>
+                        <SelectItem value="ssl">SSL/TLS (port 465)</SelectItem>
+                        <SelectItem value="none">{t('settings.smtp_enc_none', 'None (not recommended)')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Authentication */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="smtp_auth">{t('settings.smtp_auth', 'Require Authentication')}</Label>
+                    <p className="text-xs text-muted-foreground">
+                      {t('settings.smtp_auth_desc', 'Most SMTP servers require username/password authentication.')}
+                    </p>
+                  </div>
+                  <Switch
+                    id="smtp_auth"
+                    checked={smtpForm.smtp_auth}
+                    onCheckedChange={(checked) => setSmtpForm({ ...smtpForm, smtp_auth: checked })}
+                  />
+                </div>
+
+                {smtpForm.smtp_auth && (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="smtp_username">{t('settings.smtp_username', 'Username')}</Label>
+                      <Input
+                        id="smtp_username"
+                        value={smtpForm.smtp_username}
+                        onChange={(e) => setSmtpForm({ ...smtpForm, smtp_username: e.target.value })}
+                        placeholder="your-email@gmail.com"
+                        autoComplete="off"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="smtp_password">{t('settings.smtp_password', 'Password')}</Label>
+                      <div className="relative">
+                        <Input
+                          id="smtp_password"
+                          type={showSmtpPassword ? 'text' : 'password'}
+                          value={smtpForm.smtp_password}
+                          onChange={(e) => setSmtpForm({ ...smtpForm, smtp_password: e.target.value })}
+                          placeholder={smtpData?.config?.smtp_password_set ? '(encrypted — leave blank to keep)' : 'App password or SMTP password'}
+                          autoComplete="new-password"
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowSmtpPassword(!showSmtpPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          tabIndex={-1}
+                        >
+                          {showSmtpPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {t('settings.smtp_password_hint', 'For Gmail, use an App Password. Stored encrypted at rest (AES-256-GCM).')}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <Separator />
+
+                {/* Sender / Recipient */}
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="email_from">{t('settings.smtp_from', 'From Address')}</Label>
+                    <Input
+                      id="email_from"
+                      type="email"
+                      value={smtpForm.email_from}
+                      onChange={(e) => setSmtpForm({ ...smtpForm, email_from: e.target.value })}
+                      placeholder="notifications@company.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email_from_name">{t('settings.smtp_from_name', 'From Name')}</Label>
+                    <Input
+                      id="email_from_name"
+                      value={smtpForm.email_from_name}
+                      onChange={(e) => setSmtpForm({ ...smtpForm, email_from_name: e.target.value })}
+                      placeholder="OEM Activation System"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email_to">{t('settings.smtp_to', 'Default Recipient')}</Label>
+                    <Input
+                      id="email_to"
+                      type="email"
+                      value={smtpForm.email_to}
+                      onChange={(e) => setSmtpForm({ ...smtpForm, email_to: e.target.value })}
+                      placeholder="admin@company.com"
+                    />
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Notification Triggers */}
+                <div>
+                  <Label className="text-base font-medium">{t('settings.smtp_triggers', 'Notification Triggers')}</Label>
+                  <div className="mt-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label htmlFor="email_on_activation_fail">{t('settings.smtp_on_fail', 'Activation Failure')}</Label>
+                        <p className="text-xs text-muted-foreground">{t('settings.smtp_on_fail_desc', 'Send alert when a key activation fails.')}</p>
+                      </div>
+                      <Switch
+                        id="email_on_activation_fail"
+                        checked={smtpForm.email_on_activation_fail}
+                        onCheckedChange={(checked) => setSmtpForm({ ...smtpForm, email_on_activation_fail: checked })}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label htmlFor="email_on_key_exhausted">{t('settings.smtp_on_exhausted', 'Keys Exhausted')}</Label>
+                        <p className="text-xs text-muted-foreground">{t('settings.smtp_on_exhausted_desc', 'Send alert when available keys run out.')}</p>
+                      </div>
+                      <Switch
+                        id="email_on_key_exhausted"
+                        checked={smtpForm.email_on_key_exhausted}
+                        onCheckedChange={(checked) => setSmtpForm({ ...smtpForm, email_on_key_exhausted: checked })}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label htmlFor="email_on_daily_summary">{t('settings.smtp_on_summary', 'Daily Summary')}</Label>
+                        <p className="text-xs text-muted-foreground">{t('settings.smtp_on_summary_desc', 'Send a daily digest of activation activity.')}</p>
+                      </div>
+                      <Switch
+                        id="email_on_daily_summary"
+                        checked={smtpForm.email_on_daily_summary}
+                        onCheckedChange={(checked) => setSmtpForm({ ...smtpForm, email_on_daily_summary: checked })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Actions: Save + Test */}
+                <div className="flex flex-wrap items-end gap-4">
+                  <Button onClick={handleSmtpSave} disabled={saveSmtpMutation.isPending}>
+                    <Save className="mr-2 h-4 w-4" />
+                    {saveSmtpMutation.isPending ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
+                  </Button>
+
+                  <div className="flex items-end gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">{t('settings.smtp_test_recipient', 'Test Recipient')}</Label>
+                      <Input
+                        type="email"
+                        value={testRecipient}
+                        onChange={(e) => setTestRecipient(e.target.value)}
+                        placeholder={smtpForm.email_to || 'admin@company.com'}
+                        className="h-9 w-60"
+                      />
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={handleSmtpTest}
+                      disabled={testSmtpMutation.isPending || (!smtpForm.smtp_server)}
+                    >
+                      <Send className="mr-2 h-4 w-4" />
+                      {testSmtpMutation.isPending
+                        ? t('settings.smtp_testing', 'Sending...')
+                        : t('settings.smtp_test', 'Send Test Email')}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Test result feedback */}
+                {testSmtpMutation.isSuccess && (
+                  <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-400">
+                    <CheckCircle2 className="h-4 w-4" />
+                    {testSmtpMutation.data?.message || t('settings.smtp_test_ok', 'Test email sent successfully')}
+                  </div>
+                )}
+                {testSmtpMutation.isError && (
+                  <div className="flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                    <XCircle className="h-4 w-4" />
+                    {testSmtpMutation.error?.message || t('settings.smtp_test_fail', 'Test failed')}
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

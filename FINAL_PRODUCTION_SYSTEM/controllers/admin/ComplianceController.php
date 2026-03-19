@@ -13,13 +13,13 @@ define('PAGINATION_COMPLIANCE', 20);
 function handle_qc_get_settings(PDO $pdo, array $admin_session, ?array $json_input = null): void {
     requirePermission('view_compliance', $admin_session);
     $settings = qcGetGlobalSettings($pdo);
-    echo json_encode(['success' => true, 'settings' => $settings]);
+    jsonResponse(['success' => true, 'settings' => $settings]);
 }
 
 function handle_qc_save_settings(PDO $pdo, array $admin_session, ?array $json_input = null): void {
     requirePermission('manage_compliance', $admin_session);
 
-    $allowedKeys = ['qc_enabled', 'default_bios_enforcement', 'default_secure_boot_enforcement', 'default_hackbgrt_enforcement', 'blocking_prevents_key'];
+    $allowedKeys = ['qc_enabled', 'default_bios_enforcement', 'default_secure_boot_enforcement', 'default_hackbgrt_enforcement', 'blocking_prevents_key', 'default_partition_enforcement', 'default_missing_drivers_enforcement', 'max_unallocated_mb'];
 
     foreach ($allowedKeys as $key) {
         if (isset($json_input[$key])) {
@@ -29,7 +29,7 @@ function handle_qc_save_settings(PDO $pdo, array $admin_session, ?array $json_in
     }
 
     logAdminActivity($admin_session['admin_id'], $admin_session['id'], 'QC_SETTINGS_UPDATE', 'Updated QC global settings');
-    echo json_encode(['success' => true]);
+    jsonResponse(['success' => true]);
 }
 
 // ── Motherboard Registry ─────────────────────────────────────
@@ -67,7 +67,8 @@ function handle_qc_list_motherboards(PDO $pdo, array $admin_session, ?array $jso
     $stmt = $pdo->prepare("
         SELECT r.*, md.secure_boot_required AS mfr_sb_required, md.secure_boot_enforcement AS mfr_sb_enforcement,
                md.min_bios_version AS mfr_min_bios, md.recommended_bios_version AS mfr_rec_bios,
-               md.bios_enforcement AS mfr_bios_enforcement, md.hackbgrt_enforcement AS mfr_hb_enforcement
+               md.bios_enforcement AS mfr_bios_enforcement, md.hackbgrt_enforcement AS mfr_hb_enforcement,
+               md.missing_drivers_enforcement AS mfr_drivers_enforcement
         FROM qc_motherboard_registry r
         LEFT JOIN qc_manufacturer_defaults md ON r.manufacturer = md.manufacturer
         $whereClause
@@ -85,6 +86,8 @@ function handle_qc_list_motherboards(PDO $pdo, array $admin_session, ?array $jso
         $row['effective_secure_boot_enforcement'] = $row['secure_boot_enforcement'] ?? $row['mfr_sb_enforcement'] ?? (int) ($globalSettings['default_secure_boot_enforcement'] ?? 1);
         $row['effective_bios_enforcement'] = $row['bios_enforcement'] ?? $row['mfr_bios_enforcement'] ?? (int) ($globalSettings['default_bios_enforcement'] ?? 1);
         $row['effective_hackbgrt_enforcement'] = $row['hackbgrt_enforcement'] ?? $row['mfr_hb_enforcement'] ?? (int) ($globalSettings['default_hackbgrt_enforcement'] ?? 1);
+        $row['effective_partition_enforcement'] = (int) ($globalSettings['default_partition_enforcement'] ?? 2);
+        $row['effective_missing_drivers_enforcement'] = $row['missing_drivers_enforcement'] ?? $row['mfr_drivers_enforcement'] ?? (int) ($globalSettings['default_missing_drivers_enforcement'] ?? 2);
         $row['effective_secure_boot_required'] = $row['secure_boot_required'] ?? $row['mfr_sb_required'] ?? 1;
         $row['effective_min_bios'] = $row['min_bios_version'] ?? $row['mfr_min_bios'] ?? null;
         $row['effective_rec_bios'] = $row['recommended_bios_version'] ?? $row['mfr_rec_bios'] ?? null;
@@ -94,7 +97,7 @@ function handle_qc_list_motherboards(PDO $pdo, array $admin_session, ?array $jso
     // Distinct manufacturers for filter dropdown
     $mfrs = $pdo->query("SELECT DISTINCT manufacturer FROM qc_motherboard_registry ORDER BY manufacturer")->fetchAll(PDO::FETCH_COLUMN);
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'motherboards' => $rows,
         'total' => $total,
@@ -113,14 +116,14 @@ function handle_qc_get_motherboard(PDO $pdo, array $admin_session, ?array $json_
     $board = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$board) {
-        echo json_encode(['success' => false, 'error' => 'Motherboard not found']);
+        jsonResponse(['success' => false, 'error' => 'Motherboard not found']);
         return;
     }
 
     $board['known_bios_versions'] = json_decode($board['known_bios_versions'] ?: '[]', true);
     $rules = qcGetEffectiveRules($pdo, $board['manufacturer'], $board['product']);
 
-    echo json_encode(['success' => true, 'motherboard' => $board, 'effective_rules' => $rules]);
+    jsonResponse(['success' => true, 'motherboard' => $board, 'effective_rules' => $rules]);
 }
 
 function handle_qc_update_motherboard(PDO $pdo, array $admin_session, ?array $json_input = null): void {
@@ -128,13 +131,13 @@ function handle_qc_update_motherboard(PDO $pdo, array $admin_session, ?array $js
 
     $id = (int) ($json_input['id'] ?? 0);
     if (!$id) {
-        echo json_encode(['success' => false, 'error' => 'Missing motherboard ID']);
+        jsonResponse(['success' => false, 'error' => 'Missing motherboard ID']);
         return;
     }
 
     $fields = [];
     $params = [];
-    $allowedFields = ['secure_boot_required', 'secure_boot_enforcement', 'min_bios_version', 'recommended_bios_version', 'bios_enforcement', 'hackbgrt_enforcement', 'notes', 'is_active'];
+    $allowedFields = ['secure_boot_required', 'secure_boot_enforcement', 'min_bios_version', 'recommended_bios_version', 'bios_enforcement', 'hackbgrt_enforcement', 'missing_drivers_enforcement', 'notes', 'is_active'];
 
     foreach ($allowedFields as $field) {
         if (array_key_exists($field, $json_input)) {
@@ -150,7 +153,7 @@ function handle_qc_update_motherboard(PDO $pdo, array $admin_session, ?array $js
     }
 
     if (empty($fields)) {
-        echo json_encode(['success' => false, 'error' => 'No fields to update']);
+        jsonResponse(['success' => false, 'error' => 'No fields to update']);
         return;
     }
 
@@ -162,7 +165,7 @@ function handle_qc_update_motherboard(PDO $pdo, array $admin_session, ?array $js
     $stmt->execute($params);
 
     logAdminActivity($admin_session['admin_id'], $admin_session['id'], 'QC_MOTHERBOARD_UPDATE', "Updated motherboard registry #$id");
-    echo json_encode(['success' => true]);
+    jsonResponse(['success' => true]);
 }
 
 // ── Manufacturer Defaults ────────────────────────────────────
@@ -184,7 +187,7 @@ function handle_qc_list_manufacturers(PDO $pdo, array $admin_session, ?array $js
     ");
     $unconfigured = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
-    echo json_encode(['success' => true, 'manufacturers' => $configured, 'unconfigured' => $unconfigured]);
+    jsonResponse(['success' => true, 'manufacturers' => $configured, 'unconfigured' => $unconfigured]);
 }
 
 function handle_qc_update_manufacturer(PDO $pdo, array $admin_session, ?array $json_input = null): void {
@@ -192,7 +195,7 @@ function handle_qc_update_manufacturer(PDO $pdo, array $admin_session, ?array $j
 
     $manufacturer = trim($json_input['manufacturer'] ?? '');
     if (empty($manufacturer)) {
-        echo json_encode(['success' => false, 'error' => 'Manufacturer name required']);
+        jsonResponse(['success' => false, 'error' => 'Manufacturer name required']);
         return;
     }
 
@@ -222,7 +225,7 @@ function handle_qc_update_manufacturer(PDO $pdo, array $admin_session, ?array $j
     ]);
 
     logAdminActivity($admin_session['admin_id'], $admin_session['id'], 'QC_MANUFACTURER_UPDATE', "Updated manufacturer defaults: $manufacturer");
-    echo json_encode(['success' => true]);
+    jsonResponse(['success' => true]);
 }
 
 // ── Compliance Results ───────────────────────────────────────
@@ -270,7 +273,7 @@ function handle_qc_list_compliance_results(PDO $pdo, array $admin_session, ?arra
     $stmt->execute($params);
     $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'results' => $results,
         'total' => $total,
@@ -279,18 +282,170 @@ function handle_qc_list_compliance_results(PDO $pdo, array $admin_session, ?arra
     ]);
 }
 
+// ── Compliance Results — Grouped by Order ────────────────────
+
+function handle_qc_list_compliance_grouped(PDO $pdo, array $admin_session, ?array $json_input = null): void {
+    requirePermission('view_compliance', $admin_session);
+
+    $page = max(1, (int) ($_GET['page'] ?? 1));
+    $search = trim($_GET['search'] ?? '');
+    $resultFilter = trim($_GET['check_result'] ?? ''); // pass|warning|fail — filters orders that HAVE this result
+    $limit = PAGINATION_COMPLIANCE;
+    $offset = ($page - 1) * $limit;
+
+    // Sub-query: distinct (order_number, hardware_info_id) with worst result per order
+    // Result severity ordering: fail > warning > info > pass
+    $havingClause = '';
+    $havingParams = [];
+    if ($resultFilter !== '') {
+        // Filter to orders that have at least one check matching this result
+        $havingClause = "HAVING MAX(CASE WHEN cr.check_result = ? THEN 1 ELSE 0 END) = 1";
+        $havingParams[] = $resultFilter;
+    }
+
+    $searchClause = '';
+    $searchParams = [];
+    if ($search !== '') {
+        $searchClause = "AND cr.order_number LIKE ?";
+        $searchParams[] = "%$search%";
+    }
+
+    // Count distinct orders
+    $countSql = "
+        SELECT COUNT(*) FROM (
+            SELECT cr.order_number, cr.hardware_info_id
+            FROM qc_compliance_results cr
+            WHERE 1=1 $searchClause
+            GROUP BY cr.order_number, cr.hardware_info_id
+            $havingClause
+        ) sub
+    ";
+    $stmt = $pdo->prepare($countSql);
+    $stmt->execute(array_merge($searchParams, $havingParams));
+    $total = (int) $stmt->fetchColumn();
+
+    // Fetch grouped orders with worst result, ordered by latest check
+    $sql = "
+        SELECT
+            cr.order_number,
+            cr.hardware_info_id,
+            hi.motherboard_manufacturer,
+            hi.motherboard_product,
+            hi.bios_version AS hw_bios_version,
+            hi.detected_variant_name,
+            hi.detected_line_name,
+            MAX(cr.checked_at) AS checked_at,
+            MAX(CASE WHEN cr.check_result = 'fail' THEN 3
+                     WHEN cr.check_result = 'warning' THEN 2
+                     WHEN cr.check_result = 'info' THEN 1
+                     ELSE 0 END) AS worst_severity
+        FROM qc_compliance_results cr
+        LEFT JOIN hardware_info hi ON cr.hardware_info_id = hi.id
+        WHERE 1=1 $searchClause
+        GROUP BY cr.order_number, cr.hardware_info_id,
+                 hi.motherboard_manufacturer, hi.motherboard_product, hi.bios_version,
+                 hi.detected_variant_name, hi.detected_line_name
+        $havingClause
+        ORDER BY MAX(cr.checked_at) DESC
+        LIMIT ? OFFSET ?
+    ";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute(array_merge($searchParams, $havingParams, [(int) $limit, (int) $offset]));
+    $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // For each order, fetch all individual check results
+    if (!empty($orders)) {
+        $orderKeys = [];
+        foreach ($orders as $o) {
+            $orderKeys[] = $o['order_number'] . '|' . $o['hardware_info_id'];
+        }
+
+        // Fetch all checks for these orders in one query
+        $placeholders = implode(',', array_fill(0, count($orders), '(?, ?)'));
+        $checkParams = [];
+        foreach ($orders as $o) {
+            $checkParams[] = $o['order_number'];
+            $checkParams[] = $o['hardware_info_id'];
+        }
+
+        $checkSql = "
+            SELECT cr.order_number, cr.hardware_info_id, cr.check_type, cr.check_result,
+                   cr.enforcement_level, cr.expected_value, cr.actual_value, cr.message,
+                   cr.rule_source
+            FROM qc_compliance_results cr
+            WHERE (cr.order_number, cr.hardware_info_id) IN ($placeholders)
+            ORDER BY cr.check_type
+        ";
+        $stmt = $pdo->prepare($checkSql);
+        $stmt->execute($checkParams);
+        $allChecks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Group checks by order+hw key
+        $checksMap = [];
+        foreach ($allChecks as $c) {
+            $key = $c['order_number'] . '|' . $c['hardware_info_id'];
+            $checksMap[$key][] = $c;
+        }
+
+        // Attach checks to each order row
+        foreach ($orders as &$o) {
+            $key = $o['order_number'] . '|' . $o['hardware_info_id'];
+            $checks = $checksMap[$key] ?? [];
+
+            // Build per-check-type summary
+            $o['checks'] = [];
+            foreach ($checks as $c) {
+                $o['checks'][$c['check_type']] = [
+                    'result'           => $c['check_result'],
+                    'enforcement_level' => (int) $c['enforcement_level'],
+                    'expected_value'    => $c['expected_value'],
+                    'actual_value'      => $c['actual_value'],
+                    'message'           => $c['message'],
+                    'rule_source'       => $c['rule_source'],
+                ];
+            }
+
+            // Map worst_severity back to string
+            $severityMap = [0 => 'pass', 1 => 'info', 2 => 'warning', 3 => 'fail'];
+            $o['worst_result'] = $severityMap[(int) $o['worst_severity']] ?? 'pass';
+            unset($o['worst_severity']);
+        }
+        unset($o);
+    }
+
+    jsonResponse([
+        'success' => true,
+        'results' => $orders,
+        'total' => $total,
+        'page' => $page,
+        'total_pages' => max(1, (int) ceil($total / $limit)),
+    ]);
+}
+
 // ── Retroactive Recheck ──────────────────────────────────────
+
+function handle_qc_recheck_count(PDO $pdo, array $admin_session, ?array $json_input = null): void {
+    requirePermission('manage_compliance', $admin_session);
+
+    $manufacturer = $json_input['manufacturer'] ?? null;
+    $product = $json_input['product'] ?? null;
+
+    $count = qcRecheckCount($pdo, $manufacturer, $product);
+    jsonResponse(['success' => true, 'count' => $count]);
+}
 
 function handle_qc_recheck_historical(PDO $pdo, array $admin_session, ?array $json_input = null): void {
     requirePermission('manage_compliance', $admin_session);
 
     $manufacturer = $json_input['manufacturer'] ?? null;
     $product = $json_input['product'] ?? null;
+    $batchSize = isset($json_input['batch_size']) ? (int) $json_input['batch_size'] : 50;
+    $afterId = isset($json_input['after_id']) ? (int) $json_input['after_id'] : 0;
 
-    $stats = qcRecheckHistorical($pdo, $manufacturer, $product);
+    $stats = qcRecheckHistorical($pdo, $manufacturer, $product, $batchSize, $afterId);
 
-    logAdminActivity($admin_session['admin_id'], $admin_session['id'], 'QC_RECHECK_HISTORICAL', "Retroactive compliance recheck: {$stats['rechecked']} records");
-    echo json_encode(['success' => true, 'stats' => $stats]);
+    logAdminActivity($admin_session['admin_id'], $admin_session['id'], 'QC_RECHECK_HISTORICAL', "Retroactive compliance recheck batch: {$stats['rechecked']} records (after_id={$afterId})");
+    jsonResponse(['success' => true, 'stats' => $stats]);
 }
 
 // ── QC Statistics ────────────────────────────────────────────
@@ -338,7 +493,7 @@ function handle_qc_get_stats(PDO $pdo, array $admin_session, ?array $json_input 
         $byType[$row['check_type']][$row['check_result']] = (int) $row['cnt'];
     }
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'stats' => [
             'total_checks' => $total,

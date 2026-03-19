@@ -135,6 +135,26 @@ try {
         error_log("Order field config in login response error: " . $e->getMessage());
     }
 
+    // Include active product lines for order type selection
+    try {
+        $plStmt = $pdo->query("SELECT id, name, order_pattern, description FROM product_lines WHERE is_active = 1 ORDER BY name ASC");
+        $productLines = $plStmt->fetchAll(PDO::FETCH_ASSOC);
+        if (!empty($productLines)) {
+            $response['product_lines'] = array_map(function($pl) {
+                // Extract prefix from pattern (everything before # or *)
+                $prefix = preg_replace('/[#*].*$/', '', $pl['order_pattern']);
+                return [
+                    'id'      => (int) $pl['id'],
+                    'name'    => $pl['name'],
+                    'prefix'  => $prefix,
+                    'pattern' => $pl['order_pattern'],
+                ];
+            }, $productLines);
+        }
+    } catch (Exception $e) {
+        error_log("Product lines in login response error: " . $e->getMessage());
+    }
+
     // Include role and permissions in response
     try {
         require_once __DIR__ . '/../functions/acl.php';

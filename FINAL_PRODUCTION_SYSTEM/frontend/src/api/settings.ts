@@ -71,3 +71,67 @@ export function saveOrderFieldSettings(config: OrderFieldConfig) {
     config as unknown as Record<string, unknown>
   )
 }
+
+// ── Session Settings ────────────────────────────────────────
+
+export interface SessionConfig {
+  admin_session_timeout_minutes: number
+  admin_max_failed_logins: number
+  admin_lockout_duration_minutes: number
+  admin_force_password_change_days: number
+}
+
+export interface GetSessionSettingsResponse {
+  success: boolean
+  config: SessionConfig
+}
+
+export function getSessionSettings() {
+  return apiGet<GetSessionSettingsResponse>('get_session_settings')
+}
+
+export function saveSessionSettings(config: SessionConfig) {
+  return apiPostJson<{ success: boolean; config: SessionConfig }>('save_session_settings', config as unknown as Record<string, unknown>)
+}
+
+// ── SMTP / Email Settings ──────────────────────────────────────────
+
+export interface SmtpConfig {
+  smtp_enabled: boolean
+  smtp_server: string
+  smtp_port: number
+  smtp_encryption: string    // tls | ssl | none
+  smtp_username: string
+  smtp_password: string
+  smtp_password_set?: boolean
+  smtp_auth: boolean
+  email_from: string
+  email_from_name: string
+  email_to: string
+  email_on_activation_fail: boolean
+  email_on_key_exhausted: boolean
+  email_on_daily_summary: boolean
+}
+
+export interface GetSmtpSettingsResponse {
+  success: boolean
+  config: SmtpConfig
+}
+
+export function getSmtpSettings() {
+  return apiGet<GetSmtpSettingsResponse>('get_smtp_settings')
+}
+
+export function saveSmtpSettings(config: SmtpConfig) {
+  return apiPostJson<{ success: boolean; config: SmtpConfig; error?: string }>(
+    'save_smtp_settings',
+    config as unknown as Record<string, unknown>
+  )
+}
+
+export function testSmtpConnection(params: Record<string, unknown> = {}) {
+  return apiPostJson<{ success: boolean; message?: string; error?: string }>(
+    'test_smtp_connection',
+    params
+  )
+}

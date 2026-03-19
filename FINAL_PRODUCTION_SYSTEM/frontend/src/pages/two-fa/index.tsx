@@ -21,7 +21,8 @@ export function TwoFaPage() {
   const { data, isLoading, isError } = use2faStatus()
 
   const handleManageInPanel = () => {
-    window.open('/activate/secure-admin.php', '_blank')
+    // 2FA is managed directly in this React panel
+    window.location.reload()
   }
 
   return (

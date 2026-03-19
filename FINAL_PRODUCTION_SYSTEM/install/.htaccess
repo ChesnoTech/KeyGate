@@ -1,0 +1,5 @@
+# OEM Activation System — Installer
+# Allow DirectoryIndex and only index.php / ajax.php
+
+Options -Indexes
+DirectoryIndex index.php

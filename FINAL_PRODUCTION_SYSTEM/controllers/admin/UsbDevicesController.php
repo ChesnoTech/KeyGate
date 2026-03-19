@@ -48,7 +48,7 @@ function handle_list_usb_devices(PDO $pdo, array $admin_session): void {
     ");
     $statusCounts = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'devices' => $devices,
         'stats' => [
@@ -74,7 +74,7 @@ function handle_register_usb_device(PDO $pdo, array $admin_session, ?array $json
 
     // Validate required fields
     if (empty($technicianId) || empty($deviceName) || empty($deviceSerial)) {
-        echo json_encode(['success' => false, 'error' => 'Missing required fields']);
+        jsonResponse(['success' => false, 'error' => 'Missing required fields']);
         return;
     }
 
@@ -84,12 +84,12 @@ function handle_register_usb_device(PDO $pdo, array $admin_session, ?array $json
     $technician = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$technician) {
-        echo json_encode(['success' => false, 'error' => 'Technician not found']);
+        jsonResponse(['success' => false, 'error' => 'Technician not found']);
         return;
     }
 
     if (!$technician['is_active']) {
-        echo json_encode(['success' => false, 'error' => 'Cannot register USB device for inactive technician']);
+        jsonResponse(['success' => false, 'error' => 'Cannot register USB device for inactive technician']);
         return;
     }
 
@@ -99,7 +99,7 @@ function handle_register_usb_device(PDO $pdo, array $admin_session, ?array $json
     $existingDevice = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($existingDevice) {
-        echo json_encode([
+        jsonResponse([
             'success' => false,
             'error' => "USB device with this serial number already registered: {$existingDevice['device_name']}"
         ]);
@@ -114,7 +114,7 @@ function handle_register_usb_device(PDO $pdo, array $admin_session, ?array $json
         $currentCount = $stmt->fetchColumn();
 
         if ($currentCount >= $maxDevices) {
-            echo json_encode([
+            jsonResponse([
                 'success' => false,
                 'error' => "Technician has reached maximum allowed USB devices ($maxDevices)"
             ]);
@@ -145,7 +145,7 @@ function handle_register_usb_device(PDO $pdo, array $admin_session, ?array $json
         "Registered USB device '$deviceName' (ID: $deviceId) for technician $technicianId"
     );
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'device_id' => $deviceId,
         'message' => 'USB device registered successfully'
@@ -161,7 +161,7 @@ function handle_update_usb_device_status(PDO $pdo, array $admin_session, ?array 
     // Validate status
     $validStatuses = ['active', 'disabled', 'lost', 'stolen'];
     if (!in_array($newStatus, $validStatuses)) {
-        echo json_encode(['success' => false, 'error' => 'Invalid status']);
+        jsonResponse(['success' => false, 'error' => 'Invalid status']);
         return;
     }
 
@@ -171,7 +171,7 @@ function handle_update_usb_device_status(PDO $pdo, array $admin_session, ?array 
     $device = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$device) {
-        echo json_encode(['success' => false, 'error' => 'USB device not found']);
+        jsonResponse(['success' => false, 'error' => 'USB device not found']);
         return;
     }
 
@@ -207,7 +207,7 @@ function handle_update_usb_device_status(PDO $pdo, array $admin_session, ?array 
         "Changed USB device '{$device['device_name']}' (ID: $deviceId) status to '$newStatus'"
     );
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'message' => "USB device status updated to '$newStatus'"
     ]);
@@ -223,7 +223,7 @@ function handle_delete_usb_device(PDO $pdo, array $admin_session, ?array $json_i
     $device = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$device) {
-        echo json_encode(['success' => false, 'error' => 'USB device not found']);
+        jsonResponse(['success' => false, 'error' => 'USB device not found']);
         return;
     }
 
@@ -237,7 +237,7 @@ function handle_delete_usb_device(PDO $pdo, array $admin_session, ?array $json_i
         "Deleted USB device '{$device['device_name']}' (ID: $deviceId) from technician {$device['technician_id']}"
     );
 
-    echo json_encode([
+    jsonResponse([
         'success' => true,
         'message' => 'USB device deleted successfully'
     ]);

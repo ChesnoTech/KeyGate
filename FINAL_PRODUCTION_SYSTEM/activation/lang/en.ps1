@@ -34,6 +34,9 @@
     # Order Number
     'prompt_order'              = 'Enter the last 5 characters of the order number'
     'order_invalid'             = '⚠️ Order number must be exactly 5 alphanumeric characters'
+    'select_order_type'         = 'Select order type'
+    'prompt_6_digits'           = 'Enter order number (6 digits)'
+    'order_6_digits_invalid'    = '⚠️ Order number must be exactly 6 digits'
 
     # API Errors
     'api_failed'                = 'API call failed'

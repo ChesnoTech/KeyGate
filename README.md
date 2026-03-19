@@ -2,26 +2,26 @@
 
 [![CI](https://github.com/ChesnoTech/OEM_Activation_System/actions/workflows/ci.yml/badge.svg)](https://github.com/ChesnoTech/OEM_Activation_System/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/ChesnoTech/OEM_Activation_System?label=release)](https://github.com/ChesnoTech/OEM_Activation_System/releases/latest)
-![PHP](https://img.shields.io/badge/PHP-8.3-777BB4?logo=php&logoColor=white)
+![PHP](https://img.shields.io/badge/PHP-8.0+-777BB4?logo=php&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
-![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+![MariaDB](https://img.shields.io/badge/MariaDB-10.5+-003545?logo=mariadb&logoColor=white)
 ![License](https://img.shields.io/badge/license-proprietary-red)
 
 **Professional Windows OEM license management for computer assembly operations.**
 
-Secure, database-driven system that automates Windows OEM key distribution, activation, and tracking across technician workstations. Replaces legacy SSH/CSV workflows with a modern REST API architecture deployed via Docker.
+Secure, database-driven system that automates Windows OEM key distribution, activation, and tracking across technician workstations. Replaces legacy SSH/CSV workflows with a modern REST API architecture. Deploy on any LAMP server — no Docker required.
 
 ---
 
 ## Architecture
 
 ```
- Technician Workstation                     Production Server (Docker)
+ Technician Workstation                     Production Server
 +-------------------------+          +------------------------------------------+
 |                         |          |                                          |
 |  OEM_Activator.cmd      |          |  +------------+    +----------------+   |
 |    |                    |   HTTPS  |  |            |    |                |   |
-|    +-> PowerShell v3    |--------->|  |  PHP 8.3   |--->|  MariaDB 10.11 |   |
+|    +-> PowerShell v3    |--------->|  |  PHP 8.0+  |--->|  MariaDB/MySQL |   |
 |        (slmgr /ipk/ato) |<---------|  |  (Apache)  |    |  (oem_keys,    |   |
 |                         |   JSON   |  |            |    |   technicians, |   |
 +-------------------------+          |  +-----+------+    |   audit_log)   |   |
@@ -29,9 +29,9 @@ Secure, database-driven system that automates Windows OEM key distribution, acti
  Admin Browser                       |        |                                |
 +-------------------------+          |  +-----v------+                         |
 |                         |   HTTPS  |  |            |                         |
-|  Admin Dashboard (JS)   |--------->|  |  Redis 7.2 |  (rate limiting)       |
-|  - Key management       |<---------|  |            |                         |
-|  - Technician accounts  |          |  +------------+                         |
+|  React Admin Panel      |--------->|  |  Redis     |  (rate limiting,       |
+|  - Key management       |<---------|  |  (optional)|   graceful degradation)|
+|  - QC compliance        |          |  +------------+                         |
 |  - Audit logs           |          |                                          |
 +-------------------------+          +------------------------------------------+
 ```
@@ -51,46 +51,57 @@ Secure, database-driven system that automates Windows OEM key distribution, acti
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
-| Web App | PHP 8.3 + Apache | Admin panel, REST API |
-| Database | MariaDB 10.11 | Keys, technicians, audit logs |
-| Cache | Redis 7.2 | API rate limiting |
+| Web App | PHP 8.0+ / Apache | Admin panel, REST API |
+| Frontend | React 19 / Vite / shadcn/ui | Admin dashboard (i18n: EN + RU) |
+| Database | MariaDB 10.5+ / MySQL 5.7+ | Keys, technicians, audit logs |
+| Cache | Redis (optional) | API rate limiting (graceful degradation without it) |
 | Client | PowerShell 5.1/7 | Windows activation automation |
 | Launcher | CMD batch | PS7 install, pre-activation tasks |
-| Deployment | Docker Compose | Container orchestration |
 | Hardware Bridge | C# .NET 8 + Chrome Extension | USB device detection |
 
 ---
 
 ## Quick Start
 
-### Prerequisites
-- Docker and Docker Compose
-- SSL certificate (or use the included localhost cert for testing)
+### Requirements
+- Apache or Nginx web server
+- PHP 8.0+ with extensions: PDO, pdo_mysql, json, mbstring, openssl, curl
+- MariaDB 10.5+ or MySQL 5.7+
+- SSL certificate (recommended for production)
 
-### Production Deployment
+### Production Installation
 
-```bash
-# 1. Clone the repo
-git clone https://github.com/ChesnoTech/OEM_Activation_System.git
-cd OEM_Activation_System
+```
+1. Download and upload FINAL_PRODUCTION_SYSTEM/ to your web server document root
 
-# 2. Configure environment
-cp .env.example .env
-# Edit .env with your database passwords and settings
+2. Navigate to http://your-server/install/ in your browser
 
-# 3. Start the production stack
-docker compose -f docker-compose.prod.yml up -d
+3. Follow the 6-step setup wizard:
+   Step 1 - Environment check (PHP, extensions, permissions)
+   Step 2 - Database connection (host, port, credentials)
+   Step 3 - Install tables (runs 19 migrations automatically)
+   Step 4 - Create admin account
+   Step 5 - System settings (name, URL, timezone, language)
+   Step 6 - Done! Delete /install/ directory for security
 
-# 4. Run the setup wizard
-# Navigate to: https://your-server:8443/setup
+4. Open admin panel at http://your-server/secure-admin.php
 ```
 
-### Development (with PHPMyAdmin + exposed ports)
+The installer automatically detects your network and adds it as a **trusted network** (2FA bypass + USB auth enabled) and to the **admin IP whitelist** -- no manual network configuration needed on first setup.
+
+No Docker, no Composer, no npm -- just upload and run the installer.
+
+### Development (Docker, optional)
 
 ```bash
 docker compose up -d
-# PHPMyAdmin available at http://localhost:8081
-# DB accessible at localhost:3306
+# Web app:     http://localhost:8080
+# PHPMyAdmin:  http://localhost:8081
+# DB:          localhost:3306
+
+# React frontend dev server:
+cd FINAL_PRODUCTION_SYSTEM/frontend && npm run dev
+# Admin panel: http://localhost:5173
 ```
 
 ---
@@ -100,37 +111,37 @@ docker compose up -d
 ```
 OEM_Activation_System/
 |
-|-- FINAL_PRODUCTION_SYSTEM/     # Web application root
-|   |-- admin_v2.php             #   Admin panel entry point
+|-- FINAL_PRODUCTION_SYSTEM/     # Web application root (upload this to your server)
+|   |-- install/                 #   Web installer wizard (delete after setup!)
+|   |   |-- index.php            #     6-step setup UI
+|   |   +-- ajax.php             #     Installer backend (env check, migrations, config)
+|   |-- admin_v2.php             #   Admin API action router
 |   |-- secure-admin.php         #   Admin authentication
-|   |-- config.php               #   Database config (reads .env)
-|   |-- constants.php             #   Application constants
-|   |-- security-headers.php     #   CSP, HSTS, X-Frame headers
-|   |-- api/                     #   REST API endpoints
+|   |-- config.php               #   Database config (generated by installer)
+|   |-- constants.php            #   Application constants
+|   |-- api/                     #   REST API endpoints (17 endpoints)
 |   |   |-- login.php            #     Technician authentication
-|   |   |-- get-key.php          #     Key distribution
+|   |   |-- get-key.php          #     Key distribution (with QC gate)
 |   |   |-- report-result.php    #     Activation result reporting
-|   |   +-- middleware/           #     Rate limiting, validation
+|   |   |-- collect-hardware-v2.php #  Hardware inventory submission
+|   |   +-- health.php           #     Server health check
 |   |-- activation/              #   PowerShell client scripts
-|   |   |-- main_v3.PS1          #     Activation client (USB auth, hardware QC, adaptive timing)
-|   |   +-- lang/                #     Localization (en, ru)
-|   |-- controllers/admin/       #   MVC controllers (12 modules)
-|   |-- views/                   #   Admin panel templates
+|   |   +-- main_v3.PS1          #     Activation client (USB auth, hardware QC, adaptive timing)
+|   |-- controllers/admin/       #   Admin controllers (15 modules)
 |   |-- functions/               #   Shared PHP utilities
-|   |-- lang/                    #   Admin panel i18n (en, ru)
-|   |-- database/                #   SQL schema + migrations
-|   |-- client/                  #   Technician distribution files
-|   +-- setup/                   #   Installation wizard
+|   |   |-- qc-compliance.php    #     QC engine (Secure Boot, BIOS, HackBGRT, partitions, drivers)
+|   |   +-- integration-helpers.php #  Event dispatch (osTicket, 1C ERP)
+|   |-- frontend/                #   React admin panel (Vite + shadcn/ui)
+|   |-- database/                #   SQL schema + 19 migrations
+|   +-- client/                  #   Technician distribution files
 |
 |-- hardware-bridge/             # Chrome extension + C# native app
-|-- database/                    # Additional SQL migrations
-|-- ssl/                         # Apache SSL configuration
+|-- tests/                       # Automated tests
+|   +-- installer-simulation/    #   Docker-based full deployment test
 |-- docs/                        # Development documentation
 |
-|-- Dockerfile.php               # PHP 8.3 + Apache container
-|-- docker-compose.yml           # Dev stack (PHPMyAdmin, exposed ports)
-|-- docker-compose.prod.yml      # Production stack (hardened)
-|-- .env.example                 # Environment variable template
+|-- Dockerfile.php               # PHP 8.3 + Apache (dev only)
+|-- docker-compose.yml           # Dev stack (optional)
 +-- CLAUDE.md                    # AI assistant context
 ```
 
@@ -143,36 +154,87 @@ OEM_Activation_System/
 - Atomic single-key distribution (prevents race conditions)
 - Automatic key lifecycle: unused -> good/bad/retry
 - Key recycling rules for failed activations
+- Single-key retry with up to 4 automatic attempts
+
+**QC Compliance**
+- Hardware quality checks: Secure Boot, BIOS version, boot logo (HackBGRT), partitions, drivers
+- Cascade enforcement hierarchy: Global -> Product Line -> Manufacturer -> Model
+- Motherboard registry with approved BIOS versions
+- Enforcement levels: Disabled / Info / Warning / Blocking
+- Unallocated disk space detection
 
 **Technician Management**
 - Individual accounts with bcrypt password hashing
-- Mandatory password rotation for temp passwords
+- USB hardware-bound authentication (optional passwordless)
 - Account lockout after failed login attempts
-- Complete per-technician activity history
+- TOTP two-factor authentication (2FA)
 
 **Security**
 - HTTPS enforcement with HSTS
-- Redis-backed API rate limiting (per-endpoint)
-- RBAC with configurable roles and permissions
+- Redis-backed API rate limiting (per-endpoint, graceful degradation without Redis)
+- RBAC with configurable roles and ACL permissions
 - CSRF protection, CSP headers, session fixation prevention
 - IP whitelist support for admin panel
-- Setup wizard auto-locks after installation
+- Trusted network detection (auto-configured during installation)
+- Installer auto-locks after setup (install.lock)
+
+**Web Installer**
+- Joomla-style 6-step setup wizard -- no CLI required
+- Automatic environment validation (PHP version, extensions, permissions)
+- Runs 19 database migrations in order with rollback tracking
+- Auto-detects installer network and adds to trusted networks + admin IP whitelist
+- Generates config.php and locks itself after completion
+- Removes demo data (test technicians) on finalize
 
 **Activation Client**
 - PowerShell 7 auto-install (USB MSI or winget)
-- Pre-activation tasks: WSUS cleanup, SMB hardening, BIOS drive format
-- Progressive verification timing (legacy-proven, ~55s window)
+- Pre-activation tasks: WSUS cleanup, SMB hardening
+- Adaptive timing based on Microsoft activation server latency
 - Key cleanup between attempts to prevent false negatives
-- Adaptive network-based timing (measures Microsoft activation server latency)
 - USB-based technician authentication
-- Hardware QC data collection (HackBGRT detection, component inventory)
+- Full hardware inventory collection (MB, CPU, RAM, GPU, disks, drivers)
 
-**Admin Dashboard**
-- Real-time statistics and charts
+**Admin Dashboard (React)**
+- Real-time statistics and charts (with extended trend ranges: 7d/30d/90d/6mo/1yr/all)
 - Full audit log with filtering
-- SMTP email notifications
+- QC compliance management with product lines
+- Integration framework (osTicket, 1C ERP)
+- White-label branding (logo, colors, company name)
+- Bilingual interface (English / Russian)
 - Database backup management
 - Responsive design (mobile/tablet/desktop)
+
+---
+
+## Testing
+
+### Frontend Tests
+
+```bash
+cd FINAL_PRODUCTION_SYSTEM/frontend && npm test
+```
+
+Runs i18n completeness, API contract, and route permission tests via Vitest.
+
+### Installer Simulation Test
+
+A full end-to-end deployment test that simulates a production install inside Docker:
+
+```bash
+cd tests/installer-simulation
+docker compose up --build
+```
+
+This spins up Ubuntu 22.04 with systemd, installs a full LAMP stack (Apache, PHP 8.3, MariaDB), deploys the application, runs the web installer via curl (simulating a browser), and executes 29 verification tests covering:
+
+- All 19 database migrations applied
+- 38 tables created with correct schema
+- Admin account and system config populated
+- Trusted network auto-detection working
+- Admin IP whitelist auto-populated
+- Installer lock file prevents re-runs
+- API endpoints responding correctly
+- Demo data cleaned up
 
 ---
 
@@ -189,12 +251,12 @@ OEM_Activation_System/
 
 | Document | Location |
 |----------|----------|
+| **Web installer** | Upload `FINAL_PRODUCTION_SYSTEM/` -> navigate to `/install/` |
 | **Production deployment (aaPanel)** | [`docs/PRODUCTION_DEPLOYMENT_GUIDE.md`](docs/PRODUCTION_DEPLOYMENT_GUIDE.md) |
 | Web application details | [`FINAL_PRODUCTION_SYSTEM/README.md`](FINAL_PRODUCTION_SYSTEM/README.md) |
 | Hardware bridge setup | [`hardware-bridge/README.md`](hardware-bridge/README.md) |
 | Technician quick start | [`FINAL_PRODUCTION_SYSTEM/client/README_TECHNICIAN.md`](FINAL_PRODUCTION_SYSTEM/client/README_TECHNICIAN.md) |
-| Environment config | [`.env.example`](.env.example) |
-| Development history | [`docs/development/`](docs/development/) |
+| Development guide | [`CLAUDE.md`](CLAUDE.md) |
 
 ---
 
