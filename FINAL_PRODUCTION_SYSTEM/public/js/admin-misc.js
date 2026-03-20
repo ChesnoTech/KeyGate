@@ -1176,7 +1176,7 @@ function showPowerShellFallback() {
         + '<strong style="color: #1565C0;">💻 ' + LANG['usb.powershell_title'] + '</strong><br><br>'
         + '<p style="color: #1565C0; margin: 10px 0;">' + LANG['usb.powershell_run_info'] + '</p>'
         + '<div style="background: #2d2d2d; color: #f8f8f2; padding: 12px; border-radius: 4px; font-family: monospace; font-size: 12px; margin: 10px 0; overflow-x: auto;">'
-        + 'Get-WmiObject Win32_DiskDrive | Where-Object { $_.InterfaceType -eq \'USB\' } | Select SerialNumber,Model</div>'
+        + 'Get-CimInstance Win32_DiskDrive | Where-Object { $_.InterfaceType -eq \'USB\' } | Select SerialNumber,Model</div>'
         + '<button class="btn btn-primary" onclick="copyPowerShellCommand()" style="width: 100%; margin-top: 10px;">📋 ' + LANG['usb.powershell_copy'] + '</button>'
         + '<div style="background: #fff3cd; padding: 10px; border-radius: 4px; margin-top: 10px;">'
         + '<p style="margin: 0; font-size: 13px; color: #856404;"><strong>' + LANG['usb.powershell_howto'] + '</strong><br>'
@@ -1285,7 +1285,7 @@ async function requestUSBAccess() {
                     </ul>
                     <p style="color: #856404; margin: 10px 0;"><strong>Fallback Option:</strong> Use PowerShell to get the serial number:</p>
                     <div style="background: #2d2d2d; color: #f8f8f2; padding: 12px; border-radius: 4px; font-family: monospace; font-size: 12px; margin: 10px 0; overflow-x: auto;">
-Get-WmiObject Win32_DiskDrive | Where-Object { $_.InterfaceType -eq 'USB' } | Select SerialNumber,Model
+Get-CimInstance Win32_DiskDrive | Where-Object { $_.InterfaceType -eq 'USB' } | Select SerialNumber,Model
                     </div>
                     <button class="btn btn-secondary" onclick="copyPowerShellCommand()" style="margin-top: 10px; width: 100%;">📋 Copy PowerShell Command</button>
                     <p style="color: #856404; margin: 10px 0; font-size: 12px;">Run in PowerShell (Win+X → A), then copy the SerialNumber and paste into the form.</p>
@@ -1366,7 +1366,7 @@ function fillFormFromDetectedDevice() {
 }
 
 function copyPowerShellCommand() {
-    const command = "Get-WmiObject Win32_DiskDrive | Where-Object { $_.InterfaceType -eq 'USB' } | Select SerialNumber,Model,@{N='GB';E={[Math]::Round($_.Size/1GB,2)}} | FL";
+    const command = "Get-CimInstance Win32_DiskDrive | Where-Object { $_.InterfaceType -eq 'USB' } | Select SerialNumber,Model,@{N='GB';E={[Math]::Round($_.Size/1GB,2)}} | FL";
 
     navigator.clipboard.writeText(command).then(() => {
         alert('✅ ' + LANG['js.usb_command_copied']);
@@ -1410,7 +1410,7 @@ function detectUSBDevicesLocal() {
                 Run this PowerShell command to detect USB devices:
             </p>
             <div style="background: #2d2d2d; color: #f8f8f2; padding: 12px; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 11px; overflow-x: auto; margin-bottom: 10px;">
-                <code>Get-WmiObject Win32_DiskDrive | Where-Object { $_.InterfaceType -eq 'USB' } | Select SerialNumber,Model,@{N='GB';E={[Math]::Round($_.Size/1GB,2)}} | FL</code>
+                <code>Get-CimInstance Win32_DiskDrive | Where-Object { $_.InterfaceType -eq 'USB' } | Select SerialNumber,Model,@{N='GB';E={[Math]::Round($_.Size/1GB,2)}} | FL</code>
             </div>
             <button type="button" class="btn btn-primary" onclick="copyPowerShellCommand()" style="width: 100%; margin-bottom: 10px;">
                 📋 Copy PowerShell Command

@@ -95,6 +95,7 @@ try {
         'cpu_cores' => $data['cpu_cores'] ?? null,
         'cpu_logical_processors' => $data['cpu_logical_processors'] ?? null,
         'cpu_max_clock_speed' => $data['cpu_max_clock_speed'] ?? null,
+        'cpu_serial' => $data['cpu_serial'] ?? null,
 
         // RAM
         'ram_total_capacity_gb' => $data['ram_total_capacity_gb'] ?? null,
@@ -114,8 +115,39 @@ try {
         'os_name' => $data['os_name'] ?? null,
         'os_version' => $data['os_version'] ?? null,
         'os_architecture' => $data['os_architecture'] ?? null,
+        'os_build_number' => $data['os_build_number'] ?? null,
+        'os_install_date' => $data['os_install_date'] ?? null,
+        'os_serial_number' => $data['os_serial_number'] ?? null,
         'secure_boot_enabled' => isset($data['secure_boot_enabled']) ? (int)$data['secure_boot_enabled'] : null,
         'computer_name' => $data['computer_name'] ?? null,
+
+        // Chassis / Enclosure
+        'chassis_manufacturer' => $data['chassis_manufacturer'] ?? null,
+        'chassis_serial' => $data['chassis_serial'] ?? null,
+        'chassis_type' => $data['chassis_type'] ?? null,
+
+        // System Product (OEM)
+        'system_manufacturer' => $data['system_manufacturer'] ?? null,
+        'system_product_name' => $data['system_product_name'] ?? null,
+        'system_serial' => $data['system_serial'] ?? null,
+        'system_uuid' => $data['system_uuid'] ?? null,
+
+        // TPM
+        'tpm_present' => isset($data['tpm_present']) ? (int)$data['tpm_present'] : null,
+        'tpm_version' => $data['tpm_version'] ?? null,
+        'tpm_manufacturer' => $data['tpm_manufacturer'] ?? null,
+
+        // Network
+        'primary_mac_address' => $data['primary_mac_address'] ?? null,
+        'local_ip' => $data['local_ip'] ?? null,
+        'public_ip' => $data['public_ip'] ?? null,
+        'network_adapters' => $data['network_adapters'] ?? null,  // JSON
+
+        // Audio
+        'audio_devices' => $data['audio_devices'] ?? null,  // JSON
+
+        // Monitors
+        'monitors' => $data['monitors'] ?? null,  // JSON
 
         // Boot order & HackBGRT (QC compliance)
         'boot_order' => $data['boot_order'] ?? null,
@@ -125,6 +157,9 @@ try {
         // Driver status (QC compliance)
         'missing_drivers' => $data['missing_drivers'] ?? null,  // JSON array of problem devices
         'missing_drivers_count' => isset($data['missing_drivers_count']) ? (int)$data['missing_drivers_count'] : null,
+
+        // Device Fingerprint
+        'device_fingerprint' => $data['device_fingerprint'] ?? null,
     ];
 
     // Insert hardware information
@@ -133,23 +168,37 @@ try {
             activation_id, order_number, technician_id, session_token,
             motherboard_manufacturer, motherboard_product, motherboard_serial, motherboard_version,
             bios_manufacturer, bios_version, bios_release_date, bios_serial_number,
-            cpu_name, cpu_manufacturer, cpu_cores, cpu_logical_processors, cpu_max_clock_speed,
+            cpu_name, cpu_manufacturer, cpu_cores, cpu_logical_processors, cpu_max_clock_speed, cpu_serial,
             ram_total_capacity_gb, ram_slots_used, ram_slots_total, ram_modules,
             video_cards, storage_devices, disk_partitions, complete_disk_layout,
-            os_name, os_version, os_architecture, secure_boot_enabled, computer_name,
+            os_name, os_version, os_architecture, os_build_number, os_install_date, os_serial_number,
+            secure_boot_enabled, computer_name,
+            chassis_manufacturer, chassis_serial, chassis_type,
+            system_manufacturer, system_product_name, system_serial, system_uuid,
+            tpm_present, tpm_version, tpm_manufacturer,
+            primary_mac_address, local_ip, public_ip, network_adapters,
+            audio_devices, monitors,
             boot_order, hackbgrt_installed, hackbgrt_first_boot,
             missing_drivers, missing_drivers_count,
+            device_fingerprint,
             collection_timestamp
         ) VALUES (
             ?, ?, ?, ?,
             ?, ?, ?, ?,
             ?, ?, ?, ?,
-            ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?,
             ?, ?, ?, ?,
-            ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?,
+            ?, ?,
+            ?, ?, ?,
+            ?, ?, ?, ?,
+            ?, ?, ?,
+            ?, ?, ?, ?,
+            ?, ?,
             ?, ?, ?,
             ?, ?,
+            ?,
             NOW()
         )
     ");
@@ -175,6 +224,7 @@ try {
         $hardwareData['cpu_cores'],
         $hardwareData['cpu_logical_processors'],
         $hardwareData['cpu_max_clock_speed'],
+        $hardwareData['cpu_serial'],
 
         $hardwareData['ram_total_capacity_gb'],
         $hardwareData['ram_slots_used'],
@@ -189,15 +239,41 @@ try {
         $hardwareData['os_name'],
         $hardwareData['os_version'],
         $hardwareData['os_architecture'],
+        $hardwareData['os_build_number'],
+        $hardwareData['os_install_date'],
+        $hardwareData['os_serial_number'],
         $hardwareData['secure_boot_enabled'],
         $hardwareData['computer_name'],
+
+        $hardwareData['chassis_manufacturer'],
+        $hardwareData['chassis_serial'],
+        $hardwareData['chassis_type'],
+
+        $hardwareData['system_manufacturer'],
+        $hardwareData['system_product_name'],
+        $hardwareData['system_serial'],
+        $hardwareData['system_uuid'],
+
+        $hardwareData['tpm_present'],
+        $hardwareData['tpm_version'],
+        $hardwareData['tpm_manufacturer'],
+
+        $hardwareData['primary_mac_address'],
+        $hardwareData['local_ip'],
+        $hardwareData['public_ip'],
+        $hardwareData['network_adapters'],
+
+        $hardwareData['audio_devices'],
+        $hardwareData['monitors'],
 
         $hardwareData['boot_order'],
         $hardwareData['hackbgrt_installed'],
         $hardwareData['hackbgrt_first_boot'],
 
         $hardwareData['missing_drivers'],
-        $hardwareData['missing_drivers_count']
+        $hardwareData['missing_drivers_count'],
+
+        $hardwareData['device_fingerprint']
     ]);
 
     $hardwareId = $pdo->lastInsertId();

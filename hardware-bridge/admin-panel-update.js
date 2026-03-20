@@ -179,7 +179,7 @@ function showPowerShellFallback() {
                 Copy and run this command in PowerShell to get your USB device's serial number:
             </p>
             <div style="background: #2d2d2d; color: #f8f8f2; padding: 12px; border-radius: 4px; font-family: monospace; font-size: 12px; margin: 10px 0; overflow-x: auto;">
-Get-WmiObject Win32_DiskDrive | Where-Object { $_.InterfaceType -eq 'USB' } | Select SerialNumber,Model
+Get-CimInstance Win32_DiskDrive | Where-Object { $_.InterfaceType -eq 'USB' } | Select SerialNumber,Model
             </div>
             <button class="btn btn-primary" onclick="copyPowerShellCommand()" style="width: 100%; margin-top: 10px;">
                 📋 Copy PowerShell Command

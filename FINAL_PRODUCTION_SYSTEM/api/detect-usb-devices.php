@@ -72,10 +72,10 @@ function detectUSBDevices() {
 
     // PowerShell script to enumerate USB drives
     $psScript = <<<'POWERSHELL'
-Get-WmiObject Win32_DiskDrive | Where-Object { $_.InterfaceType -eq 'USB' } | ForEach-Object {
+Get-CimInstance Win32_DiskDrive | Where-Object { $_.InterfaceType -eq 'USB' } | ForEach-Object {
     $disk = $_
-    $partition = Get-WmiObject -Query "ASSOCIATORS OF {Win32_DiskDrive.DeviceID='$($disk.DeviceID)'} WHERE AssocClass = Win32_DiskDriveToDiskPartition"
-    $volume = $partition | ForEach-Object { Get-WmiObject -Query "ASSOCIATORS OF {Win32_DiskPartition.DeviceID='$($_.DeviceID)'} WHERE AssocClass = Win32_LogicalDiskToPartition" }
+    $partition = Get-CimAssociatedInstance -InputObject $disk -ResultClassName Win32_DiskPartition
+    $volume = $partition | ForEach-Object { Get-CimAssociatedInstance -InputObject $_ -ResultClassName Win32_LogicalDisk }
 
     # Extract real serial from PNPDeviceID (WMI SerialNumber is often unreliable for USB)
     # PNPDeviceID format: USBSTOR\DISK&VEN_xxx&PROD_xxx&REV_xxx\SERIAL&0
@@ -188,7 +188,7 @@ if (!isWindowsServer()) {
         'message' => 'Server-side USB detection requires Windows. Use the Hardware Bridge extension or PowerShell on the admin workstation for USB device detection.',
         'alternatives' => [
             'hardware_bridge' => 'Install the OEM Hardware Bridge Chrome extension for automatic detection',
-            'powershell' => 'Run: Get-WmiObject Win32_DiskDrive | Where-Object { $_.InterfaceType -eq \'USB\' } | Select SerialNumber,Model',
+            'powershell' => 'Run: Get-CimInstance Win32_DiskDrive | Where-Object { $_.InterfaceType -eq \'USB\' } | Select SerialNumber,Model',
             'local_script' => 'Run detect-local-usb.ps1 on the admin workstation'
         ]
     ]);

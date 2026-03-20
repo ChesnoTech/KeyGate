@@ -15,7 +15,7 @@ echo Detecting USB flash drives...
 echo.
 
 REM Run PowerShell to get USB info
-powershell -NoProfile -Command "Get-WmiObject Win32_DiskDrive | Where-Object { $_.InterfaceType -eq 'USB' } | ForEach-Object { Write-Host ''; Write-Host '========================================' -ForegroundColor Cyan; Write-Host 'Device Found!' -ForegroundColor Green; Write-Host '========================================' -ForegroundColor Cyan; Write-Host ''; Write-Host 'Serial Number:' $_.SerialNumber.Trim() -ForegroundColor Yellow; Write-Host 'Manufacturer: ' ($_.Caption -replace $_.Model, '' -replace 'USB Device', '').Trim(); Write-Host 'Model:        ' $_.Model.Trim(); Write-Host 'Capacity:     ' ([Math]::Round($_.Size/1GB, 2)) 'GB'; Write-Host ''; }"
+powershell -NoProfile -Command "Get-CimInstance Win32_DiskDrive | Where-Object { $_.InterfaceType -eq 'USB' } | ForEach-Object { Write-Host ''; Write-Host '========================================' -ForegroundColor Cyan; Write-Host 'Device Found!' -ForegroundColor Green; Write-Host '========================================' -ForegroundColor Cyan; Write-Host ''; Write-Host 'Serial Number:' $_.SerialNumber.Trim() -ForegroundColor Yellow; Write-Host 'Manufacturer: ' ($_.Caption -replace $_.Model, '' -replace 'USB Device', '').Trim(); Write-Host 'Model:        ' $_.Model.Trim(); Write-Host 'Capacity:     ' ([Math]::Round($_.Size/1GB, 2)) 'GB'; Write-Host ''; }"
 
 echo.
 echo ============================================================

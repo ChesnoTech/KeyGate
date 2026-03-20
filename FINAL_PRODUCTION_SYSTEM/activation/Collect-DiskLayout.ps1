@@ -17,7 +17,7 @@ function Collect-CompleteDiskLayout {
 
     try {
         # Get all physical disks
-        $physicalDisks = Get-WmiObject Win32_DiskDrive -ErrorAction Stop | Sort-Object Index
+        $physicalDisks = Get-CimInstance Win32_DiskDrive -ErrorAction Stop | Sort-Object Index
 
         foreach ($disk in $physicalDisks) {
             $diskInfo = @{
@@ -43,7 +43,7 @@ function Collect-CompleteDiskLayout {
             }
 
             # Get all partitions on this disk using WMI associations
-            $diskPartitions = Get-WmiObject -Query "ASSOCIATORS OF {Win32_DiskDrive.DeviceID='$($disk.DeviceID)'} WHERE AssocClass=Win32_DiskDriveToDiskPartition" -ErrorAction SilentlyContinue
+            $diskPartitions = Get-CimAssociatedInstance -InputObject $disk -ResultClassName Win32_DiskPartition -ErrorAction SilentlyContinue
 
             if ($diskPartitions) {
                 foreach ($partition in $diskPartitions) {
@@ -64,7 +64,7 @@ function Collect-CompleteDiskLayout {
                     }
 
                     # Get logical disk (volume) information if partition has a drive letter
-                    $logicalDisks = Get-WmiObject -Query "ASSOCIATORS OF {Win32_DiskPartition.DeviceID='$($partition.DeviceID)'} WHERE AssocClass=Win32_LogicalDiskToPartition" -ErrorAction SilentlyContinue
+                    $logicalDisks = Get-CimAssociatedInstance -InputObject $partition -ResultClassName Win32_LogicalDisk -ErrorAction SilentlyContinue
 
                     if ($logicalDisks) {
                         $volume = $logicalDisks | Select-Object -First 1

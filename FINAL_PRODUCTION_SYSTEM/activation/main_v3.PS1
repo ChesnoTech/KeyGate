@@ -804,8 +804,8 @@ function Collect-CompleteDiskLayout {
     $diskLayout = @()
 
     try {
-        # Get all physical disks
-        $physicalDisks = Get-WmiObject Win32_DiskDrive -ErrorAction Stop | Sort-Object Index
+        # Get all physical disks (Get-CimInstance for Win11 25H2 compatibility)
+        $physicalDisks = Get-CimInstance Win32_DiskDrive -ErrorAction Stop | Sort-Object Index
 
         foreach ($disk in $physicalDisks) {
             $diskInfo = @{
@@ -830,8 +830,8 @@ function Collect-CompleteDiskLayout {
                 # Continue without partition style
             }
 
-            # Get all partitions on this disk
-            $diskPartitions = Get-WmiObject -Query "ASSOCIATORS OF {Win32_DiskDrive.DeviceID='$($disk.DeviceID)'} WHERE AssocClass=Win32_DiskDriveToDiskPartition" -ErrorAction SilentlyContinue
+            # Get all partitions on this disk via CIM association
+            $diskPartitions = Get-CimAssociatedInstance -InputObject $disk -ResultClassName Win32_DiskPartition -ErrorAction SilentlyContinue
 
             if ($diskPartitions) {
                 foreach ($partition in $diskPartitions) {
@@ -851,8 +851,8 @@ function Collect-CompleteDiskLayout {
                         partition_purpose = $null
                     }
 
-                    # Get logical disk (volume) information
-                    $logicalDisks = Get-WmiObject -Query "ASSOCIATORS OF {Win32_DiskPartition.DeviceID='$($partition.DeviceID)'} WHERE AssocClass=Win32_LogicalDiskToPartition" -ErrorAction SilentlyContinue
+                    # Get logical disk (volume) information via CIM association
+                    $logicalDisks = Get-CimAssociatedInstance -InputObject $partition -ResultClassName Win32_LogicalDisk -ErrorAction SilentlyContinue
 
                     if ($logicalDisks) {
                         $volume = $logicalDisks | Select-Object -First 1
@@ -896,7 +896,7 @@ function Collect-HardwareInfo {
     try {
         # === Motherboard Information ===
         Write-Host "  • Motherboard..." -ForegroundColor Gray
-        $motherboard = Get-WmiObject Win32_BaseBoard -ErrorAction Stop
+        $motherboard = Get-CimInstance Win32_BaseBoard -ErrorAction Stop
         $hardwareInfo['motherboard_manufacturer'] = $motherboard.Manufacturer
         $hardwareInfo['motherboard_product'] = $motherboard.Product
         $hardwareInfo['motherboard_serial'] = $motherboard.SerialNumber
@@ -904,10 +904,10 @@ function Collect-HardwareInfo {
 
         # === BIOS Information ===
         Write-Host "  • BIOS..." -ForegroundColor Gray
-        $bios = Get-WmiObject Win32_BIOS -ErrorAction Stop
+        $bios = Get-CimInstance Win32_BIOS -ErrorAction Stop
         $hardwareInfo['bios_manufacturer'] = $bios.Manufacturer
         $hardwareInfo['bios_version'] = $bios.SMBIOSBIOSVersion
-        $hardwareInfo['bios_release_date'] = $bios.ReleaseDate
+        $hardwareInfo['bios_release_date'] = if ($bios.ReleaseDate) { $bios.ReleaseDate.ToString('yyyyMMddHHmmss.ffffff+000') } else { $null }
         $hardwareInfo['bios_serial_number'] = $bios.SerialNumber
 
         # === Secure Boot Status ===
@@ -990,22 +990,23 @@ function Collect-HardwareInfo {
 
         # === CPU Information ===
         Write-Host "  • CPU..." -ForegroundColor Gray
-        $cpu = Get-WmiObject Win32_Processor -ErrorAction Stop | Select-Object -First 1
+        $cpu = Get-CimInstance Win32_Processor -ErrorAction Stop | Select-Object -First 1
         $hardwareInfo['cpu_name'] = $cpu.Name.Trim()
         $hardwareInfo['cpu_manufacturer'] = $cpu.Manufacturer
         $hardwareInfo['cpu_cores'] = $cpu.NumberOfCores
         $hardwareInfo['cpu_logical_processors'] = $cpu.NumberOfLogicalProcessors
         $hardwareInfo['cpu_max_clock_speed'] = $cpu.MaxClockSpeed
+        $hardwareInfo['cpu_serial'] = $cpu.ProcessorId
 
         # === RAM Information ===
         Write-Host "  • RAM..." -ForegroundColor Gray
-        $ramModules = Get-WmiObject Win32_PhysicalMemory -ErrorAction Stop
+        $ramModules = Get-CimInstance Win32_PhysicalMemory -ErrorAction Stop
         $totalRamBytes = ($ramModules | Measure-Object -Property Capacity -Sum).Sum
         $hardwareInfo['ram_total_capacity_gb'] = [math]::Round($totalRamBytes / 1GB, 2)
         $hardwareInfo['ram_slots_used'] = $ramModules.Count
 
         try {
-            $ramSlots = Get-WmiObject Win32_PhysicalMemoryArray -ErrorAction Stop
+            $ramSlots = Get-CimInstance Win32_PhysicalMemoryArray -ErrorAction Stop
             $hardwareInfo['ram_slots_total'] = ($ramSlots | Measure-Object -Property MemoryDevices -Sum).Sum
         } catch {
             $hardwareInfo['ram_slots_total'] = $ramModules.Count
@@ -1025,7 +1026,7 @@ function Collect-HardwareInfo {
 
         # === Video Cards Information ===
         Write-Host "  • Video cards..." -ForegroundColor Gray
-        $videoCards = Get-WmiObject Win32_VideoController -ErrorAction Stop
+        $videoCards = Get-CimInstance Win32_VideoController -ErrorAction Stop
         $videoDetails = @()
         foreach ($card in $videoCards) {
             $videoDetails += @{
@@ -1040,7 +1041,7 @@ function Collect-HardwareInfo {
 
         # === Storage Devices Information ===
         Write-Host "  • Storage..." -ForegroundColor Gray
-        $disks = Get-WmiObject Win32_DiskDrive -ErrorAction Stop
+        $disks = Get-CimInstance Win32_DiskDrive -ErrorAction Stop
         $storageDetails = @()
         foreach ($disk in $disks) {
             $storageDetails += @{
@@ -1059,7 +1060,7 @@ function Collect-HardwareInfo {
 
         # === Legacy Partitions for Compatibility ===
         Write-Host "  • Partitions..." -ForegroundColor Gray
-        $partitions = Get-WmiObject Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction Stop
+        $partitions = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction Stop
         $partitionDetails = @()
         foreach ($partition in $partitions) {
             $partitionDetails += @{
@@ -1074,13 +1075,152 @@ function Collect-HardwareInfo {
 
         # === Operating System Information ===
         Write-Host "  • Operating System..." -ForegroundColor Gray
-        $os = Get-WmiObject Win32_OperatingSystem -ErrorAction Stop
+        $os = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
         $hardwareInfo['os_name'] = $os.Caption
         $hardwareInfo['os_version'] = $os.Version
         $hardwareInfo['os_architecture'] = $os.OSArchitecture
+        $hardwareInfo['os_build_number'] = $os.BuildNumber
+        $hardwareInfo['os_install_date'] = if ($os.InstallDate) { $os.InstallDate.ToString('yyyy-MM-dd HH:mm:ss') } else { $null }
+        $hardwareInfo['os_serial_number'] = $os.SerialNumber
 
         # === Computer Name ===
         $hardwareInfo['computer_name'] = $env:COMPUTERNAME
+
+        # === Chassis / Enclosure Information ===
+        Write-Host "  • Chassis..." -ForegroundColor Gray
+        try {
+            $chassis = Get-CimInstance Win32_SystemEnclosure -ErrorAction Stop | Select-Object -First 1
+            $hardwareInfo['chassis_manufacturer'] = $chassis.Manufacturer
+            $hardwareInfo['chassis_serial'] = $chassis.SerialNumber
+            # ChassisTypes is an array; map common codes to human-readable names
+            $chassisTypeCode = if ($chassis.ChassisTypes) { $chassis.ChassisTypes[0] } else { $null }
+            $chassisTypeMap = @{
+                1='Other'; 2='Unknown'; 3='Desktop'; 4='Low Profile Desktop'; 5='Pizza Box';
+                6='Mini Tower'; 7='Tower'; 8='Portable'; 9='Laptop'; 10='Notebook';
+                11='Hand Held'; 12='Docking Station'; 13='All in One'; 14='Sub Notebook';
+                15='Space-Saving'; 16='Lunch Box'; 17='Main Server Chassis'; 18='Expansion Chassis';
+                23='Rack Mount Chassis'; 24='Sealed-Case PC'; 30='Tablet'; 31='Convertible';
+                32='Detachable'; 33='IoT Gateway'; 34='Embedded PC'; 35='Mini PC'; 36='Stick PC'
+            }
+            $hardwareInfo['chassis_type'] = if ($chassisTypeCode -and $chassisTypeMap.ContainsKey([int]$chassisTypeCode)) {
+                $chassisTypeMap[[int]$chassisTypeCode]
+            } else { "Type $chassisTypeCode" }
+        } catch {
+            Write-Host "    ℹ️ Chassis information unavailable" -ForegroundColor DarkGray
+        }
+
+        # === System Product Information (OEM) ===
+        Write-Host "  • System info..." -ForegroundColor Gray
+        try {
+            $compSys = Get-CimInstance Win32_ComputerSystem -ErrorAction Stop
+            $hardwareInfo['system_manufacturer'] = $compSys.Manufacturer
+            $hardwareInfo['system_product_name'] = $compSys.Model
+
+            $compProd = Get-CimInstance Win32_ComputerSystemProduct -ErrorAction Stop
+            $hardwareInfo['system_serial'] = $compProd.IdentifyingNumber
+            $hardwareInfo['system_uuid'] = $compProd.UUID
+        } catch {
+            Write-Host "    ℹ️ System product information unavailable" -ForegroundColor DarkGray
+        }
+
+        # === TPM Information ===
+        Write-Host "  • TPM..." -ForegroundColor Gray
+        try {
+            $tpm = Get-Tpm -ErrorAction Stop
+            $hardwareInfo['tpm_present'] = if ($tpm.TpmPresent) { 1 } else { 0 }
+            # Get TPM version and manufacturer from WMI namespace
+            if ($tpm.TpmPresent) {
+                try {
+                    $tpmWmi = Get-CimInstance -Namespace "root\cimv2\Security\MicrosoftTpm" -ClassName Win32_Tpm -ErrorAction Stop
+                    $hardwareInfo['tpm_version'] = $tpmWmi.SpecVersion
+                    $hardwareInfo['tpm_manufacturer'] = $tpmWmi.ManufacturerIdTxt
+                } catch {
+                    $hardwareInfo['tpm_version'] = $null
+                    $hardwareInfo['tpm_manufacturer'] = $null
+                }
+            }
+        } catch {
+            $hardwareInfo['tpm_present'] = $null
+            Write-Host "    ℹ️ TPM information unavailable" -ForegroundColor DarkGray
+        }
+
+        # === Network Adapters ===
+        Write-Host "  • Network..." -ForegroundColor Gray
+        try {
+            $netAdapters = Get-CimInstance Win32_NetworkAdapterConfiguration -Filter "IPEnabled=True" -ErrorAction Stop
+            $networkDetails = @()
+            $primaryMac = $null
+            $localIp = $null
+            foreach ($adapter in $netAdapters) {
+                $adapterInfo = @{
+                    description = $adapter.Description
+                    mac_address = $adapter.MACAddress
+                    ip_addresses = $adapter.IPAddress
+                    dhcp_enabled = $adapter.DHCPEnabled
+                    dns_domain = $adapter.DNSDomain
+                }
+                $networkDetails += $adapterInfo
+                # Use first physical adapter with a MAC as primary
+                if (-not $primaryMac -and $adapter.MACAddress) {
+                    $primaryMac = $adapter.MACAddress
+                    if ($adapter.IPAddress) {
+                        # Get first IPv4 address
+                        $localIp = $adapter.IPAddress | Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
+                    }
+                }
+            }
+            $hardwareInfo['primary_mac_address'] = $primaryMac
+            $hardwareInfo['local_ip'] = $localIp
+            $hardwareInfo['network_adapters'] = ($networkDetails | ConvertTo-Json -Compress -Depth 3)
+
+            # Get public IP via external service (best-effort)
+            try {
+                $publicIp = (Invoke-RestMethod -Uri 'https://api.ipify.org?format=text' -TimeoutSec 5 -ErrorAction Stop).Trim()
+                $hardwareInfo['public_ip'] = $publicIp
+            } catch {
+                $hardwareInfo['public_ip'] = $null
+            }
+        } catch {
+            Write-Host "    ℹ️ Network adapter information unavailable" -ForegroundColor DarkGray
+        }
+
+        # === Audio Devices ===
+        Write-Host "  • Audio devices..." -ForegroundColor Gray
+        try {
+            $audioDevices = Get-CimInstance Win32_SoundDevice -ErrorAction Stop
+            $audioDetails = @()
+            foreach ($device in $audioDevices) {
+                $audioDetails += @{
+                    name = $device.Name
+                    manufacturer = $device.Manufacturer
+                    status = $device.Status
+                }
+            }
+            $hardwareInfo['audio_devices'] = ($audioDetails | ConvertTo-Json -Compress)
+        } catch {
+            $hardwareInfo['audio_devices'] = $null
+            Write-Host "    ℹ️ Audio device information unavailable" -ForegroundColor DarkGray
+        }
+
+        # === Monitor Information ===
+        Write-Host "  • Monitors..." -ForegroundColor Gray
+        try {
+            $monitors = Get-CimInstance WmiMonitorID -Namespace root\wmi -ErrorAction Stop
+            $monitorDetails = @()
+            foreach ($mon in $monitors) {
+                $monitorDetails += @{
+                    manufacturer = if ($mon.ManufacturerName) { [System.Text.Encoding]::ASCII.GetString($mon.ManufacturerName).Trim("`0") } else { $null }
+                    product_code = if ($mon.ProductCodeID) { [System.Text.Encoding]::ASCII.GetString($mon.ProductCodeID).Trim("`0") } else { $null }
+                    serial_number = if ($mon.SerialNumberID) { [System.Text.Encoding]::ASCII.GetString($mon.SerialNumberID).Trim("`0") } else { $null }
+                    name = if ($mon.UserFriendlyName) { [System.Text.Encoding]::ASCII.GetString($mon.UserFriendlyName).Trim("`0") } else { $null }
+                    year_of_manufacture = $mon.YearOfManufacture
+                }
+            }
+            $hardwareInfo['monitors'] = ($monitorDetails | ConvertTo-Json -Compress)
+        } catch {
+            $hardwareInfo['monitors'] = $null
+            Write-Host "    ℹ️ Monitor information unavailable" -ForegroundColor DarkGray
+        }
 
         # === Missing / Problematic Drivers ===
         Write-Host "  • Driver status..." -ForegroundColor Gray
@@ -1093,9 +1233,9 @@ function Collect-HardwareInfo {
                                          @{N='class';E={$_.Class}},
                                          @{N='error_code';E={$_.ConfigManagerErrorCode}})
 
-            # Fallback for older Windows: WMI query for devices with errors
+            # Fallback for older Windows: CIM query for devices with errors
             if (-not $problemDevices -and $problemDevices.Count -eq 0) {
-                $problemDevices = @(Get-WmiObject Win32_PnPEntity -ErrorAction SilentlyContinue |
+                $problemDevices = @(Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue |
                     Where-Object { $_.ConfigManagerErrorCode -ne 0 } |
                     Select-Object -Property @{N='device_name';E={$_.Name}},
                                              @{N='device_id';E={$_.DeviceID}},
@@ -1116,6 +1256,27 @@ function Collect-HardwareInfo {
             Write-Host "    ⚠️ Could not check driver status: $($_.Exception.Message)" -ForegroundColor Yellow
             $hardwareInfo['missing_drivers_count'] = $null
             $hardwareInfo['missing_drivers'] = $null
+        }
+
+        # === Device Fingerprint (HWFingerprint) ===
+        # SHA256 hash of key hardware identifiers for unique machine identification
+        Write-Host "  • Device fingerprint..." -ForegroundColor Gray
+        try {
+            $fingerprintComponents = @(
+                ($hardwareInfo['motherboard_serial'] ?? ''),
+                ($hardwareInfo['bios_serial_number'] ?? ''),
+                ($storageDetails | Where-Object { $_.serial_number } | Select-Object -First 1 -ExpandProperty serial_number -ErrorAction SilentlyContinue) ?? '',
+                ($hardwareInfo['primary_mac_address'] ?? ''),
+                ($hardwareInfo['system_uuid'] ?? '')
+            )
+            $fingerprintString = ($fingerprintComponents -join '|').ToUpperInvariant()
+            $sha256 = [System.Security.Cryptography.SHA256]::Create()
+            $hashBytes = $sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($fingerprintString))
+            $hardwareInfo['device_fingerprint'] = ($hashBytes | ForEach-Object { $_.ToString('x2') }) -join ''
+            Write-Host "    ✅ Fingerprint: $($hardwareInfo['device_fingerprint'].Substring(0,16))..." -ForegroundColor Green
+        } catch {
+            $hardwareInfo['device_fingerprint'] = $null
+            Write-Host "    ℹ️ Device fingerprint generation failed" -ForegroundColor DarkGray
         }
 
         Write-Host "✅ Hardware information collected successfully" -ForegroundColor Green

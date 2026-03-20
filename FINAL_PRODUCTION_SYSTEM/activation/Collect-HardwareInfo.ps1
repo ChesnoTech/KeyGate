@@ -18,7 +18,7 @@ function Collect-HardwareInfo {
     try {
         # === Motherboard Information ===
         Write-Host "  • Motherboard..." -ForegroundColor Gray
-        $motherboard = Get-WmiObject Win32_BaseBoard -ErrorAction Stop
+        $motherboard = Get-CimInstance Win32_BaseBoard -ErrorAction Stop
         $hardwareInfo['motherboard_manufacturer'] = $motherboard.Manufacturer
         $hardwareInfo['motherboard_product'] = $motherboard.Product
         $hardwareInfo['motherboard_serial'] = $motherboard.SerialNumber
@@ -26,7 +26,7 @@ function Collect-HardwareInfo {
 
         # === BIOS Information ===
         Write-Host "  • BIOS..." -ForegroundColor Gray
-        $bios = Get-WmiObject Win32_BIOS -ErrorAction Stop
+        $bios = Get-CimInstance Win32_BIOS -ErrorAction Stop
         $hardwareInfo['bios_manufacturer'] = $bios.Manufacturer
         $hardwareInfo['bios_version'] = $bios.SMBIOSBIOSVersion
         $hardwareInfo['bios_release_date'] = $bios.ReleaseDate
@@ -45,7 +45,7 @@ function Collect-HardwareInfo {
 
         # === CPU Information ===
         Write-Host "  • CPU..." -ForegroundColor Gray
-        $cpu = Get-WmiObject Win32_Processor -ErrorAction Stop | Select-Object -First 1
+        $cpu = Get-CimInstance Win32_Processor -ErrorAction Stop | Select-Object -First 1
         $hardwareInfo['cpu_name'] = $cpu.Name.Trim()
         $hardwareInfo['cpu_manufacturer'] = $cpu.Manufacturer
         $hardwareInfo['cpu_cores'] = $cpu.NumberOfCores
@@ -54,14 +54,14 @@ function Collect-HardwareInfo {
 
         # === RAM Information ===
         Write-Host "  • RAM..." -ForegroundColor Gray
-        $ramModules = Get-WmiObject Win32_PhysicalMemory -ErrorAction Stop
+        $ramModules = Get-CimInstance Win32_PhysicalMemory -ErrorAction Stop
         $totalRamBytes = ($ramModules | Measure-Object -Property Capacity -Sum).Sum
         $hardwareInfo['ram_total_capacity_gb'] = [math]::Round($totalRamBytes / 1GB, 2)
         $hardwareInfo['ram_slots_used'] = $ramModules.Count
 
         # Get total RAM slots
         try {
-            $ramSlots = Get-WmiObject Win32_PhysicalMemoryArray -ErrorAction Stop
+            $ramSlots = Get-CimInstance Win32_PhysicalMemoryArray -ErrorAction Stop
             $hardwareInfo['ram_slots_total'] = ($ramSlots | Measure-Object -Property MemoryDevices -Sum).Sum
         } catch {
             $hardwareInfo['ram_slots_total'] = $ramModules.Count
@@ -82,7 +82,7 @@ function Collect-HardwareInfo {
 
         # === Video Cards Information ===
         Write-Host "  • Video cards..." -ForegroundColor Gray
-        $videoCards = Get-WmiObject Win32_VideoController -ErrorAction Stop
+        $videoCards = Get-CimInstance Win32_VideoController -ErrorAction Stop
         $videoDetails = @()
         foreach ($card in $videoCards) {
             $videoDetails += @{
@@ -97,7 +97,7 @@ function Collect-HardwareInfo {
 
         # === Storage Devices Information ===
         Write-Host "  • Storage..." -ForegroundColor Gray
-        $disks = Get-WmiObject Win32_DiskDrive -ErrorAction Stop
+        $disks = Get-CimInstance Win32_DiskDrive -ErrorAction Stop
         $storageDetails = @()
         foreach ($disk in $disks) {
             $storageDetails += @{
@@ -112,7 +112,7 @@ function Collect-HardwareInfo {
 
         # === Disk Partitions Layout ===
         Write-Host "  • Partitions..." -ForegroundColor Gray
-        $partitions = Get-WmiObject Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction Stop
+        $partitions = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction Stop
         $partitionDetails = @()
         foreach ($partition in $partitions) {
             $partitionDetails += @{
@@ -127,7 +127,7 @@ function Collect-HardwareInfo {
 
         # === Operating System Information ===
         Write-Host "  • Operating System..." -ForegroundColor Gray
-        $os = Get-WmiObject Win32_OperatingSystem -ErrorAction Stop
+        $os = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
         $hardwareInfo['os_name'] = $os.Caption
         $hardwareInfo['os_version'] = $os.Version
         $hardwareInfo['os_architecture'] = $os.OSArchitecture

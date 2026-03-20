@@ -1,20 +1,20 @@
 # Local USB Device Detection Script
 # Run this on the admin PC to detect USB devices and output JSON
 
-# Get USB drives
-$usbDevices = Get-WmiObject Win32_DiskDrive | Where-Object { $_.InterfaceType -eq 'USB' }
+# Get USB drives (Get-CimInstance for Win11 25H2 compatibility)
+$usbDevices = Get-CimInstance Win32_DiskDrive | Where-Object { $_.InterfaceType -eq 'USB' }
 
 $devices = @()
 
 foreach ($disk in $usbDevices) {
-    # Get partition and volume information
-    $partitions = Get-WmiObject -Query "ASSOCIATORS OF {Win32_DiskDrive.DeviceID='$($disk.DeviceID)'} WHERE AssocClass = Win32_DiskDriveToDiskPartition"
+    # Get partition and volume information via CIM associations
+    $partitions = Get-CimAssociatedInstance -InputObject $disk -ResultClassName Win32_DiskPartition -ErrorAction SilentlyContinue
 
     $driveLetter = ""
     $volumeName = ""
 
     foreach ($partition in $partitions) {
-        $volumes = Get-WmiObject -Query "ASSOCIATORS OF {Win32_DiskPartition.DeviceID='$($partition.DeviceID)'} WHERE AssocClass = Win32_LogicalDiskToPartition"
+        $volumes = Get-CimAssociatedInstance -InputObject $partition -ResultClassName Win32_LogicalDisk -ErrorAction SilentlyContinue
         if ($volumes) {
             $driveLetter = $volumes.DeviceID
             $volumeName = $volumes.VolumeName
