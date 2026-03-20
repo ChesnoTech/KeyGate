@@ -1,17 +1,19 @@
 @echo off
-REM OEM Activation System v3.0 - Technician Launcher
-REM Hardware Collection + USB Auth + Adaptive Timing
-REM =================================================
+setlocal EnableDelayedExpansion
+REM OEM Activation System v3.1 - Technician Launcher
+REM Hardware Collection + USB Auth + Adaptive Timing + Self-Update
+REM ==============================================================
+REM LAUNCHER_VERSION=3.1.0
 
-title OEM Activation System v3.0
+title OEM Activation System v3.1
 
 REM Display banner
 echo.
 echo  ====================================================
-echo  OEM Activation System v3.0
+echo  OEM Activation System v3.1
 echo  ====================================================
 echo  Features: USB Auth, Hardware QC, Adaptive Timing
-echo  Backend: MySQL Database with Atomic Operations
+echo  Self-Updating Launcher + Get-CimInstance (Win11 25H2)
 echo  ====================================================
 echo.
 
@@ -32,11 +34,14 @@ if %errorlevel% neq 0 (
 )
 
 REM Configuration
+set "LAUNCHER_VERSION=3.1.0"
 set "SERVER_URL=https://roo24.ieatkittens.netcraze.pro:65083"
 set "PING_HOST=roo24.ieatkittens.netcraze.pro"
 set "API_ENDPOINT=%SERVER_URL%/activate/api"
 set "SCRIPT_ENDPOINT=%SERVER_URL%/activate/activation/main_v3.PS1"
+set "LAUNCHER_ENDPOINT=%SERVER_URL%/activate/client/OEM_Activator.cmd"
 set "TEMP_SCRIPT=%TEMP%\oem_activation_v3.ps1"
+set "TEMP_LAUNCHER=%TEMP%\oem_activator_update.cmd"
 set "LOG_FILE=%TEMP%\oem_activation_log.txt"
 
 REM Check for command-line override
@@ -53,6 +58,7 @@ if exist "%~dp0CONFIG.txt" (
         if "%%a"=="SERVER_URL" set "SERVER_URL=%%b"
         if "%%a"=="API_ENDPOINT" set "API_ENDPOINT=%%b"
         if "%%a"=="SCRIPT_ENDPOINT" set "SCRIPT_ENDPOINT=%%b"
+        if "%%a"=="LAUNCHER_ENDPOINT" set "LAUNCHER_ENDPOINT=%%b"
     )
     echo [OK] Configuration loaded
     echo    Server URL: %SERVER_URL%
@@ -243,6 +249,48 @@ set "PS_EXE=powershell"
 :ps_ready
 echo [OK] Using: %PS_EXE%
 echo Using PowerShell executable: %PS_EXE% >> "%LOG_FILE%"
+echo.
+
+REM ============================================
+REM Launcher Self-Update Check
+REM ============================================
+echo Checking for launcher updates...
+echo [SELF-UPDATE] Checking launcher version %LAUNCHER_VERSION% >> "%LOG_FILE%"
+
+REM Use PowerShell to download remote CMD, extract version, compare, and report result
+REM Exit codes: 0=up-to-date, 1=download-failed, 2=updated-needs-restart
+%PS_EXE% -ExecutionPolicy Bypass -Command ^
+    "$ErrorActionPreference='Stop'; " ^
+    "try { " ^
+    "  $remote = '%TEMP_LAUNCHER%'; " ^
+    "  Invoke-WebRequest -Uri '%LAUNCHER_ENDPOINT%' -OutFile $remote -UserAgent 'OEM-Activator-v%LAUNCHER_VERSION%' -TimeoutSec 15; " ^
+    "  $content = Get-Content $remote -Raw; " ^
+    "  if ($content -match 'set \"LAUNCHER_VERSION=([^\"]+)\"') { " ^
+    "    $rv = $Matches[1]; " ^
+    "    if ($rv -ne '%LAUNCHER_VERSION%') { " ^
+    "      Write-Host \"[UPDATE] New launcher v$rv available (current: %LAUNCHER_VERSION%)\"; " ^
+    "      Copy-Item $remote '%~f0' -Force; " ^
+    "      Remove-Item $remote -Force -ErrorAction SilentlyContinue; " ^
+    "      exit 2 " ^
+    "    } else { " ^
+    "      Write-Host '[OK] Launcher is up to date (v%LAUNCHER_VERSION%)' " ^
+    "    } " ^
+    "  } else { Write-Host '[OK] Version check skipped (no version in remote)' }; " ^
+    "  Remove-Item $remote -Force -ErrorAction SilentlyContinue; " ^
+    "  exit 0 " ^
+    "} catch { Write-Host '[INFO] Launcher update check skipped'; exit 1 }"
+
+set "UPDATE_RESULT=%errorlevel%"
+echo [SELF-UPDATE] Result code: %UPDATE_RESULT% >> "%LOG_FILE%"
+
+if "%UPDATE_RESULT%"=="2" (
+    echo [OK] Launcher updated successfully. Restarting...
+    echo [SELF-UPDATE] Restarting with new version >> "%LOG_FILE%"
+    echo.
+    REM Re-launch the updated CMD (passes all original arguments)
+    start "" "%~f0" %*
+    exit /b 0
+)
 echo.
 
 REM Download the latest PowerShell script
