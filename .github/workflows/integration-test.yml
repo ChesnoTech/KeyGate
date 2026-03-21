@@ -74,6 +74,12 @@ jobs:
         run: |
           HASH=$(docker compose exec -T web php -r 'echo password_hash("Admin2024!", PASSWORD_BCRYPT, ["cost" => 10]);')
 
+          # Ensure i18n columns exist (may be missing if 00-init.sh didn't run all migrations)
+          docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "
+            ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(5) DEFAULT 'en' AFTER role;
+            ALTER TABLE technicians ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(5) DEFAULT 'en';
+          " 2>/dev/null || true
+
           docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "
             INSERT INTO admin_users (username, password_hash, full_name, email, role, must_change_password)
             VALUES ('admin', '$HASH', 'CI Admin', 'ci@test.local', 'super_admin', 0)
