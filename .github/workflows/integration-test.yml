@@ -80,14 +80,26 @@ jobs:
             WHERE table_schema = 'oem_activation' AND table_name = 'upgrade_history'
           "
 
+      - name: Debug admin_v2.php accessibility
+        run: |
+          echo "=== Testing admin_v2.php is reachable ==="
+          curl -v http://localhost:8080/admin_v2.php?action=get_csrf 2>&1 | head -30
+          echo ""
+          echo "=== Checking if admin user exists ==="
+          docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "SELECT id, username, role FROM admin_users LIMIT 5" || echo "Table may not exist"
+          echo ""
+          echo "=== Checking upgrade_history table ==="
+          docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "SHOW TABLES LIKE 'upgrade_history'" || echo "Table not found"
+
       - name: Test admin login + get CSRF token
         id: auth
         run: |
-          # Login
-          LOGIN=$(curl -sf -c /tmp/cookies.txt -X POST http://localhost:8080/admin_v2.php?action=admin_login \
+          # Login — use -s (silent) but NOT -f (fail) so we can see the response
+          LOGIN=$(curl -s -c /tmp/cookies.txt -X POST http://localhost:8080/admin_v2.php?action=admin_login \
             -H 'Content-Type: application/json' \
             -d '{"username":"admin","password":"Admin2024!"}')
-          echo "$LOGIN" | jq -e '.success == true' > /dev/null
+          echo "Login response: $LOGIN"
+          echo "$LOGIN" | jq -e '.success == true' > /dev/null || (echo "❌ Login failed" && exit 1)
           CSRF=$(echo "$LOGIN" | jq -r '.csrf_token')
           echo "csrf=$CSRF" >> "$GITHUB_OUTPUT"
           echo "✅ Admin login successful, CSRF token obtained"
