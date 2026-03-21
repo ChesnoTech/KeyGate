@@ -140,6 +140,16 @@ const BACKEND_ACTIONS: Record<string, { method: 'GET' | 'POST'; csrf: boolean }>
   save_product_variant:        { method: 'POST', csrf: true },
   delete_product_variant:      { method: 'POST', csrf: true },
 
+  // system upgrade
+  upgrade_get_status:          { method: 'GET',  csrf: false },
+  upgrade_upload_package:      { method: 'POST', csrf: true },
+  upgrade_preflight:           { method: 'POST', csrf: true },
+  upgrade_backup:              { method: 'POST', csrf: true },
+  upgrade_apply:               { method: 'POST', csrf: true },
+  upgrade_verify:              { method: 'POST', csrf: true },
+  upgrade_rollback:            { method: 'POST', csrf: true },
+  upgrade_history:             { method: 'GET',  csrf: false },
+
   // pre-auth (no registry — handled directly in admin_v2.php)
   check_session:               { method: 'GET',  csrf: false },
   get_csrf:                    { method: 'GET',  csrf: false },

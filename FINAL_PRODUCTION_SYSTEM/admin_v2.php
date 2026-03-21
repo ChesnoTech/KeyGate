@@ -290,6 +290,16 @@ $action_registry = [
     'delete_product_line'      => ['ProductVariantsController.php', 'handle_delete_product_line',      true,  true],
     'save_product_variant'     => ['ProductVariantsController.php', 'handle_save_product_variant',     true,  true],
     'delete_product_variant'   => ['ProductVariantsController.php', 'handle_delete_product_variant',   true,  true],
+
+    // system upgrade
+    'upgrade_get_status'       => ['UpgradeController.php', 'handle_upgrade_get_status',       false, true],
+    'upgrade_upload_package'   => ['UpgradeController.php', 'handle_upgrade_upload_package',   true,  false],
+    'upgrade_preflight'        => ['UpgradeController.php', 'handle_upgrade_preflight',        true,  true],
+    'upgrade_backup'           => ['UpgradeController.php', 'handle_upgrade_backup',           true,  true],
+    'upgrade_apply'            => ['UpgradeController.php', 'handle_upgrade_apply',            true,  true],
+    'upgrade_verify'           => ['UpgradeController.php', 'handle_upgrade_verify',           true,  true],
+    'upgrade_rollback'         => ['UpgradeController.php', 'handle_upgrade_rollback',         true,  true],
+    'upgrade_history'          => ['UpgradeController.php', 'handle_upgrade_history',          false, true],
 ];
 
 // ── Action Dispatcher ────────────────────────────────────────

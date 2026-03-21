@@ -93,6 +93,9 @@ run_sql "unallocated_space_migration.sql"     19
 # Phase 8: Downloads ACL permissions
 run_sql "downloads_acl_migration.sql"         20
 
+# Phase 9: System upgrade tracking
+run_sql "upgrade_system_migration.sql"        21
+
 echo ""
 echo "=== Database initialization complete ==="
 echo ""

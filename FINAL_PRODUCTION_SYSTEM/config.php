@@ -15,6 +15,7 @@
  */
 
 require_once __DIR__ . '/constants.php';
+require_once __DIR__ . '/VERSION.php';
 
 // ── Environment Detection ───────────────────────────────────────
 $isProduction = !in_array($_SERVER['HTTP_HOST'] ?? 'localhost', ['localhost', '127.0.0.1', 'activate.local']);

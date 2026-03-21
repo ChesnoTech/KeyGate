@@ -66,6 +66,18 @@ $checks['php_extensions'] = empty($missing)
     : ['status' => 'fail', 'missing' => $missing];
 if (!empty($missing)) $healthy = false;
 
+// ── Application Version ────────────────────────────────────
+if (defined('APP_VERSION')) {
+    $checks['app_version'] = [
+        'status'       => 'ok',
+        'version'      => APP_VERSION,
+        'version_code' => APP_VERSION_CODE,
+        'version_date' => defined('APP_VERSION_DATE') ? APP_VERSION_DATE : '',
+    ];
+} else {
+    $checks['app_version'] = ['status' => 'warn', 'message' => 'VERSION.php not loaded'];
+}
+
 // ── Response ────────────────────────────────────────────────
 http_response_code($healthy ? 200 : 503);
 echo json_encode([
