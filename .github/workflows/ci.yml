@@ -5,6 +5,7 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  workflow_call:  # Allow release.yml to call this workflow
 
 jobs:
   # ─── PHP Lint ───────────────────────────────────────────────

@@ -1,0 +1,268 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags: v2.1.0, v2.1.1, etc.
+
+permissions:
+  contents: write  # Needed to create releases
+
+jobs:
+  # ─── Run CI first ──────────────────────────────────────────
+  ci:
+    name: CI Checks
+    uses: ./.github/workflows/ci.yml
+
+  # ─── Build & Release ──────────────────────────────────────
+  release:
+    name: Build Upgrade Package & Create Release
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for diff against previous tag
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: FINAL_PRODUCTION_SYSTEM/frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: FINAL_PRODUCTION_SYSTEM/frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Extract version info
+        id: version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#v}"
+
+          # Parse semver components
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          PATCH=$(echo "$VERSION" | cut -d. -f3)
+          VERSION_CODE=$((MAJOR * 100 + MINOR * 10 + PATCH))
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "date=$(date +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+          echo "Version: $VERSION (code: $VERSION_CODE)"
+
+      - name: Find previous tag
+        id: prev_tag
+        run: |
+          # Get the tag before the current one
+          PREV_TAG=$(git tag --sort=-version:refname | grep '^v' | head -2 | tail -1)
+          if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "${{ steps.version.outputs.tag }}" ]; then
+            # First release or only one tag — diff against initial commit
+            PREV_TAG=$(git rev-list --max-parents=0 HEAD | head -1)
+            echo "First release — diffing against initial commit"
+          fi
+          echo "prev_tag=$PREV_TAG" >> "$GITHUB_OUTPUT"
+          echo "Previous tag: $PREV_TAG"
+
+      - name: Determine min_current_version
+        id: compat
+        run: |
+          PREV_TAG="${{ steps.prev_tag.outputs.prev_tag }}"
+          if echo "$PREV_TAG" | grep -q '^v'; then
+            MIN_VERSION="${PREV_TAG#v}"
+          else
+            MIN_VERSION="0.0.0"
+          fi
+          echo "min_version=$MIN_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Min current version for upgrade: $MIN_VERSION"
+
+      - name: Build upgrade package
+        id: package
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          VERSION_CODE="${{ steps.version.outputs.version_code }}"
+          RELEASE_DATE="${{ steps.version.outputs.date }}"
+          PREV_TAG="${{ steps.prev_tag.outputs.prev_tag }}"
+          MIN_VERSION="${{ steps.compat.outputs.min_version }}"
+
+          APP_ROOT="FINAL_PRODUCTION_SYSTEM"
+          PKG_DIR="$(mktemp -d)"
+          FILES_DIR="$PKG_DIR/files"
+          MIG_DIR="$PKG_DIR/migrations"
+          mkdir -p "$FILES_DIR" "$MIG_DIR"
+
+          echo "=== Building upgrade package v${VERSION} ==="
+          echo "Diffing against: $PREV_TAG"
+
+          # ── Find changed/added files ──
+          CHANGED_FILES=$(git diff --name-only --diff-filter=ACMR "$PREV_TAG"..HEAD -- "$APP_ROOT/" | \
+            grep -v 'node_modules/' | \
+            grep -v 'frontend/src/' | \
+            grep -v '.gitignore' | \
+            grep -v 'install.lock' | \
+            grep -v 'uploads/' | \
+            grep -v 'backups/' || true)
+
+          # Always include the built frontend dist
+          FRONTEND_DIST="$APP_ROOT/frontend/dist"
+
+          FILE_ENTRIES="[]"
+          FILE_COUNT=0
+
+          # Copy changed backend files
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            # Strip APP_ROOT prefix for the target path
+            REL_PATH="${file#$APP_ROOT/}"
+            TARGET_DIR="$FILES_DIR/$(dirname "$REL_PATH")"
+            mkdir -p "$TARGET_DIR"
+            cp "$file" "$TARGET_DIR/"
+            FILE_ENTRIES=$(echo "$FILE_ENTRIES" | jq --arg src "files/$REL_PATH" --arg tgt "$REL_PATH" \
+              '. + [{"action": "replace", "source": $src, "target": $tgt}]')
+            FILE_COUNT=$((FILE_COUNT + 1))
+          done <<< "$CHANGED_FILES"
+
+          # Copy frontend dist if it exists
+          if [ -d "$FRONTEND_DIST" ]; then
+            mkdir -p "$FILES_DIR/frontend/"
+            cp -r "$FRONTEND_DIST" "$FILES_DIR/frontend/"
+            FILE_ENTRIES=$(echo "$FILE_ENTRIES" | jq \
+              '. + [{"action": "replace", "source": "files/frontend/dist", "target": "frontend/dist"}]')
+            FILE_COUNT=$((FILE_COUNT + 1))
+          fi
+
+          # ── Find new migration files ──
+          NEW_MIGRATIONS=$(git diff --name-only --diff-filter=A "$PREV_TAG"..HEAD -- "$APP_ROOT/database/" | \
+            grep '\.sql$' | \
+            grep -v 'docker-init' || true)
+
+          MIG_ENTRIES="[]"
+          MIG_VERSION=100  # Starting version for package migrations
+
+          while IFS= read -r mig; do
+            [ -z "$mig" ] && continue
+            MIG_BASENAME=$(basename "$mig")
+            cp "$mig" "$MIG_DIR/"
+            MIG_ENTRIES=$(echo "$MIG_ENTRIES" | jq --arg file "migrations/$MIG_BASENAME" --argjson ver "$MIG_VERSION" \
+              '. + [{"file": $file, "version": $ver}]')
+            MIG_VERSION=$((MIG_VERSION + 1))
+          done <<< "$NEW_MIGRATIONS"
+
+          MIG_COUNT=$(echo "$MIG_ENTRIES" | jq 'length')
+
+          # ── Find deleted files ──
+          DELETED_FILES=$(git diff --name-only --diff-filter=D "$PREV_TAG"..HEAD -- "$APP_ROOT/" | \
+            grep -v 'node_modules/' | \
+            grep -v 'frontend/src/' || true)
+
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            REL_PATH="${file#$APP_ROOT/}"
+            FILE_ENTRIES=$(echo "$FILE_ENTRIES" | jq --arg tgt "$REL_PATH" \
+              '. + [{"action": "delete", "target": $tgt}]')
+            FILE_COUNT=$((FILE_COUNT + 1))
+          done <<< "$DELETED_FILES"
+
+          # ── Generate manifest.json ──
+          cat > "$PKG_DIR/manifest.json" <<MANIFEST
+          {
+            "schema_version": 1,
+            "version": "$VERSION",
+            "version_code": $VERSION_CODE,
+            "min_current_version": "$MIN_VERSION",
+            "max_current_version": "99.99.99",
+            "release_date": "$RELEASE_DATE",
+            "description": "OEM Activation System v${VERSION}",
+            "author": "ChesnoTech",
+            "requirements": {
+              "php_min": "8.1",
+              "mariadb_min": "10.6",
+              "disk_mb_min": 100,
+              "php_extensions": ["pdo_mysql", "json", "mbstring", "openssl", "zip"],
+              "writable_paths": ["."]
+            },
+            "migrations": $(echo "$MIG_ENTRIES" | jq -c '.'),
+            "files": $(echo "$FILE_ENTRIES" | jq -c '.'),
+            "post_upgrade": {
+              "clear_opcache": true,
+              "run_health_check": true
+            }
+          }
+          MANIFEST
+          # Strip heredoc leading whitespace
+          sed -i 's/^[[:space:]]*//' "$PKG_DIR/manifest.json"
+
+          echo "=== Manifest ==="
+          cat "$PKG_DIR/manifest.json" | jq .
+          echo ""
+          echo "Files: $FILE_COUNT, Migrations: $MIG_COUNT"
+
+          # ── Create ZIP ──
+          ZIP_NAME="upgrade-v${VERSION}.zip"
+          ZIP_PATH="${GITHUB_WORKSPACE}/${ZIP_NAME}"
+          cd "$PKG_DIR"
+          zip -r "$ZIP_PATH" manifest.json files/ migrations/
+          cd "$GITHUB_WORKSPACE"
+
+          ZIP_SIZE=$(stat -c%s "$ZIP_PATH" 2>/dev/null || stat -f%z "$ZIP_PATH")
+          ZIP_SIZE_MB=$(echo "scale=2; $ZIP_SIZE / 1024 / 1024" | bc)
+          SHA256=$(sha256sum "$ZIP_PATH" | cut -d' ' -f1)
+
+          echo "zip_path=$ZIP_PATH" >> "$GITHUB_OUTPUT"
+          echo "zip_name=$ZIP_NAME" >> "$GITHUB_OUTPUT"
+          echo "zip_size=$ZIP_SIZE_MB" >> "$GITHUB_OUTPUT"
+          echo "zip_sha256=$SHA256" >> "$GITHUB_OUTPUT"
+          echo "file_count=$FILE_COUNT" >> "$GITHUB_OUTPUT"
+          echo "mig_count=$MIG_COUNT" >> "$GITHUB_OUTPUT"
+
+          echo "=== Package built ==="
+          echo "  $ZIP_NAME ($ZIP_SIZE_MB MB)"
+          echo "  SHA256: $SHA256"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG="${{ steps.prev_tag.outputs.prev_tag }}"
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Generate changelog from commit messages
+          CHANGELOG=$(git log --pretty=format:"- %s" "$PREV_TAG"..HEAD --no-merges | head -50)
+
+          # Build release body
+          cat > /tmp/release_body.md <<BODY
+          ## What's Changed
+
+          $CHANGELOG
+
+          ## Upgrade Package
+
+          | Property | Value |
+          |---|---|
+          | Package | \`${{ steps.package.outputs.zip_name }}\` |
+          | Size | ${{ steps.package.outputs.zip_size }} MB |
+          | SHA256 | \`${{ steps.package.outputs.zip_sha256 }}\` |
+          | Files Changed | ${{ steps.package.outputs.file_count }} |
+          | Migrations | ${{ steps.package.outputs.mig_count }} |
+          | Min Version | ${{ steps.compat.outputs.min_version }} |
+
+          ## How to Upgrade
+
+          **Automatic (recommended):** Open Admin Panel → System Upgrade → the update will appear automatically.
+
+          **Manual:** Download \`${{ steps.package.outputs.zip_name }}\` below, then upload it in Admin Panel → System Upgrade → Manual Upload.
+          BODY
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "v${{ steps.version.outputs.version }}"
+          body_path: /tmp/release_body.md
+          files: ${{ steps.package.outputs.zip_path }}
+          draft: false
+          prerelease: false
+          generate_release_notes: false
