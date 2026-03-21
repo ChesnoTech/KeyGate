@@ -44,9 +44,10 @@ jobs:
 
       - name: Start Docker stack
         run: |
-          # Patch Dockerfile for CI: disable secure cookies (HTTP) + set session save path
+          # Patch Dockerfile for CI: disable secure cookies + fix session directory
           sed -i "s/session.cookie_secure = 1/session.cookie_secure = 0/" Dockerfile.php
-          echo 'RUN echo "session.save_path = /tmp" >> /usr/local/etc/php/conf.d/custom.ini' >> Dockerfile.php
+          # Ensure PHP session directory exists and is writable
+          echo 'RUN mkdir -p /var/lib/php/sessions && chmod 1733 /var/lib/php/sessions && echo "session.save_path = /var/lib/php/sessions" >> /usr/local/etc/php/conf.d/custom.ini' >> Dockerfile.php
 
           docker compose build
           docker compose up -d db redis
@@ -138,54 +139,21 @@ jobs:
           echo "$LOGIN" | jq -e '.success == true' > /dev/null || (echo "❌ Login failed" && exit 1)
 
           CSRF=$(echo "$LOGIN" | jq -r '.csrf_token')
-
-          # PHP session files may not persist in CI Docker. Get the session token
-          # and PHPSESSID from the DB+cookie, and create a helper script that
-          # pre-seeds the PHP session on each request.
-          PHPSESSID=$(grep PHPSESSID /tmp/cookies.txt | awk '{print $NF}')
-
-          # Create a PHP CI proxy that pre-seeds session from DB
-          cat > /tmp/ci-api.php << 'CIEOF'
-          <?php
-          session_start();
-          if (empty($_SESSION['admin_token'])) {
-              require_once __DIR__ . '/config.php';
-              $stmt = $pdo->query('SELECT session_token, admin_id, id FROM admin_sessions WHERE is_active = 1 ORDER BY id DESC LIMIT 1');
-              $row = $stmt->fetch(PDO::FETCH_ASSOC);
-              if ($row) { $_SESSION['admin_token'] = $row['session_token']; $_SESSION['admin_id'] = $row['admin_id']; $_SESSION['session_id'] = $row['id']; }
-          }
-          require __DIR__ . '/admin_v2.php';
-          CIEOF
-          sed -i 's/^[[:space:]]*//' /tmp/ci-api.php
-          docker compose cp /tmp/ci-api.php web:/var/www/html/activate/ci-api.php
-
           echo "csrf=$CSRF" >> "$GITHUB_OUTPUT"
-          echo "✅ Admin login successful + CI proxy created"
+          echo "✅ Admin login successful, CSRF obtained"
 
-      - name: Debug session state
+      - name: Verify session persistence
         run: |
-          echo "=== admin_sessions table ==="
-          docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "SELECT id, admin_id, is_active, session_token FROM admin_sessions LIMIT 5"
-          echo ""
-          echo "=== CI proxy file contents ==="
-          docker compose exec -T web cat /var/www/html/activate/ci-api.php
-          echo ""
-          echo "=== Test CI proxy directly with PHP CLI ==="
-          docker compose exec -T web php -r '
-            $_GET["action"] = "check_session";
-            $_SERVER["REQUEST_URI"] = "/ci-api.php?action=check_session";
-            $_SERVER["HTTP_HOST"] = "localhost";
-            ob_start();
-            require "/var/www/html/activate/ci-api.php";
-            $out = ob_get_clean();
-            echo "CLI output: $out\n";
-          ' 2>&1 || echo "CLI test failed"
+          echo "=== Session files ==="
+          docker compose exec -T web ls -la /var/lib/php/sessions/ 2>/dev/null || echo "No session dir"
+          echo "=== check_session ==="
+          curl -s -b /tmp/cookies.txt "http://localhost:8080/admin_v2.php?action=check_session" | jq .
 
       - name: Test upgrade_get_status endpoint
         run: |
           HTTP_CODE=$(curl -s -o /tmp/status_resp.txt -w "%{http_code}" \
             -b /tmp/cookies.txt \
-            "http://localhost:8080/ci-api.php?action=upgrade_get_status")
+            "http://localhost:8080/admin_v2.php?action=upgrade_get_status")
           response=$(cat /tmp/status_resp.txt)
           echo "HTTP $HTTP_CODE — Response: $response"
           if [ "$HTTP_CODE" != "200" ]; then
@@ -201,7 +169,7 @@ jobs:
       - name: Test upgrade_history endpoint
         run: |
           response=$(curl -sf -b /tmp/cookies.txt \
-            "http://localhost:8080/ci-api.php?action=upgrade_history")
+            "http://localhost:8080/admin_v2.php?action=upgrade_history")
           echo "$response" | jq .
           echo "$response" | jq -e '.success == true' > /dev/null
           echo "$response" | jq -e '.upgrades | type == "array"' > /dev/null
@@ -210,7 +178,7 @@ jobs:
       - name: Test upgrade_check_github endpoint
         run: |
           response=$(curl -sf -b /tmp/cookies.txt \
-            "http://localhost:8080/ci-api.php?action=upgrade_check_github")
+            "http://localhost:8080/admin_v2.php?action=upgrade_check_github")
           echo "$response" | jq .
           # May fail if no releases exist yet, but should not error
           echo "$response" | jq -e '.current_version' > /dev/null
@@ -267,7 +235,7 @@ jobs:
         run: |
           CSRF="${{ steps.auth.outputs.csrf }}"
           response=$(curl -sf -b /tmp/cookies.txt -X POST \
-            "http://localhost:8080/ci-api.php?action=upgrade_upload_package" \
+            "http://localhost:8080/admin_v2.php?action=upgrade_upload_package" \
             -F "csrf_token=$CSRF" \
             -F "upgrade_package=@/tmp/test-upgrade.zip")
           echo "$response" | jq .
@@ -281,7 +249,7 @@ jobs:
           CSRF="${{ steps.auth.outputs.csrf }}"
           UPGRADE_ID="${{ steps.upload.outputs.upgrade_id }}"
           response=$(curl -sf -b /tmp/cookies.txt -X POST \
-            "http://localhost:8080/ci-api.php?action=upgrade_preflight" \
+            "http://localhost:8080/admin_v2.php?action=upgrade_preflight" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
           echo "$response" | jq .
@@ -294,7 +262,7 @@ jobs:
           CSRF="${{ steps.auth.outputs.csrf }}"
           UPGRADE_ID="${{ steps.upload.outputs.upgrade_id }}"
           response=$(curl -sf -b /tmp/cookies.txt -X POST \
-            "http://localhost:8080/ci-api.php?action=upgrade_backup" \
+            "http://localhost:8080/admin_v2.php?action=upgrade_backup" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
           echo "$response" | jq .
@@ -308,7 +276,7 @@ jobs:
           CSRF="${{ steps.auth.outputs.csrf }}"
           UPGRADE_ID="${{ steps.upload.outputs.upgrade_id }}"
           response=$(curl -sf -b /tmp/cookies.txt -X POST \
-            "http://localhost:8080/ci-api.php?action=upgrade_apply" \
+            "http://localhost:8080/admin_v2.php?action=upgrade_apply" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
           echo "$response" | jq .
@@ -321,7 +289,7 @@ jobs:
           CSRF="${{ steps.auth.outputs.csrf }}"
           UPGRADE_ID="${{ steps.upload.outputs.upgrade_id }}"
           response=$(curl -sf -b /tmp/cookies.txt -X POST \
-            "http://localhost:8080/ci-api.php?action=upgrade_verify" \
+            "http://localhost:8080/admin_v2.php?action=upgrade_verify" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
           echo "$response" | jq .
@@ -351,7 +319,7 @@ jobs:
       - name: Test upgrade history shows completed
         run: |
           response=$(curl -sf -b /tmp/cookies.txt \
-            "http://localhost:8080/ci-api.php?action=upgrade_history")
+            "http://localhost:8080/admin_v2.php?action=upgrade_history")
           echo "$response" | jq '.upgrades[0]'
           echo "$response" | jq -e '.upgrades[0].status == "completed"' > /dev/null
           echo "✅ Upgrade history shows completed status"
@@ -393,7 +361,7 @@ jobs:
           cd "$TMPDIR" && zip -r /tmp/rollback-test.zip manifest.json files/ migrations/
 
           response=$(curl -sf -b /tmp/cookies.txt -X POST \
-            "http://localhost:8080/ci-api.php?action=upgrade_upload_package" \
+            "http://localhost:8080/admin_v2.php?action=upgrade_upload_package" \
             -F "csrf_token=$CSRF" \
             -F "upgrade_package=@/tmp/rollback-test.zip")
           UPGRADE_ID=$(echo "$response" | jq -r '.upgrade_id')
@@ -401,17 +369,17 @@ jobs:
 
           # Run through preflight + backup + apply
           curl -sf -b /tmp/cookies.txt -X POST \
-            "http://localhost:8080/ci-api.php?action=upgrade_preflight" \
+            "http://localhost:8080/admin_v2.php?action=upgrade_preflight" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}" > /dev/null
 
           curl -sf -b /tmp/cookies.txt -X POST \
-            "http://localhost:8080/ci-api.php?action=upgrade_backup" \
+            "http://localhost:8080/admin_v2.php?action=upgrade_backup" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}" > /dev/null
 
           curl -sf -b /tmp/cookies.txt -X POST \
-            "http://localhost:8080/ci-api.php?action=upgrade_apply" \
+            "http://localhost:8080/admin_v2.php?action=upgrade_apply" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}" > /dev/null
 
@@ -423,7 +391,7 @@ jobs:
           UPGRADE_ID="${{ steps.rollback_upload.outputs.upgrade_id }}"
 
           response=$(curl -sf -b /tmp/cookies.txt -X POST \
-            "http://localhost:8080/ci-api.php?action=upgrade_rollback" \
+            "http://localhost:8080/admin_v2.php?action=upgrade_rollback" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
           echo "$response" | jq .
