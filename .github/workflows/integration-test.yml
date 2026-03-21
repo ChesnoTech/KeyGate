@@ -126,8 +126,9 @@ jobs:
 
           # Get the session token directly from DB (bypasses PHP session persistence issues)
           TOKEN=$(docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -N -e \
-            "SELECT session_token FROM admin_sessions WHERE is_active = 1 ORDER BY id DESC LIMIT 1")
+            "SELECT session_token FROM admin_sessions WHERE is_active = 1 ORDER BY id DESC LIMIT 1" | tr -d '\n\r\t ')
           echo "admin_token=$TOKEN" >> "$GITHUB_OUTPUT"
+          echo "Token length: ${#TOKEN}"
           echo "✅ Admin login successful, session token obtained from DB"
 
       - name: Test upgrade_get_status endpoint
