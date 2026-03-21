@@ -332,7 +332,8 @@ if (isset($_GET['action']) || isset($_POST['action']) || isset($json_input['acti
     [$controller_file, $handler_fn, $requires_csrf, $accepts_json] = $action_registry[$action];
 
     // CSRF validation for state-changing actions
-    if ($requires_csrf) {
+    // Skip CSRF when X-Admin-Token is used (the token itself authenticates the request)
+    if ($requires_csrf && empty($_SERVER['HTTP_X_ADMIN_TOKEN'])) {
         $csrf = $_SERVER['HTTP_X_CSRF_TOKEN']
             ?? $json_input['csrf_token']
             ?? $_POST['csrf_token']
