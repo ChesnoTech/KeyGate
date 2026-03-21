@@ -154,6 +154,9 @@ jobs:
             "http://localhost:8080/admin_v2.php?action=upgrade_get_status")
           response=$(cat /tmp/status_resp.txt)
           echo "HTTP $HTTP_CODE — $response"
+          echo "=== PHP error log ==="
+          docker compose exec -T web tail -20 /var/log/apache2/error.log 2>/dev/null || echo "No apache error log"
+          docker compose exec -T web tail -20 /var/www/html/activate/logs/php_errors.log 2>/dev/null || echo "No php error log"
           [ "$HTTP_CODE" = "200" ] || (echo "❌ HTTP $HTTP_CODE" && exit 1)
           echo "$response" | jq -e '.success == true' > /dev/null
           echo "$response" | jq -e '.data.current_version' > /dev/null
