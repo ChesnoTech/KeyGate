@@ -93,11 +93,16 @@ jobs:
           done
           echo "✅ All migrations applied"
 
+          # Get the super_admin role ID from the ACL roles table
+          SA_ROLE_ID=$(docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -N -B -e \
+            "SELECT id FROM acl_roles WHERE role_name = 'super_admin' LIMIT 1" 2>/dev/null | tr -d '\n\r\t ')
+          echo "Super admin role ID: $SA_ROLE_ID"
+
           docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "
-            INSERT INTO admin_users (username, password_hash, full_name, email, role, must_change_password)
-            VALUES ('admin', '$HASH', 'CI Admin', 'ci@test.local', 'super_admin', 0)
+            INSERT INTO admin_users (username, password_hash, full_name, email, role, must_change_password, custom_role_id)
+            VALUES ('admin', '$HASH', 'CI Admin', 'ci@test.local', 'super_admin', 0, ${SA_ROLE_ID:-NULL})
             ON DUPLICATE KEY UPDATE password_hash = '$HASH', must_change_password = 0,
-              failed_login_attempts = 0, locked_until = NULL;
+              failed_login_attempts = 0, locked_until = NULL, custom_role_id = ${SA_ROLE_ID:-NULL};
           "
 
           docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "
