@@ -131,13 +131,6 @@ jobs:
           echo "Token length: ${#TOKEN}"
           echo "✅ Admin login successful, session token obtained from DB"
 
-      - name: Verify container has latest code
-        run: |
-          echo "=== Line 14-20 of admin_v2.php in container ==="
-          docker compose exec -T web sed -n '14,20p' /var/www/html/activate/admin_v2.php
-          echo "=== Does X_ADMIN_TOKEN exist? ==="
-          docker compose exec -T web grep -c "HTTP_X_ADMIN_TOKEN" /var/www/html/activate/admin_v2.php || echo "NOT FOUND!"
-
       - name: Test upgrade_get_status endpoint
         run: |
           TOKEN="${{ steps.auth.outputs.admin_token }}"
