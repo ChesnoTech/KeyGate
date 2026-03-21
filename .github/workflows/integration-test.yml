@@ -48,7 +48,7 @@ jobs:
           sed -i "s/session.cookie_secure = 1/session.cookie_secure = 0/" Dockerfile.php
           sed -i "s/session.use_strict_mode = 1/session.use_strict_mode = 0/" Dockerfile.php
 
-          # Add auto_prepend to inject session token from X-Session-Token header
+          # Add auto_prepend via php.ini to inject session token from X-Session-Token header
           # This bypasses PHP session file persistence issues in CI Docker
           cat >> Dockerfile.php <<'DOCKERFILE'
           RUN echo '<?php' > /var/www/html/activate/ci-session-fix.php \
@@ -59,7 +59,7 @@ jobs:
             && echo '  $_SESSION["admin_id"] = 1;' >> /var/www/html/activate/ci-session-fix.php \
             && echo '  $_SESSION["session_id"] = 1;' >> /var/www/html/activate/ci-session-fix.php \
             && echo '}' >> /var/www/html/activate/ci-session-fix.php \
-            && echo "php_value auto_prepend_file /var/www/html/activate/ci-session-fix.php" >> /var/www/html/activate/.htaccess
+            && echo 'auto_prepend_file = /var/www/html/activate/ci-session-fix.php' >> /usr/local/etc/php/conf.d/ci-prepend.ini
           DOCKERFILE
 
           docker compose build
