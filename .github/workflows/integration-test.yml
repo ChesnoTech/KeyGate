@@ -140,6 +140,12 @@ jobs:
           echo "csrf=$CSRF" >> "$GITHUB_OUTPUT"
           echo "✅ Admin login successful, CSRF obtained"
 
+      - name: Debug cookie jar
+        run: |
+          echo "=== Cookie jar contents ==="
+          cat /tmp/cookies.txt || echo "Cookie file not found"
+          echo "=== End cookies ==="
+
       - name: Test upgrade_get_status endpoint
         run: |
           HTTP_CODE=$(curl -s -o /tmp/status_resp.txt -w "%{http_code}" \
