@@ -143,9 +143,13 @@ jobs:
 
       - name: Test upgrade_get_status endpoint
         run: |
-          response=$(curl -sf -H "X-Session-Token: ${{ steps.auth.outputs.session_token }}" \
+          TOKEN="${{ steps.auth.outputs.session_token }}"
+          HTTP_CODE=$(curl -s -o /tmp/status_resp.txt -w "%{http_code}" \
+            -H "X-Session-Token: $TOKEN" \
             "http://localhost:8080/admin_v2.php?action=upgrade_get_status")
-          echo "$response" | jq .
+          response=$(cat /tmp/status_resp.txt)
+          echo "HTTP $HTTP_CODE — $response"
+          [ "$HTTP_CODE" = "200" ] || (echo "❌ HTTP $HTTP_CODE" && exit 1)
           echo "$response" | jq -e '.success == true' > /dev/null
           echo "$response" | jq -e '.data.current_version' > /dev/null
           echo "$response" | jq -e '.data.php_version' > /dev/null
