@@ -144,23 +144,20 @@ jobs:
           # pre-seeds the PHP session on each request.
           PHPSESSID=$(grep PHPSESSID /tmp/cookies.txt | awk '{print $NF}')
 
-          # Create a PHP helper that sets up the session for CI API calls
-          docker compose exec -T web bash -c "cat > /var/www/html/activate/ci-api.php << 'CIPHP'
-<?php
-// CI API proxy: pre-seeds PHP session from DB admin_sessions, then forwards to admin_v2.php
-session_start();
-if (empty(\$_SESSION['admin_token'])) {
-    require_once __DIR__ . '/config.php';
-    \$stmt = \$pdo->query('SELECT session_token, admin_id, id FROM admin_sessions WHERE is_active = 1 ORDER BY id DESC LIMIT 1');
-    \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
-    if (\$row) {
-        \$_SESSION['admin_token'] = \$row['session_token'];
-        \$_SESSION['admin_id'] = \$row['admin_id'];
-        \$_SESSION['session_id'] = \$row['id'];
-    }
-}
-require __DIR__ . '/admin_v2.php';
-CIPHP"
+          # Create a PHP CI proxy that pre-seeds session from DB
+          cat > /tmp/ci-api.php << 'CIEOF'
+          <?php
+          session_start();
+          if (empty($_SESSION['admin_token'])) {
+              require_once __DIR__ . '/config.php';
+              $stmt = $pdo->query('SELECT session_token, admin_id, id FROM admin_sessions WHERE is_active = 1 ORDER BY id DESC LIMIT 1');
+              $row = $stmt->fetch(PDO::FETCH_ASSOC);
+              if ($row) { $_SESSION['admin_token'] = $row['session_token']; $_SESSION['admin_id'] = $row['admin_id']; $_SESSION['session_id'] = $row['id']; }
+          }
+          require __DIR__ . '/admin_v2.php';
+          CIEOF
+          sed -i 's/^[[:space:]]*//' /tmp/ci-api.php
+          docker compose cp /tmp/ci-api.php web:/var/www/html/activate/ci-api.php
 
           echo "csrf=$CSRF" >> "$GITHUB_OUTPUT"
           echo "✅ Admin login successful + CI proxy created"
