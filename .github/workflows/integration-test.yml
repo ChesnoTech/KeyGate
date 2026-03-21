@@ -142,21 +142,21 @@ jobs:
           echo "Token in DB: [${DB_TOKEN}]"
           echo "Match: $([ "$TOKEN" = "$DB_TOKEN" ] && echo YES || echo NO)"
 
-          # Test inline PHP validation
-          timeout 10 docker compose exec -T web php -r "
-            \$_SERVER['HTTP_X_ADMIN_TOKEN'] = '$TOKEN';
+          # Test inline PHP validation with full exception details
+          timeout 15 docker compose exec -T web php -r "
             \$_SESSION = [];
-            session_start();
             \$_SESSION['admin_token'] = '$TOKEN';
             require '/var/www/html/activate/config.php';
             require '/var/www/html/activate/functions/admin-helpers.php';
-            \$r = validateAdminSession();
-            echo 'validateAdminSession: ' . (\$r ? 'OK' : 'FAIL') . PHP_EOL;
-            if (!\$r) {
-              \$stmt = \$pdo->prepare('SELECT id, admin_id, is_active, expires_at, NOW() as n FROM admin_sessions WHERE session_token = ?');
+            try {
+              \$stmt = \$pdo->prepare('SELECT s.id, s.admin_id, s.expires_at, s.last_activity, u.username, u.full_name, u.role, u.is_active, u.preferred_language, u.password_changed_at, u.must_change_password FROM admin_sessions s JOIN admin_users u ON s.admin_id = u.id WHERE s.session_token = ? AND s.is_active = 1');
               \$stmt->execute(['$TOKEN']);
               \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
-              echo 'DB row: ' . json_encode(\$row) . PHP_EOL;
+              echo 'JOIN query result: ' . json_encode(\$row) . PHP_EOL;
+              \$r = validateAdminSession();
+              echo 'validateAdminSession: ' . (\$r ? json_encode(\$r) : 'FAIL') . PHP_EOL;
+            } catch (Exception \$e) {
+              echo 'EXCEPTION: ' . \$e->getMessage() . PHP_EOL;
             }
           " 2>&1 || echo "PHP test failed"
 
