@@ -164,17 +164,11 @@ jobs:
 
       - name: Debug session state
         run: |
-          echo "=== Cookie jar ==="
-          cat /tmp/cookies.txt || echo "No cookies"
+          echo "=== admin_sessions table ==="
+          docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "SELECT id, admin_id, is_active, session_token FROM admin_sessions LIMIT 5"
           echo ""
-          echo "=== check_session with cookie ==="
-          curl -s -b /tmp/cookies.txt "http://localhost:8080/ci-api.php?action=check_session" | jq .
-          echo ""
-          echo "=== PHP session files in container ==="
-          docker compose exec -T web ls -la /tmp/sess_* 2>/dev/null | tail -5 || echo "No session files found"
-          echo ""
-          echo "=== PHP session.save_path ==="
-          docker compose exec -T web php -r 'echo ini_get("session.save_path") . "\n";'
+          echo "=== CI proxy test ==="
+          curl -sv -b /tmp/cookies.txt "http://localhost:8080/ci-api.php?action=check_session" 2>&1 | tail -20
 
       - name: Test upgrade_get_status endpoint
         run: |
