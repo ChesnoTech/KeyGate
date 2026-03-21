@@ -867,6 +867,7 @@ function handle_upgrade_apply(PDO $pdo, array $admin_session, $json_input): void
     $pdo->beginTransaction();
     $lockStmt = $pdo->prepare("SELECT id FROM upgrade_history WHERE id = ? FOR UPDATE");
     $lockStmt->execute([$upgradeId]);
+    $lockStmt->closeCursor();
     $pdo->commit();
 
     updateUpgradeStatus($pdo, $upgradeId, 'upgrading', [
