@@ -46,6 +46,7 @@ jobs:
         run: |
           # Patch Dockerfile for CI: disable secure cookies + fix session directory
           sed -i "s/session.cookie_secure = 1/session.cookie_secure = 0/" Dockerfile.php
+          sed -i "s/session.use_strict_mode = 1/session.use_strict_mode = 0/" Dockerfile.php
           # Ensure PHP session directory exists and is writable
           echo 'RUN mkdir -p /var/lib/php/sessions && chmod 1733 /var/lib/php/sessions && echo "session.save_path = /var/lib/php/sessions" >> /usr/local/etc/php/conf.d/custom.ini' >> Dockerfile.php
 
@@ -153,12 +154,12 @@ jobs:
           echo "=== All session files ==="
           docker compose exec -T web bash -c 'for f in /var/lib/php/sessions/sess_*; do echo "--- $f ---"; cat "$f" 2>/dev/null; echo; done'
           echo "=== check_session ==="
-          curl -s -b /tmp/cookies.txt "http://localhost:8080/admin_v2.php?action=check_session" | jq .
+          curl -s -b /tmp/cookies.txt -c /tmp/cookies.txt "http://localhost:8080/admin_v2.php?action=check_session" | jq .
 
       - name: Test upgrade_get_status endpoint
         run: |
           HTTP_CODE=$(curl -s -o /tmp/status_resp.txt -w "%{http_code}" \
-            -b /tmp/cookies.txt \
+            -b /tmp/cookies.txt -c /tmp/cookies.txt \
             "http://localhost:8080/admin_v2.php?action=upgrade_get_status")
           response=$(cat /tmp/status_resp.txt)
           echo "HTTP $HTTP_CODE — Response: $response"
@@ -174,7 +175,7 @@ jobs:
 
       - name: Test upgrade_history endpoint
         run: |
-          response=$(curl -sf -b /tmp/cookies.txt \
+          response=$(curl -sf -b /tmp/cookies.txt -c /tmp/cookies.txt \
             "http://localhost:8080/admin_v2.php?action=upgrade_history")
           echo "$response" | jq .
           echo "$response" | jq -e '.success == true' > /dev/null
@@ -183,7 +184,7 @@ jobs:
 
       - name: Test upgrade_check_github endpoint
         run: |
-          response=$(curl -sf -b /tmp/cookies.txt \
+          response=$(curl -sf -b /tmp/cookies.txt -c /tmp/cookies.txt \
             "http://localhost:8080/admin_v2.php?action=upgrade_check_github")
           echo "$response" | jq .
           # May fail if no releases exist yet, but should not error
@@ -240,7 +241,7 @@ jobs:
         id: upload
         run: |
           CSRF="${{ steps.auth.outputs.csrf }}"
-          response=$(curl -sf -b /tmp/cookies.txt -X POST \
+          response=$(curl -sf -b /tmp/cookies.txt -c /tmp/cookies.txt -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_upload_package" \
             -F "csrf_token=$CSRF" \
             -F "upgrade_package=@/tmp/test-upgrade.zip")
@@ -254,7 +255,7 @@ jobs:
         run: |
           CSRF="${{ steps.auth.outputs.csrf }}"
           UPGRADE_ID="${{ steps.upload.outputs.upgrade_id }}"
-          response=$(curl -sf -b /tmp/cookies.txt -X POST \
+          response=$(curl -sf -b /tmp/cookies.txt -c /tmp/cookies.txt -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_preflight" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
@@ -267,7 +268,7 @@ jobs:
         run: |
           CSRF="${{ steps.auth.outputs.csrf }}"
           UPGRADE_ID="${{ steps.upload.outputs.upgrade_id }}"
-          response=$(curl -sf -b /tmp/cookies.txt -X POST \
+          response=$(curl -sf -b /tmp/cookies.txt -c /tmp/cookies.txt -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_backup" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
@@ -281,7 +282,7 @@ jobs:
         run: |
           CSRF="${{ steps.auth.outputs.csrf }}"
           UPGRADE_ID="${{ steps.upload.outputs.upgrade_id }}"
-          response=$(curl -sf -b /tmp/cookies.txt -X POST \
+          response=$(curl -sf -b /tmp/cookies.txt -c /tmp/cookies.txt -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_apply" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
@@ -294,7 +295,7 @@ jobs:
         run: |
           CSRF="${{ steps.auth.outputs.csrf }}"
           UPGRADE_ID="${{ steps.upload.outputs.upgrade_id }}"
-          response=$(curl -sf -b /tmp/cookies.txt -X POST \
+          response=$(curl -sf -b /tmp/cookies.txt -c /tmp/cookies.txt -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_verify" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
@@ -324,7 +325,7 @@ jobs:
 
       - name: Test upgrade history shows completed
         run: |
-          response=$(curl -sf -b /tmp/cookies.txt \
+          response=$(curl -sf -b /tmp/cookies.txt -c /tmp/cookies.txt \
             "http://localhost:8080/admin_v2.php?action=upgrade_history")
           echo "$response" | jq '.upgrades[0]'
           echo "$response" | jq -e '.upgrades[0].status == "completed"' > /dev/null
@@ -366,7 +367,7 @@ jobs:
           MANIFEST
           cd "$TMPDIR" && zip -r /tmp/rollback-test.zip manifest.json files/ migrations/
 
-          response=$(curl -sf -b /tmp/cookies.txt -X POST \
+          response=$(curl -sf -b /tmp/cookies.txt -c /tmp/cookies.txt -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_upload_package" \
             -F "csrf_token=$CSRF" \
             -F "upgrade_package=@/tmp/rollback-test.zip")
@@ -374,17 +375,17 @@ jobs:
           echo "upgrade_id=$UPGRADE_ID" >> "$GITHUB_OUTPUT"
 
           # Run through preflight + backup + apply
-          curl -sf -b /tmp/cookies.txt -X POST \
+          curl -sf -b /tmp/cookies.txt -c /tmp/cookies.txt -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_preflight" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}" > /dev/null
 
-          curl -sf -b /tmp/cookies.txt -X POST \
+          curl -sf -b /tmp/cookies.txt -c /tmp/cookies.txt -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_backup" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}" > /dev/null
 
-          curl -sf -b /tmp/cookies.txt -X POST \
+          curl -sf -b /tmp/cookies.txt -c /tmp/cookies.txt -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_apply" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}" > /dev/null
@@ -396,7 +397,7 @@ jobs:
           CSRF="${{ steps.auth.outputs.csrf }}"
           UPGRADE_ID="${{ steps.rollback_upload.outputs.upgrade_id }}"
 
-          response=$(curl -sf -b /tmp/cookies.txt -X POST \
+          response=$(curl -sf -b /tmp/cookies.txt -c /tmp/cookies.txt -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_rollback" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
