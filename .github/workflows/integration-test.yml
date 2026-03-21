@@ -44,6 +44,10 @@ jobs:
 
       - name: Start Docker stack
         run: |
+          # Create PHP config override to disable secure cookies (CI uses HTTP)
+          mkdir -p ci-overrides
+          echo "session.cookie_secure = 0" > ci-overrides/zz-ci.ini
+
           docker compose build
           docker compose up -d db redis
           for i in $(seq 1 40); do
@@ -51,9 +55,10 @@ jobs:
             sleep 5
           done
           docker compose up -d
-          # Disable secure cookies for CI (plain HTTP environment) and restart Apache
-          docker compose exec -T web bash -c 'echo "session.cookie_secure = 0" > /usr/local/etc/php/conf.d/zz-ci.ini && apache2ctl graceful'
-          sleep 2
+          # Copy PHP ini override into running container and restart Apache
+          docker compose cp ci-overrides/zz-ci.ini web:/usr/local/etc/php/conf.d/zz-ci.ini
+          docker compose exec -T web apache2ctl graceful
+          sleep 3
           for i in $(seq 1 30); do
             curl -sf http://localhost:8080/api/health.php > /dev/null 2>&1 && break
             sleep 5
