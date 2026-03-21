@@ -6,7 +6,7 @@ param(
 )
 
 $ActivationDelaySeconds = 10
-$MaxRetryAttempts = 4  # Retry same key up to 4 times (failures are usually network issues, not bad keys)
+$MaxRetryAttempts = 5  # Retry same key up to 5 times (failures are usually network issues, not bad keys)
 
 # === Adaptive Network Timing ===
 # Activation delays exist because Microsoft's servers (not our LAN API) need time to
@@ -145,6 +145,313 @@ function Get-AdaptiveDelay {
     )
     $scaled = [math]::Max($MinSeconds, [math]::Round($BaseSeconds * $script:NetworkMultiplier))
     return [int]$scaled
+}
+
+# === Network Diagnostics & Recovery (MAS-inspired) ===
+
+function Test-InternetConnectivity {
+    <#
+    .SYNOPSIS
+        Dual-method internet connectivity check (ping + COM fallback).
+        Returns $true if internet is available, $false otherwise.
+    #>
+    # Method 1: ICMP ping to reliable targets (fast, works unless ICMP blocked)
+    $pingTargets = @('l.root-servers.net', 'dns.msftncsi.com', 'resolver1.opendns.com')
+    foreach ($target in $pingTargets) {
+        try {
+            $ping = Test-Connection -ComputerName $target -Count 1 -Quiet -ErrorAction SilentlyContinue
+            if ($ping) { return $true }
+        } catch { }
+    }
+
+    # Method 2: COM NetworkListManager fallback (works when ICMP is blocked by firewall)
+    try {
+        $nlm = [Activator]::CreateInstance([Type]::GetTypeFromCLSID([Guid]'{DCB00C01-570F-4A9B-8D69-199FDBA5723B}'))
+        if ($nlm.IsConnectedToInternet) { return $true }
+    } catch { }
+
+    return $false
+}
+
+function Test-DnsResolution {
+    <#
+    .SYNOPSIS
+        Tests DNS resolution for Microsoft activation servers.
+        Returns hashtable with results per hostname.
+    #>
+    $hosts = @('activation.sls.microsoft.com', 'go.microsoft.com', 'dns.msftncsi.com', 'licensing.mp.microsoft.com')
+    $results = @{}
+    foreach ($h in $hosts) {
+        try {
+            $resolved = [System.Net.Dns]::GetHostAddresses($h)
+            $results[$h] = @{ Success = $true; IP = $resolved[0].IPAddressToString }
+        } catch {
+            $results[$h] = @{ Success = $false; IP = $null }
+        }
+    }
+    return $results
+}
+
+function Test-HostsFileBlocking {
+    <#
+    .SYNOPSIS
+        Checks if Windows hosts file blocks Microsoft activation domains.
+    #>
+    $hostsPath = "$env:SystemRoot\System32\drivers\etc\hosts"
+    $blockedDomains = @()
+    $msDomainsToCheck = @(
+        'activation.sls.microsoft.com',
+        'go.microsoft.com',
+        'licensing.mp.microsoft.com',
+        'login.live.com',
+        'purchase.mp.microsoft.com',
+        'validation.sls.microsoft.com'
+    )
+    if (Test-Path $hostsPath) {
+        $hostsContent = Get-Content $hostsPath -ErrorAction SilentlyContinue
+        foreach ($domain in $msDomainsToCheck) {
+            foreach ($line in $hostsContent) {
+                $trimmed = $line.Trim()
+                if ($trimmed -and -not $trimmed.StartsWith('#') -and $trimmed -match $domain) {
+                    $blockedDomains += $domain
+                    break
+                }
+            }
+        }
+    }
+    return $blockedDomains
+}
+
+function Test-LicensingServices {
+    <#
+    .SYNOPSIS
+        Checks and optionally restarts Windows licensing services.
+        Returns hashtable of service states.
+    #>
+    param([switch]$AutoRestart)
+
+    $services = @(
+        @{ Name = 'sppsvc';   DisplayName = 'Software Protection' },
+        @{ Name = 'ClipSVC';  DisplayName = 'Client License' },
+        @{ Name = 'wlidsvc';  DisplayName = 'Windows Live ID' }
+    )
+    $results = @{}
+
+    foreach ($svc in $services) {
+        try {
+            $service = Get-Service -Name $svc.Name -ErrorAction SilentlyContinue
+            if (-not $service) {
+                $results[$svc.Name] = 'not_found'
+                continue
+            }
+            if ($service.Status -eq 'Running') {
+                $results[$svc.Name] = 'running'
+            } else {
+                $results[$svc.Name] = $service.Status.ToString().ToLower()
+                if ($AutoRestart) {
+                    try {
+                        Start-Service -Name $svc.Name -ErrorAction Stop
+                        Start-Sleep -Seconds 2
+                        $results[$svc.Name] = 'restarted'
+                    } catch {
+                        $results[$svc.Name] = "restart_failed"
+                    }
+                }
+            }
+        } catch {
+            $results[$svc.Name] = 'error'
+        }
+    }
+    return $results
+}
+
+function Invoke-NetworkRecovery {
+    <#
+    .SYNOPSIS
+        Attempts to recover network/activation subsystem:
+        1. Flush DNS cache
+        2. Restart licensing services
+        3. Clear IdentityCRL cache
+    #>
+    Write-Host "  🔧 Attempting network recovery..." -ForegroundColor Yellow
+
+    # 1. Flush DNS cache
+    try {
+        $null = ipconfig /flushdns 2>&1
+        Write-Host "    ✓ DNS cache flushed" -ForegroundColor DarkGray
+    } catch { }
+
+    # 2. Restart licensing services
+    $svcResults = Test-LicensingServices -AutoRestart
+    foreach ($svc in $svcResults.Keys) {
+        $state = $svcResults[$svc]
+        if ($state -eq 'restarted') {
+            Write-Host "    ✓ Restarted $svc" -ForegroundColor DarkGray
+        } elseif ($state -eq 'running') {
+            Write-Host "    ✓ $svc already running" -ForegroundColor DarkGray
+        }
+    }
+
+    # 3. Clear IdentityCRL cache (stale tokens block activation)
+    try {
+        $crlPath = "HKLM:\SOFTWARE\Microsoft\IdentityCRL"
+        if (Test-Path $crlPath) {
+            # Remove cached credentials that may be stale
+            $null = Remove-ItemProperty -Path $crlPath -Name "ClockData" -ErrorAction SilentlyContinue
+            Write-Host "    ✓ IdentityCRL cache cleared" -ForegroundColor DarkGray
+        }
+    } catch { }
+
+    # 4. Brief pause for services to stabilize
+    Start-Sleep -Seconds 3
+}
+
+function Get-ActivationErrorCategory {
+    <#
+    .SYNOPSIS
+        Classifies activation error output into categories:
+        'network', 'key_invalid', 'server_busy', 'service', or 'unknown'
+    #>
+    param([string]$ErrorOutput)
+
+    if (-not $ErrorOutput) { return 'unknown' }
+
+    # Network-level errors (Microsoft servers unreachable)
+    $networkPatterns = @(
+        '0x80072EE7',  # WINHTTP_ERROR_NAME_NOT_RESOLVED
+        '0x80072EFD',  # WINHTTP_ERROR_CANNOT_CONNECT
+        '0x80072EE2',  # WINHTTP_ERROR_TIMEOUT
+        '0x80072F8F',  # WINHTTP_ERROR_SECURITY_CHANNEL_ERROR (SSL)
+        '0x80072AFC',  # WINHTTP_ERROR_CONNECTION_ABORTED
+        '0x800704CF',  # ERROR_NETWORK_UNREACHABLE
+        '0x87E10BCF',  # Internet connectivity error
+        '0x800705B4',  # ERROR_TIMEOUT
+        '0x80072EFE',  # WINHTTP_ERROR_CONNECTION_RESET
+        '0x80072F76',  # WINHTTP_ERROR_HEADER_NOT_FOUND
+        'unable to connect',
+        'connection timed out',
+        'network',
+        'DNS name does not exist'
+    )
+    foreach ($p in $networkPatterns) {
+        if ($ErrorOutput -match [regex]::Escape($p)) { return 'network' }
+    }
+
+    # Key/license errors (key is bad, wrong edition, already used)
+    $keyPatterns = @(
+        '0xC004C003',  # Activation server determined key is blocked
+        '0xC004C001',  # Activation server determined key is invalid
+        '0xC004C008',  # Activation server reported key has exceeded unlock limit
+        '0xC004B100',  # Activation server determined product key has been revoked
+        '0xC004F050',  # SL service reported product key is invalid
+        '0xC004F014',  # SL service reported product key is not available
+        '0xC004F042',  # SL service determined product key is invalid for this version
+        'product key you entered',
+        'blocked',
+        'invalid'
+    )
+    foreach ($p in $keyPatterns) {
+        if ($ErrorOutput -match [regex]::Escape($p)) { return 'key_invalid' }
+    }
+
+    # Server busy / throttled
+    $serverPatterns = @(
+        '0xC004F069',  # SL service reported activation server is busy
+        '0x8007000D',  # ERROR_INVALID_DATA
+        '0x8007232B',  # DNS_ERROR_RECORD_DOES_NOT_EXIST
+        'server is busy',
+        'try again later'
+    )
+    foreach ($p in $serverPatterns) {
+        if ($ErrorOutput -match [regex]::Escape($p)) { return 'server_busy' }
+    }
+
+    # Service errors
+    $servicePatterns = @(
+        '0x80070005',  # ERROR_ACCESS_DENIED
+        '0x800706BA',  # RPC_S_SERVER_UNAVAILABLE
+        'service',
+        'sppsvc'
+    )
+    foreach ($p in $servicePatterns) {
+        if ($ErrorOutput -match [regex]::Escape($p)) { return 'service' }
+    }
+
+    return 'unknown'
+}
+
+function Invoke-PreActivationDiagnostics {
+    <#
+    .SYNOPSIS
+        Runs a full diagnostics suite before activation. Warns about issues
+        but does not block activation (issues may be transient).
+    #>
+    Write-Host "`n🔍 Running pre-activation diagnostics..." -ForegroundColor Cyan
+    $issues = @()
+
+    # 1. Internet connectivity (dual method)
+    $internetOk = Test-InternetConnectivity
+    if ($internetOk) {
+        Write-Host "  ✅ Internet connectivity: OK" -ForegroundColor Green
+    } else {
+        Write-Host "  ❌ Internet connectivity: FAILED" -ForegroundColor Red
+        $issues += "No internet — activation requires connection to Microsoft servers"
+    }
+
+    # 2. DNS resolution
+    $dnsResults = Test-DnsResolution
+    $dnsOk = ($dnsResults.Values | Where-Object { $_.Success }).Count
+    $dnsTotal = $dnsResults.Count
+    if ($dnsOk -eq $dnsTotal) {
+        Write-Host "  ✅ DNS resolution: $dnsOk/$dnsTotal Microsoft hosts resolved" -ForegroundColor Green
+    } elseif ($dnsOk -gt 0) {
+        Write-Host "  ⚠️ DNS resolution: $dnsOk/$dnsTotal hosts resolved" -ForegroundColor Yellow
+        $failed = ($dnsResults.GetEnumerator() | Where-Object { -not $_.Value.Success } | ForEach-Object { $_.Key }) -join ', '
+        $issues += "DNS: Cannot resolve $failed"
+    } else {
+        Write-Host "  ❌ DNS resolution: FAILED (0/$dnsTotal)" -ForegroundColor Red
+        $issues += "DNS resolution completely failed"
+    }
+
+    # 3. Hosts file blocking
+    $blocked = Test-HostsFileBlocking
+    if ($blocked.Count -eq 0) {
+        Write-Host "  ✅ Hosts file: No Microsoft domains blocked" -ForegroundColor Green
+    } else {
+        Write-Host "  ❌ Hosts file: $($blocked.Count) Microsoft domain(s) BLOCKED!" -ForegroundColor Red
+        foreach ($d in $blocked) { Write-Host "     → $d" -ForegroundColor Red }
+        $issues += "Hosts file blocks: $($blocked -join ', ')"
+    }
+
+    # 4. Licensing services
+    $svcResults = Test-LicensingServices
+    $svcRunning = ($svcResults.Values | Where-Object { $_ -eq 'running' }).Count
+    $svcFound = ($svcResults.Values | Where-Object { $_ -ne 'not_found' }).Count
+    if ($svcRunning -ge 1 -and $svcResults['sppsvc'] -eq 'running') {
+        Write-Host "  ✅ Licensing services: sppsvc running ($svcRunning/$svcFound services up)" -ForegroundColor Green
+    } else {
+        Write-Host "  ⚠️ Licensing services: sppsvc not running — attempting restart..." -ForegroundColor Yellow
+        $restartResults = Test-LicensingServices -AutoRestart
+        if ($restartResults['sppsvc'] -eq 'restarted' -or $restartResults['sppsvc'] -eq 'running') {
+            Write-Host "  ✅ sppsvc restarted successfully" -ForegroundColor Green
+        } else {
+            Write-Host "  ❌ sppsvc could not be started" -ForegroundColor Red
+            $issues += "Software Protection service (sppsvc) is not running"
+        }
+    }
+
+    # Summary
+    if ($issues.Count -gt 0) {
+        Write-Host "`n  ⚠️ $($issues.Count) issue(s) detected (activation may fail):" -ForegroundColor Yellow
+        foreach ($issue in $issues) {
+            Write-Host "    • $issue" -ForegroundColor Yellow
+        }
+        Write-Host "  Proceeding anyway — issues may be transient.`n" -ForegroundColor DarkGray
+    } else {
+        Write-Host "  ✅ All diagnostics passed`n" -ForegroundColor Green
+    }
+
+    return $issues
 }
 
 # === PowerShell 7 Self-Restart (Safety Net) ===
@@ -1368,12 +1675,14 @@ function Submit-HardwareInfo-v2 {
 function Activate-Key {
     param([string]$key)
 
-    # Result object captures slmgr output for error reporting
+    # Result object captures activation output for error reporting
     $activationResult = @{
         Success = $false
         IpkOutput = ''
         AtoOutput = ''
         ErrorDetails = ''
+        ErrorCategory = 'unknown'
+        ActivationMethod = 'slmgr'
     }
 
     Write-Host "`n⏳ Activating Windows..." -ForegroundColor Cyan
@@ -1385,16 +1694,59 @@ function Activate-Key {
     Start-Sleep -Seconds (Get-AdaptiveDelay -BaseSeconds 5 -MinSeconds 2)
 
     try {
-        # Install the key
+        # Install the key via WMI (faster, no cscript overhead)
         Write-Host "🔑 Installing product key..." -ForegroundColor Cyan
-        $installResult = & cscript //NoLogo "C:\Windows\System32\slmgr.vbs" /ipk $key 2>&1
-        $activationResult.IpkOutput = ($installResult | Out-String).Trim()
+        try {
+            $sls = Get-CimInstance -ClassName SoftwareLicensingService
+            $ipkResult = Invoke-CimMethod -InputObject $sls -MethodName InstallProductKey -Arguments @{ ProductKey = $key }
+            if ($ipkResult.ReturnValue -eq 0) {
+                $activationResult.IpkOutput = "Product key installed successfully (WMI)"
+            } else {
+                $activationResult.IpkOutput = "WMI InstallProductKey returned: $($ipkResult.ReturnValue)"
+            }
+        } catch {
+            # Fallback to slmgr if WMI fails
+            Write-Host "  ↳ WMI key install failed, using slmgr fallback..." -ForegroundColor DarkGray
+            $installResult = & cscript //NoLogo "C:\Windows\System32\slmgr.vbs" /ipk $key 2>&1
+            $activationResult.IpkOutput = ($installResult | Out-String).Trim()
+        }
+
         Start-Sleep -Seconds (Get-AdaptiveDelay -BaseSeconds 5 -MinSeconds 2)
 
-        # Attempt online activation
+        # Refresh licensing status so the new key is recognized
+        try {
+            $sls = Get-CimInstance -ClassName SoftwareLicensingService
+            $null = Invoke-CimMethod -InputObject $sls -MethodName RefreshLicenseStatus
+        } catch { }
+
+        # Attempt online activation via WMI (primary) with slmgr fallback
         Write-Host "📞 Attempting activation..." -ForegroundColor Cyan
-        $activateResult = & cscript //NoLogo "C:\Windows\System32\slmgr.vbs" /ato 2>&1
-        $activationResult.AtoOutput = ($activateResult | Out-String).Trim()
+        try {
+            $product = Get-CimInstance -Query "SELECT * FROM SoftwareLicensingProduct WHERE Name LIKE 'Windows%' AND PartialProductKey IS NOT NULL" |
+                       Select-Object -First 1
+            if ($product) {
+                $atoResult = Invoke-CimMethod -InputObject $product -MethodName Activate
+                if ($atoResult.ReturnValue -eq 0) {
+                    $activationResult.AtoOutput = "Activation call succeeded (WMI)"
+                    $activationResult.ActivationMethod = 'wmi'
+                } else {
+                    $activationResult.AtoOutput = "WMI Activate returned: 0x$($atoResult.ReturnValue.ToString('X8'))"
+                    $activationResult.ActivationMethod = 'wmi'
+                }
+            } else {
+                throw "No Windows product with partial key found after install"
+            }
+        } catch {
+            # Fallback to slmgr /ato
+            Write-Host "  ↳ WMI activation failed, using slmgr fallback..." -ForegroundColor DarkGray
+            $activateResult = & cscript //NoLogo "C:\Windows\System32\slmgr.vbs" /ato 2>&1
+            $activationResult.AtoOutput = ($activateResult | Out-String).Trim()
+            $activationResult.ActivationMethod = 'slmgr'
+        }
+
+        # Classify any error in the output
+        $combinedOutput = "$($activationResult.IpkOutput) $($activationResult.AtoOutput)"
+        $activationResult.ErrorCategory = Get-ActivationErrorCategory -ErrorOutput $combinedOutput
 
         # Adaptive initial countdown — scales with Microsoft server latency
         $adaptiveActivationDelay = Get-AdaptiveDelay -BaseSeconds $ActivationDelaySeconds -MinSeconds 4
@@ -1406,18 +1758,17 @@ function Activate-Key {
         Write-Host "`r⏳ Checking now...         "
 
         # Verify activation status with adaptive progressive delays
-        # Base: 6 checks starting at 5s, incrementing by 2s each = ~55s total on normal network
-        # Fast internet: shorter waits, slow internet: longer waits for Microsoft to respond
         $maxChecks = 6
         $checkDelay = Get-AdaptiveDelay -BaseSeconds 5 -MinSeconds 3
         $checkIncrement = [math]::Max(1, [math]::Round(2 * $script:NetworkMultiplier))
         for ($i = 0; $i -lt $maxChecks; $i++) {
             try {
-                $winProduct = Get-CimInstance -Query "SELECT LicenseStatus FROM SoftwareLicensingProduct WHERE Name LIKE 'Windows%' AND PartialProductKey IS NOT NULL"
+                $winProduct = Get-CimInstance -Query "SELECT LicenseStatus, GracePeriodRemaining FROM SoftwareLicensingProduct WHERE Name LIKE 'Windows%' AND PartialProductKey IS NOT NULL"
                 foreach ($prod in $winProduct) {
                     if ($prod.LicenseStatus -eq 1) {
                         Write-Host "`n✅ Windows is permanently activated." -ForegroundColor Green
                         $activationResult.Success = $true
+                        $activationResult.ErrorCategory = 'none'
                         return $activationResult
                     }
                 }
@@ -1432,10 +1783,15 @@ function Activate-Key {
         }
 
         Write-Host "`n❌ Activation failed." -ForegroundColor Red
+        # Re-classify with full output if initial classification was 'unknown'
+        if ($activationResult.ErrorCategory -eq 'unknown') {
+            $activationResult.ErrorCategory = Get-ActivationErrorCategory -ErrorOutput $combinedOutput
+        }
         return $activationResult
     } catch {
         Write-Host "❌ Activation error: $($_.Exception.Message)" -ForegroundColor Red
         $activationResult.ErrorDetails = $_.Exception.Message
+        $activationResult.ErrorCategory = Get-ActivationErrorCategory -ErrorOutput $_.Exception.Message
         return $activationResult
     }
 }
@@ -1450,18 +1806,21 @@ function Main-ActivationLoop {
     )
 
     while ($currentAttempt -le $MaxRetryAttempts) {
-        Write-Host "`n--- Attempt #$currentAttempt ---" -ForegroundColor Magenta
+        Write-Host "`n--- Attempt #$currentAttempt of $MaxRetryAttempts ---" -ForegroundColor Magenta
         Write-Host "Using key: $($productKey.Substring(0,5))..." -ForegroundColor Gray
 
         $activationData = Activate-Key -key $productKey
         $activationSuccess = $activationData.Success
         $result = if ($activationSuccess) { "success" } else { "failed" }
+        $errorCat = $activationData.ErrorCategory
 
-        # Build descriptive notes from slmgr output
+        # Build descriptive notes from activation output
         $noteParts = @()
         if ($activationData.IpkOutput) { $noteParts += "IPK: $($activationData.IpkOutput)" }
         if ($activationData.AtoOutput) { $noteParts += "ATO: $($activationData.AtoOutput)" }
         if ($activationData.ErrorDetails) { $noteParts += "Error: $($activationData.ErrorDetails)" }
+        if ($errorCat -ne 'none' -and $errorCat -ne 'unknown') { $noteParts += "Category: $errorCat" }
+        $noteParts += "Method: $($activationData.ActivationMethod)"
         $activationNotes = ($noteParts -join ' | ')
         if (-not $activationNotes) { $activationNotes = "Attempt #$currentAttempt" }
         if ($activationNotes.Length -gt 2000) { $activationNotes = $activationNotes.Substring(0, 2000) }
@@ -1491,10 +1850,57 @@ function Main-ActivationLoop {
             } else {
                 Write-Host "`n❌ Activation failed: $($reportResponse.message)" -ForegroundColor Red
 
+                # Key is definitively invalid — don't retry
+                if ($errorCat -eq 'key_invalid') {
+                    Write-Host "  🔑 Error category: INVALID KEY — this key cannot activate this system." -ForegroundColor Red
+                    Write-Host "  Skipping remaining retry attempts for this key." -ForegroundColor Yellow
+                    return $false
+                }
+
                 if ($currentAttempt -lt $MaxRetryAttempts) {
                     $currentAttempt++
+
+                    # Smart retry: different recovery based on error category
+                    if ($errorCat -eq 'network') {
+                        Write-Host "  📡 Error category: NETWORK — checking connectivity..." -ForegroundColor Yellow
+
+                        # Re-test internet before retrying
+                        $maxReconnectAttempts = 4
+                        $reconnected = $false
+                        for ($r = 1; $r -le $maxReconnectAttempts; $r++) {
+                            if (Test-InternetConnectivity) {
+                                $reconnected = $true
+                                Write-Host "  ✅ Internet connection restored" -ForegroundColor Green
+                                break
+                            }
+                            Write-Host "  ⏳ No internet (attempt $r/$maxReconnectAttempts) — waiting 30 seconds..." -ForegroundColor Yellow
+                            Start-Sleep -Seconds 30
+                        }
+
+                        if (-not $reconnected) {
+                            Write-Host "  ❌ Internet still unavailable after $maxReconnectAttempts checks" -ForegroundColor Red
+                        }
+
+                        # Run recovery: DNS flush, service restart, cache clear
+                        Invoke-NetworkRecovery
+
+                    } elseif ($errorCat -eq 'server_busy') {
+                        Write-Host "  🔄 Error category: SERVER BUSY — Microsoft servers are throttling" -ForegroundColor Yellow
+                        $busyDelay = Get-AdaptiveDelay -BaseSeconds 30 -MinSeconds 15
+                        Write-Host "  ⏳ Waiting $busyDelay seconds before retry..." -ForegroundColor Yellow
+                        Start-Sleep -Seconds $busyDelay
+                        continue
+
+                    } elseif ($errorCat -eq 'service') {
+                        Write-Host "  🔧 Error category: SERVICE — restarting licensing services..." -ForegroundColor Yellow
+                        Invoke-NetworkRecovery
+                    } else {
+                        # Unknown error — standard retry with adaptive delay
+                        Write-Host "  ❓ Error category: UNKNOWN" -ForegroundColor Yellow
+                    }
+
                     $retryDelay = Get-AdaptiveDelay -BaseSeconds 8 -MinSeconds 4
-                    Write-Host "⏳ Retrying same key in $retryDelay seconds... (attempt $currentAttempt of $MaxRetryAttempts)" -ForegroundColor Yellow
+                    Write-Host "  ⏳ Retrying in $retryDelay seconds... (attempt $currentAttempt of $MaxRetryAttempts)" -ForegroundColor Yellow
                     Start-Sleep -Seconds $retryDelay
                     continue
                 } else {
@@ -1504,6 +1910,11 @@ function Main-ActivationLoop {
             }
         } else {
             Write-Host "❌ Failed to report result to server" -ForegroundColor Red
+            # API server might be down — check connectivity before next attempt
+            if (-not (Test-InternetConnectivity)) {
+                Write-Host "  📡 Internet appears down — waiting 30 seconds..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 30
+            }
             $currentAttempt++
         }
     }
@@ -1690,6 +2101,9 @@ if ($useAlternativeServer) {
         exit 1
     }
 }
+
+# === PRE-ACTIVATION DIAGNOSTICS ===
+$diagnosticIssues = Invoke-PreActivationDiagnostics
 
 # === OEM SERVER PATH (PRIMARY) ===
 Write-Host "`n🔧 Using OEM Activation Server (Primary)..." -ForegroundColor Green
