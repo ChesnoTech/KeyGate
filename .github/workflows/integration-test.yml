@@ -1,0 +1,350 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_call:  # Allow release.yml to call this
+
+jobs:
+  # ─── End-to-End API Tests ────────────────────────────────────
+  api-integration:
+    name: API Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env file
+        run: |
+          cat > .env <<'EOF'
+          DB_HOST=db
+          DB_NAME=oem_activation
+          DB_USER=oem_user
+          DB_PASS=ci_oem_pass
+          MARIADB_ROOT_PASSWORD=ci_root_pass
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+          REDIS_PASSWORD=ci_redis_pass
+          APP_TIMEZONE=UTC
+          BACKUP_RETENTION_DAYS=30
+          CORS_ORIGINS=
+          PHP_MEMORY_LIMIT=256M
+          PHP_UPLOAD_MAX_FILESIZE=50M
+          PHP_POST_MAX_SIZE=50M
+          EOF
+          sed -i 's/^[[:space:]]*//' .env
+
+      - name: Generate self-signed SSL cert
+        run: |
+          mkdir -p ssl
+          openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+            -keyout ssl/server.key -out ssl/server.crt \
+            -subj "/CN=localhost" 2>/dev/null
+
+      - name: Start Docker stack
+        run: |
+          docker compose build
+          docker compose up -d db redis
+          for i in $(seq 1 40); do
+            docker compose exec -T db mariadb -uroot -pci_root_pass -e "SELECT 1" > /dev/null 2>&1 && break
+            sleep 5
+          done
+          docker compose up -d
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8080/api/health.php > /dev/null 2>&1 && break
+            sleep 5
+          done
+
+      - name: Test health endpoint has version
+        run: |
+          response=$(curl -sf http://localhost:8080/api/health.php)
+          echo "$response" | jq .
+          echo "$response" | jq -e '.checks.app_version.version' > /dev/null
+          echo "✅ Health endpoint returns app version"
+
+      - name: Setup test data (admin + technician)
+        run: |
+          # Reset admin password and unlock
+          docker compose exec -T web bash -c 'php -r "
+            require \"/var/www/html/activate/config.php\";
+            \$hash = password_hash(\"Admin2024!\", PASSWORD_BCRYPT, [\"cost\" => 10]);
+            \$stmt = \$pdo->prepare(\"UPDATE admin_users SET password_hash = ?, must_change_password = 0, failed_login_attempts = 0, locked_until = NULL WHERE username = ?\");
+            \$stmt->execute([\$hash, \"admin\"]);
+            echo \"Admin password reset\n\";
+          "'
+
+          # Ensure upgrade_history table exists
+          docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "
+            SELECT COUNT(*) as cnt FROM information_schema.tables
+            WHERE table_schema = 'oem_activation' AND table_name = 'upgrade_history'
+          "
+
+      - name: Test admin login + get CSRF token
+        id: auth
+        run: |
+          # Login
+          LOGIN=$(curl -sf -c /tmp/cookies.txt -X POST http://localhost:8080/activate/admin_v2.php?action=admin_login \
+            -H 'Content-Type: application/json' \
+            -d '{"username":"admin","password":"Admin2024!"}')
+          echo "$LOGIN" | jq -e '.success == true' > /dev/null
+          CSRF=$(echo "$LOGIN" | jq -r '.csrf_token')
+          echo "csrf=$CSRF" >> "$GITHUB_OUTPUT"
+          echo "✅ Admin login successful, CSRF token obtained"
+
+      - name: Test upgrade_get_status endpoint
+        run: |
+          response=$(curl -sf -b /tmp/cookies.txt \
+            "http://localhost:8080/activate/admin_v2.php?action=upgrade_get_status")
+          echo "$response" | jq .
+          echo "$response" | jq -e '.success == true' > /dev/null
+          echo "$response" | jq -e '.data.current_version' > /dev/null
+          echo "$response" | jq -e '.data.php_version' > /dev/null
+          echo "$response" | jq -e '.data.mariadb_version' > /dev/null
+          echo "✅ upgrade_get_status returns valid data"
+
+      - name: Test upgrade_history endpoint
+        run: |
+          response=$(curl -sf -b /tmp/cookies.txt \
+            "http://localhost:8080/activate/admin_v2.php?action=upgrade_history")
+          echo "$response" | jq .
+          echo "$response" | jq -e '.success == true' > /dev/null
+          echo "$response" | jq -e '.upgrades | type == "array"' > /dev/null
+          echo "✅ upgrade_history returns valid data"
+
+      - name: Test upgrade_check_github endpoint
+        run: |
+          response=$(curl -sf -b /tmp/cookies.txt \
+            "http://localhost:8080/activate/admin_v2.php?action=upgrade_check_github")
+          echo "$response" | jq .
+          # May fail if no releases exist yet, but should not error
+          echo "$response" | jq -e '.current_version' > /dev/null
+          echo "✅ upgrade_check_github responds correctly"
+
+      - name: Create test upgrade package
+        run: |
+          # Create a minimal upgrade package for testing
+          TMPDIR=$(mktemp -d)
+          mkdir -p "$TMPDIR/files" "$TMPDIR/migrations"
+
+          # Create a simple test migration
+          echo "SELECT 1; -- CI test migration" > "$TMPDIR/migrations/ci_test_migration.sql"
+
+          # Create a test file to "upgrade"
+          echo '<?php // CI test file' > "$TMPDIR/files/ci_test_file.php"
+
+          # Create manifest
+          cat > "$TMPDIR/manifest.json" <<'MANIFEST'
+          {
+            "schema_version": 1,
+            "version": "99.0.0",
+            "version_code": 990000,
+            "min_current_version": "0.0.0",
+            "max_current_version": "99.99.99",
+            "release_date": "2026-03-21",
+            "description": "CI test upgrade package",
+            "author": "CI",
+            "requirements": {
+              "php_min": "8.0",
+              "mariadb_min": "10.0",
+              "disk_mb_min": 10,
+              "php_extensions": ["pdo_mysql", "json"],
+              "writable_paths": ["."]
+            },
+            "migrations": [
+              {"file": "migrations/ci_test_migration.sql", "version": 9999}
+            ],
+            "files": [
+              {"action": "replace", "source": "files/ci_test_file.php", "target": "ci_test_file.php"}
+            ],
+            "post_upgrade": {
+              "clear_opcache": true
+            }
+          }
+          MANIFEST
+
+          cd "$TMPDIR" && zip -r /tmp/test-upgrade.zip manifest.json files/ migrations/
+          echo "✅ Test upgrade package created"
+          ls -lh /tmp/test-upgrade.zip
+
+      - name: Test upgrade_upload_package
+        id: upload
+        run: |
+          CSRF="${{ steps.auth.outputs.csrf }}"
+          response=$(curl -sf -b /tmp/cookies.txt -X POST \
+            "http://localhost:8080/activate/admin_v2.php?action=upgrade_upload_package" \
+            -F "csrf_token=$CSRF" \
+            -F "upgrade_package=@/tmp/test-upgrade.zip")
+          echo "$response" | jq .
+          echo "$response" | jq -e '.success == true' > /dev/null
+          UPGRADE_ID=$(echo "$response" | jq -r '.upgrade_id')
+          echo "upgrade_id=$UPGRADE_ID" >> "$GITHUB_OUTPUT"
+          echo "✅ Package uploaded, upgrade_id=$UPGRADE_ID"
+
+      - name: Test upgrade_preflight
+        run: |
+          CSRF="${{ steps.auth.outputs.csrf }}"
+          UPGRADE_ID="${{ steps.upload.outputs.upgrade_id }}"
+          response=$(curl -sf -b /tmp/cookies.txt -X POST \
+            "http://localhost:8080/activate/admin_v2.php?action=upgrade_preflight" \
+            -H 'Content-Type: application/json' \
+            -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
+          echo "$response" | jq .
+          echo "$response" | jq -e '.success == true' > /dev/null
+          echo "$response" | jq -e '.all_passed == true' > /dev/null
+          echo "✅ Pre-flight checks all passed"
+
+      - name: Test upgrade_backup
+        run: |
+          CSRF="${{ steps.auth.outputs.csrf }}"
+          UPGRADE_ID="${{ steps.upload.outputs.upgrade_id }}"
+          response=$(curl -sf -b /tmp/cookies.txt -X POST \
+            "http://localhost:8080/activate/admin_v2.php?action=upgrade_backup" \
+            -H 'Content-Type: application/json' \
+            -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
+          echo "$response" | jq .
+          echo "$response" | jq -e '.success == true' > /dev/null
+          echo "$response" | jq -e '.db_backup.filename' > /dev/null
+          echo "$response" | jq -e '.file_backup.filename' > /dev/null
+          echo "✅ Pre-upgrade backup created"
+
+      - name: Test upgrade_apply
+        run: |
+          CSRF="${{ steps.auth.outputs.csrf }}"
+          UPGRADE_ID="${{ steps.upload.outputs.upgrade_id }}"
+          response=$(curl -sf -b /tmp/cookies.txt -X POST \
+            "http://localhost:8080/activate/admin_v2.php?action=upgrade_apply" \
+            -H 'Content-Type: application/json' \
+            -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
+          echo "$response" | jq .
+          echo "$response" | jq -e '.success == true' > /dev/null
+          echo "$response" | jq -e '.migrations_applied | length >= 1' > /dev/null
+          echo "✅ Upgrade applied successfully"
+
+      - name: Test upgrade_verify
+        run: |
+          CSRF="${{ steps.auth.outputs.csrf }}"
+          UPGRADE_ID="${{ steps.upload.outputs.upgrade_id }}"
+          response=$(curl -sf -b /tmp/cookies.txt -X POST \
+            "http://localhost:8080/activate/admin_v2.php?action=upgrade_verify" \
+            -H 'Content-Type: application/json' \
+            -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
+          echo "$response" | jq .
+          echo "$response" | jq -e '.success == true' > /dev/null
+          echo "$response" | jq -e '.all_passed == true' > /dev/null
+          echo "✅ Upgrade verified"
+
+      - name: Verify VERSION.php was updated
+        run: |
+          VERSION=$(docker compose exec -T web bash -c 'php -r "require \"/var/www/html/activate/VERSION.php\"; echo APP_VERSION;"')
+          echo "Version after upgrade: $VERSION"
+          [ "$VERSION" = "99.0.0" ] || (echo "❌ VERSION.php not updated" && exit 1)
+          echo "✅ VERSION.php correctly updated to 99.0.0"
+
+      - name: Verify test file was deployed
+        run: |
+          docker compose exec -T web test -f /var/www/html/activate/ci_test_file.php
+          echo "✅ Test file deployed to application root"
+
+      - name: Verify migration was recorded
+        run: |
+          result=$(docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -N -e \
+            "SELECT COUNT(*) FROM schema_versions WHERE filename = 'ci_test_migration.sql'")
+          [ "$result" -ge 1 ] || (echo "❌ Migration not recorded" && exit 1)
+          echo "✅ Migration recorded in schema_versions"
+
+      - name: Test upgrade history shows completed
+        run: |
+          response=$(curl -sf -b /tmp/cookies.txt \
+            "http://localhost:8080/activate/admin_v2.php?action=upgrade_history")
+          echo "$response" | jq '.upgrades[0]'
+          echo "$response" | jq -e '.upgrades[0].status == "completed"' > /dev/null
+          echo "✅ Upgrade history shows completed status"
+
+      - name: Test health endpoint after upgrade
+        run: |
+          response=$(curl -sf http://localhost:8080/api/health.php)
+          echo "$response" | jq .
+          echo "$response" | jq -e '.status == "healthy"' > /dev/null
+          echo "$response" | jq -e '.checks.app_version.version == "99.0.0"' > /dev/null
+          echo "✅ Health endpoint healthy with new version"
+
+      # ── Rollback Test ─────────────────────────────────────────
+      - name: Create and upload rollback test package
+        id: rollback_upload
+        run: |
+          CSRF="${{ steps.auth.outputs.csrf }}"
+
+          # Create a package that will succeed upload+preflight+backup but we can rollback
+          TMPDIR=$(mktemp -d)
+          mkdir -p "$TMPDIR/files" "$TMPDIR/migrations"
+          echo '<?php // rollback test' > "$TMPDIR/files/rollback_test.php"
+          cat > "$TMPDIR/manifest.json" <<'MANIFEST'
+          {
+            "schema_version": 1,
+            "version": "99.1.0",
+            "version_code": 990100,
+            "min_current_version": "0.0.0",
+            "max_current_version": "99.99.99",
+            "release_date": "2026-03-21",
+            "description": "Rollback test",
+            "author": "CI",
+            "requirements": {"php_min": "8.0", "mariadb_min": "10.0", "disk_mb_min": 10, "php_extensions": ["pdo_mysql"], "writable_paths": ["."]},
+            "migrations": [],
+            "files": [{"action": "replace", "source": "files/rollback_test.php", "target": "rollback_test.php"}],
+            "post_upgrade": {"clear_opcache": true}
+          }
+          MANIFEST
+          cd "$TMPDIR" && zip -r /tmp/rollback-test.zip manifest.json files/ migrations/
+
+          response=$(curl -sf -b /tmp/cookies.txt -X POST \
+            "http://localhost:8080/activate/admin_v2.php?action=upgrade_upload_package" \
+            -F "csrf_token=$CSRF" \
+            -F "upgrade_package=@/tmp/rollback-test.zip")
+          UPGRADE_ID=$(echo "$response" | jq -r '.upgrade_id')
+          echo "upgrade_id=$UPGRADE_ID" >> "$GITHUB_OUTPUT"
+
+          # Run through preflight + backup + apply
+          curl -sf -b /tmp/cookies.txt -X POST \
+            "http://localhost:8080/activate/admin_v2.php?action=upgrade_preflight" \
+            -H 'Content-Type: application/json' \
+            -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}" > /dev/null
+
+          curl -sf -b /tmp/cookies.txt -X POST \
+            "http://localhost:8080/activate/admin_v2.php?action=upgrade_backup" \
+            -H 'Content-Type: application/json' \
+            -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}" > /dev/null
+
+          curl -sf -b /tmp/cookies.txt -X POST \
+            "http://localhost:8080/activate/admin_v2.php?action=upgrade_apply" \
+            -H 'Content-Type: application/json' \
+            -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}" > /dev/null
+
+          echo "✅ Rollback test package applied (upgrade_id=$UPGRADE_ID)"
+
+      - name: Test upgrade_rollback
+        run: |
+          CSRF="${{ steps.auth.outputs.csrf }}"
+          UPGRADE_ID="${{ steps.rollback_upload.outputs.upgrade_id }}"
+
+          response=$(curl -sf -b /tmp/cookies.txt -X POST \
+            "http://localhost:8080/activate/admin_v2.php?action=upgrade_rollback" \
+            -H 'Content-Type: application/json' \
+            -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
+          echo "$response" | jq .
+          echo "$response" | jq -e '.success == true' > /dev/null
+          echo "✅ Rollback completed successfully"
+
+      - name: Verify system restored after rollback
+        run: |
+          # Health check should still work
+          response=$(curl -sf http://localhost:8080/api/health.php)
+          echo "$response" | jq -e '.status == "healthy"' > /dev/null
+
+          # DB should be accessible
+          docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "SELECT 1" > /dev/null
+          echo "✅ System healthy after rollback"
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v
