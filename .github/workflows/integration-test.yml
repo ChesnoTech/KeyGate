@@ -140,11 +140,19 @@ jobs:
           echo "csrf=$CSRF" >> "$GITHUB_OUTPUT"
           echo "✅ Admin login successful, CSRF obtained"
 
-      - name: Debug cookie jar
+      - name: Debug session state
         run: |
-          echo "=== Cookie jar contents ==="
-          cat /tmp/cookies.txt || echo "Cookie file not found"
-          echo "=== End cookies ==="
+          echo "=== Cookie jar ==="
+          cat /tmp/cookies.txt || echo "No cookies"
+          echo ""
+          echo "=== check_session with cookie ==="
+          curl -s -b /tmp/cookies.txt "http://localhost:8080/admin_v2.php?action=check_session" | jq .
+          echo ""
+          echo "=== PHP session files in container ==="
+          docker compose exec -T web ls -la /tmp/sess_* 2>/dev/null | tail -5 || echo "No session files found"
+          echo ""
+          echo "=== PHP session.save_path ==="
+          docker compose exec -T web php -r 'echo ini_get("session.save_path") . "\n";'
 
       - name: Test upgrade_get_status endpoint
         run: |
