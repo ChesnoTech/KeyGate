@@ -63,22 +63,54 @@ jobs:
           echo "$response" | jq -e '.checks.app_version.version' > /dev/null
           echo "✅ Health endpoint returns app version"
 
-      - name: Setup test data (admin + technician)
+      - name: Setup test data (admin user + upgrade_history table)
         run: |
-          # Reset admin password and unlock
+          # Create admin user if not exists, or reset password if exists
           docker compose exec -T web bash -c 'php -r "
             require \"/var/www/html/activate/config.php\";
             \$hash = password_hash(\"Admin2024!\", PASSWORD_BCRYPT, [\"cost\" => 10]);
-            \$stmt = \$pdo->prepare(\"UPDATE admin_users SET password_hash = ?, must_change_password = 0, failed_login_attempts = 0, locked_until = NULL WHERE username = ?\");
-            \$stmt->execute([\$hash, \"admin\"]);
-            echo \"Admin password reset\n\";
+            // Check if admin exists
+            \$check = \$pdo->prepare(\"SELECT id FROM admin_users WHERE username = ?\");
+            \$check->execute([\"admin\"]);
+            if (\$check->fetch()) {
+              \$stmt = \$pdo->prepare(\"UPDATE admin_users SET password_hash = ?, must_change_password = 0, failed_login_attempts = 0, locked_until = NULL WHERE username = ?\");
+              \$stmt->execute([\$hash, \"admin\"]);
+              echo \"Admin password reset\n\";
+            } else {
+              \$stmt = \$pdo->prepare(\"INSERT INTO admin_users (username, password_hash, full_name, role, must_change_password) VALUES (?, ?, ?, ?, 0)\");
+              \$stmt->execute([\"admin\", \$hash, \"CI Admin\", \"super_admin\"]);
+              echo \"Admin user created\n\";
+            }
           "'
 
-          # Ensure upgrade_history table exists
+          # Ensure upgrade_history table exists (may not if migration hasn't run)
           docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "
-            SELECT COUNT(*) as cnt FROM information_schema.tables
-            WHERE table_schema = 'oem_activation' AND table_name = 'upgrade_history'
+            CREATE TABLE IF NOT EXISTS upgrade_history (
+              id INT AUTO_INCREMENT PRIMARY KEY,
+              from_version VARCHAR(20) NOT NULL,
+              to_version VARCHAR(20) NOT NULL,
+              from_version_code INT NOT NULL DEFAULT 0,
+              to_version_code INT NOT NULL DEFAULT 0,
+              status ENUM('pending','preflight','backing_up','upgrading','verifying','completed','failed','rolled_back') NOT NULL DEFAULT 'pending',
+              step_details JSON DEFAULT NULL,
+              manifest_json JSON DEFAULT NULL,
+              package_filename VARCHAR(255) DEFAULT NULL,
+              package_checksum VARCHAR(64) DEFAULT NULL,
+              backup_db_filename VARCHAR(512) DEFAULT NULL,
+              backup_files_path VARCHAR(512) DEFAULT NULL,
+              migrations_applied JSON DEFAULT NULL,
+              files_changed JSON DEFAULT NULL,
+              error_message TEXT DEFAULT NULL,
+              started_at TIMESTAMP NULL DEFAULT NULL,
+              completed_at TIMESTAMP NULL DEFAULT NULL,
+              rolled_back_at TIMESTAMP NULL DEFAULT NULL,
+              admin_id INT NOT NULL,
+              admin_username VARCHAR(100) DEFAULT NULL,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
           "
+
+          echo "✅ Test data setup complete"
 
       - name: Debug admin_v2.php accessibility
         run: |
@@ -94,12 +126,25 @@ jobs:
       - name: Test admin login + get CSRF token
         id: auth
         run: |
-          # Login — use -s (silent) but NOT -f (fail) so we can see the response
-          LOGIN=$(curl -s -c /tmp/cookies.txt -X POST http://localhost:8080/admin_v2.php?action=admin_login \
+          # First verify admin exists
+          docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "SELECT id, username, role FROM admin_users"
+
+          # Login — show HTTP status + body for debugging
+          HTTP_CODE=$(curl -s -o /tmp/login_response.txt -w "%{http_code}" -c /tmp/cookies.txt \
+            -X POST http://localhost:8080/admin_v2.php?action=admin_login \
             -H 'Content-Type: application/json' \
             -d '{"username":"admin","password":"Admin2024!"}')
-          echo "Login response: $LOGIN"
-          echo "$LOGIN" | jq -e '.success == true' > /dev/null || (echo "❌ Login failed" && exit 1)
+          LOGIN=$(cat /tmp/login_response.txt)
+          echo "HTTP $HTTP_CODE — Response: $LOGIN"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ Login returned HTTP $HTTP_CODE"
+            # Show Apache error log for clues
+            docker compose exec -T web tail -20 /var/log/apache2/error.log 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "$LOGIN" | jq -e '.success == true' > /dev/null || (echo "❌ Login JSON indicates failure" && exit 1)
           CSRF=$(echo "$LOGIN" | jq -r '.csrf_token')
           echo "csrf=$CSRF" >> "$GITHUB_OUTPUT"
           echo "✅ Admin login successful, CSRF token obtained"
