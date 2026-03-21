@@ -44,8 +44,10 @@ jobs:
 
       - name: Start Docker stack
         run: |
-          # Patch Dockerfile to disable session.cookie_secure for CI (HTTP-only)
+          # Patch Dockerfile for CI: disable secure cookies (HTTP) + ensure session save path
           sed -i "s/session.cookie_secure = 1/session.cookie_secure = 0/" Dockerfile.php
+          # Add session.save_path if not present
+          grep -q 'session.save_path' Dockerfile.php || sed -i "/session.cookie_secure/a\\    echo 'session.save_path = /tmp';" Dockerfile.php
 
           docker compose build
           docker compose up -d db redis
