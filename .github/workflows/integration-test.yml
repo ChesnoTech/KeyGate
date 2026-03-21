@@ -155,16 +155,8 @@ jobs:
           docker compose exec -T web bash -c 'for f in /var/lib/php/sessions/sess_*; do echo "--- $f ---"; cat "$f" 2>/dev/null; echo; done'
           echo "=== DB admin_sessions ==="
           docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "SELECT id, admin_id, is_active, expires_at, last_activity, NOW() as db_now FROM admin_sessions"
-          echo "=== validateAdminSession debug ==="
-          docker compose exec -T web php -r '
-            session_id("'$SESSID'");
-            session_start();
-            echo "SESSION admin_token: " . ($_SESSION["admin_token"] ?? "NOT SET") . "\n";
-            require "/var/www/html/activate/config.php";
-            require "/var/www/html/activate/functions/admin-helpers.php";
-            $result = validateAdminSession();
-            echo "validateAdminSession result: " . ($result ? json_encode($result) : "FALSE") . "\n";
-          ' 2>&1 || echo "Validation test failed"
+          echo "=== Direct header cookie test ==="
+          curl -sv -H "Cookie: PHPSESSID=$SESSID" "http://localhost:8080/admin_v2.php?action=check_session" 2>&1 | grep -E 'Cookie:|Set-Cookie:|authenticated|HTTP/'
 
       - name: Test upgrade_get_status endpoint
         run: |
