@@ -80,42 +80,18 @@ jobs:
             ALTER TABLE technicians ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(5) DEFAULT 'en';
           " 2>/dev/null || true
 
-          # Ensure ACL tables + permissions exist for super_admin
-          # The acl_migration.sql should have created these, but may have partially failed
-          docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "
-            CREATE TABLE IF NOT EXISTS acl_roles (
-              id INT AUTO_INCREMENT PRIMARY KEY, role_name VARCHAR(50) UNIQUE, display_name VARCHAR(100),
-              description TEXT, role_type ENUM('admin','technician') DEFAULT 'admin',
-              is_system_role TINYINT(1) DEFAULT 0, priority INT DEFAULT 0, color VARCHAR(7) DEFAULT '#6b7280'
-            );
-            CREATE TABLE IF NOT EXISTS acl_permissions (
-              id INT AUTO_INCREMENT PRIMARY KEY, permission_key VARCHAR(100) UNIQUE,
-              display_name VARCHAR(200), category VARCHAR(50)
-            );
-            CREATE TABLE IF NOT EXISTS acl_role_permissions (
-              id INT AUTO_INCREMENT PRIMARY KEY, role_id INT, permission_id INT,
-              UNIQUE KEY uk_role_perm (role_id, permission_id)
-            );
-            CREATE TABLE IF NOT EXISTS acl_user_overrides (
-              id INT AUTO_INCREMENT PRIMARY KEY, user_type VARCHAR(20), user_id INT,
-              permission_id INT, granted TINYINT(1) DEFAULT 1
-            );
-            ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS custom_role_id INT DEFAULT NULL;
-          " 2>/dev/null || true
-
-          # Grant system_settings (and other needed perms) via user override for admin user id=1
-          docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "
-            INSERT IGNORE INTO acl_permissions (permission_key, display_name, category) VALUES
-              ('system_settings','System Settings','system'),
-              ('view_keys','View Keys','keys'),
-              ('view_activations','View Activations','history'),
-              ('view_backups','View Backups','backups'),
-              ('manual_backup','Manual Backup','backups'),
-              ('view_logs','View Logs','logs'),
-              ('view_compliance','View Compliance','compliance');
-            INSERT IGNORE INTO acl_user_overrides (user_type, user_id, permission_id, granted)
-              SELECT 'admin', 1, id, 1 FROM acl_permissions;
-          " 2>/dev/null || true
+          # Run missing migrations manually (00-init.sh may not have completed all migrations)
+          for sql in rbac_migration.sql acl_migration.sql 2fa_migration.sql rate_limiting_migration.sql \
+                     backup_migration.sql hardware_info_migration.sql hardware_info_v2_migration.sql \
+                     push_notifications_migration.sql client_resources_migration.sql i18n_migration.sql \
+                     qc_compliance_migration.sql order_field_config_migration.sql integrations_migration.sql \
+                     temp_password_hash_migration.sql product_variants_migration.sql \
+                     missing_drivers_migration.sql unallocated_space_migration.sql \
+                     downloads_acl_migration.sql upgrade_system_migration.sql; do
+            docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation \
+              < "FINAL_PRODUCTION_SYSTEM/database/$sql" 2>/dev/null || true
+          done
+          echo "✅ All migrations applied"
 
           docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "
             INSERT INTO admin_users (username, password_hash, full_name, email, role, must_change_password)
