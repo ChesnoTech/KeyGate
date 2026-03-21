@@ -65,23 +65,20 @@ jobs:
 
       - name: Setup test data (admin user + upgrade_history table)
         run: |
-          # Create admin user if not exists, or reset password if exists
-          docker compose exec -T web bash -c 'php -r "
-            require \"/var/www/html/activate/config.php\";
-            \$hash = password_hash(\"Admin2024!\", PASSWORD_BCRYPT, [\"cost\" => 10]);
-            // Check if admin exists
-            \$check = \$pdo->prepare(\"SELECT id FROM admin_users WHERE username = ?\");
-            \$check->execute([\"admin\"]);
-            if (\$check->fetch()) {
-              \$stmt = \$pdo->prepare(\"UPDATE admin_users SET password_hash = ?, must_change_password = 0, failed_login_attempts = 0, locked_until = NULL WHERE username = ?\");
-              \$stmt->execute([\$hash, \"admin\"]);
-              echo \"Admin password reset\n\";
+          # Create admin user via PHP script piped to container
+          docker compose exec -T web php -r '
+            require "/var/www/html/activate/config.php";
+            $hash = password_hash("Admin2024!", PASSWORD_BCRYPT, ["cost" => 10]);
+            $check = $pdo->prepare("SELECT id FROM admin_users WHERE username = ?");
+            $check->execute(["admin"]);
+            if ($check->fetch()) {
+              $pdo->prepare("UPDATE admin_users SET password_hash = ?, must_change_password = 0, failed_login_attempts = 0, locked_until = NULL WHERE username = ?")->execute([$hash, "admin"]);
+              echo "Admin password reset\n";
             } else {
-              \$stmt = \$pdo->prepare(\"INSERT INTO admin_users (username, password_hash, full_name, role, must_change_password) VALUES (?, ?, ?, ?, 0)\");
-              \$stmt->execute([\"admin\", \$hash, \"CI Admin\", \"super_admin\"]);
-              echo \"Admin user created\n\";
+              $pdo->prepare("INSERT INTO admin_users (username, password_hash, full_name, role, must_change_password) VALUES (?, ?, ?, ?, 0)")->execute(["admin", $hash, "CI Admin", "super_admin"]);
+              echo "Admin user created\n";
             }
-          "'
+          '
 
           # Ensure upgrade_history table exists (may not if migration hasn't run)
           docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "
