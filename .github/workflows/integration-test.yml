@@ -167,8 +167,19 @@ jobs:
           echo "=== admin_sessions table ==="
           docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "SELECT id, admin_id, is_active, session_token FROM admin_sessions LIMIT 5"
           echo ""
-          echo "=== CI proxy test ==="
-          curl -sv -b /tmp/cookies.txt "http://localhost:8080/ci-api.php?action=check_session" 2>&1 | tail -20
+          echo "=== CI proxy file contents ==="
+          docker compose exec -T web cat /var/www/html/activate/ci-api.php
+          echo ""
+          echo "=== Test CI proxy directly with PHP CLI ==="
+          docker compose exec -T web php -r '
+            $_GET["action"] = "check_session";
+            $_SERVER["REQUEST_URI"] = "/ci-api.php?action=check_session";
+            $_SERVER["HTTP_HOST"] = "localhost";
+            ob_start();
+            require "/var/www/html/activate/ci-api.php";
+            $out = ob_get_clean();
+            echo "CLI output: $out\n";
+          ' 2>&1 || echo "CLI test failed"
 
       - name: Test upgrade_get_status endpoint
         run: |
