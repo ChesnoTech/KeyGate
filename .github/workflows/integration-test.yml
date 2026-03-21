@@ -74,10 +74,44 @@ jobs:
         run: |
           HASH=$(docker compose exec -T web php -r 'echo password_hash("Admin2024!", PASSWORD_BCRYPT, ["cost" => 10]);')
 
-          # Ensure i18n columns exist (may be missing if 00-init.sh didn't run all migrations)
+          # Ensure columns from later migrations exist (00-init.sh may not run all migrations in CI)
           docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "
             ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(5) DEFAULT 'en' AFTER role;
             ALTER TABLE technicians ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(5) DEFAULT 'en';
+          " 2>/dev/null || true
+
+          # Ensure ACL tables exist and grant all permissions to super_admin
+          docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "
+            CREATE TABLE IF NOT EXISTS acl_roles (
+              id INT AUTO_INCREMENT PRIMARY KEY, role_name VARCHAR(50), display_name VARCHAR(100),
+              description TEXT, role_type ENUM('admin','technician') DEFAULT 'admin',
+              is_system_role TINYINT(1) DEFAULT 0, priority INT DEFAULT 0, color VARCHAR(7) DEFAULT '#6b7280'
+            );
+            CREATE TABLE IF NOT EXISTS acl_permissions (
+              id INT AUTO_INCREMENT PRIMARY KEY, permission_key VARCHAR(100) UNIQUE,
+              display_name VARCHAR(200), category VARCHAR(50)
+            );
+            CREATE TABLE IF NOT EXISTS acl_role_permissions (
+              id INT AUTO_INCREMENT PRIMARY KEY, role_id INT, permission_id INT,
+              UNIQUE KEY (role_id, permission_id)
+            );
+            CREATE TABLE IF NOT EXISTS acl_user_overrides (
+              id INT AUTO_INCREMENT PRIMARY KEY, user_type VARCHAR(20), user_id INT,
+              permission_id INT, granted TINYINT(1) DEFAULT 1
+            );
+            ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS custom_role_id INT DEFAULT NULL;
+            INSERT IGNORE INTO acl_roles (role_name, display_name, role_type, is_system_role, priority)
+              VALUES ('super_admin', 'Super Admin', 'admin', 1, 100);
+            INSERT IGNORE INTO acl_permissions (permission_key, display_name, category) VALUES
+              ('system_settings','System Settings','system'),
+              ('view_keys','View Keys','keys'),
+              ('view_activations','View Activations','history'),
+              ('view_backups','View Backups','backups'),
+              ('manual_backup','Manual Backup','backups'),
+              ('view_logs','View Logs','logs'),
+              ('view_compliance','View Compliance','compliance');
+            INSERT IGNORE INTO acl_role_permissions (role_id, permission_id)
+              SELECT r.id, p.id FROM acl_roles r CROSS JOIN acl_permissions p WHERE r.role_name = 'super_admin';
           " 2>/dev/null || true
 
           docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "
@@ -147,24 +181,6 @@ jobs:
             "SELECT session_token FROM admin_sessions WHERE is_active = 1 ORDER BY id DESC LIMIT 1")
           echo "Token in DB: [${DB_TOKEN}]"
           echo "Match: $([ "$TOKEN" = "$DB_TOKEN" ] && echo YES || echo NO)"
-
-          # Test inline PHP validation with full exception details
-          timeout 15 docker compose exec -T web php -r "
-            \$_SESSION = [];
-            \$_SESSION['admin_token'] = '$TOKEN';
-            require '/var/www/html/activate/config.php';
-            require '/var/www/html/activate/functions/admin-helpers.php';
-            try {
-              \$stmt = \$pdo->prepare('SELECT s.id, s.admin_id, s.expires_at, s.last_activity, u.username, u.full_name, u.role, u.is_active, u.preferred_language, u.password_changed_at, u.must_change_password FROM admin_sessions s JOIN admin_users u ON s.admin_id = u.id WHERE s.session_token = ? AND s.is_active = 1');
-              \$stmt->execute(['$TOKEN']);
-              \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
-              echo 'JOIN query result: ' . json_encode(\$row) . PHP_EOL;
-              \$r = validateAdminSession();
-              echo 'validateAdminSession: ' . (\$r ? json_encode(\$r) : 'FAIL') . PHP_EOL;
-            } catch (Exception \$e) {
-              echo 'EXCEPTION: ' . \$e->getMessage() . PHP_EOL;
-            }
-          " 2>&1 || echo "PHP test failed"
 
           HTTP_CODE=$(curl -s -o /tmp/status_resp.txt -w "%{http_code}" \
             -H "X-Admin-Token: $TOKEN" \
