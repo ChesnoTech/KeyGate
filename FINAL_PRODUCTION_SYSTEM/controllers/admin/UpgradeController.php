@@ -907,7 +907,9 @@ function handle_upgrade_apply(PDO $pdo, array $admin_session, $json_input): void
         // Check if already applied
         $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM schema_versions WHERE filename = ?");
         $checkStmt->execute([basename($migFile)]);
-        if ((int)$checkStmt->fetchColumn() > 0) {
+        $alreadyApplied = (int)$checkStmt->fetchColumn() > 0;
+        $checkStmt->closeCursor();
+        if ($alreadyApplied) {
             $migrationsApplied[] = ['file' => $migFile, 'status' => 'skipped', 'message' => 'Already applied'];
             continue;
         }
@@ -944,6 +946,7 @@ function handle_upgrade_apply(PDO $pdo, array $admin_session, $json_input): void
             $checksum = hash('sha256', $migContent);
             $svStmt = $pdo->prepare("INSERT INTO schema_versions (version, filename, checksum) VALUES (?, ?, ?)");
             $svStmt->execute([$migVersion, basename($migFile), $checksum]);
+            $svStmt->closeCursor();
 
             $migrationsApplied[] = ['file' => $migFile, 'status' => 'applied'];
         } catch (Exception $e) {
