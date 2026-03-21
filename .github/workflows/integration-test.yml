@@ -48,21 +48,8 @@ jobs:
           sed -i "s/session.cookie_secure = 1/session.cookie_secure = 0/" Dockerfile.php
           sed -i "s/session.use_strict_mode = 1/session.use_strict_mode = 0/" Dockerfile.php
 
-          # Add auto_prepend via php.ini to inject session token from X-Session-Token header
-          # This bypasses PHP session file persistence issues in CI Docker
-          cat >> Dockerfile.php <<'DOCKERFILE'
-          RUN echo '<?php' > /var/www/html/activate/ci-session-fix.php \
-            && echo 'if (strpos($_SERVER["REQUEST_URI"] ?? "", "admin_v2.php") === false) return;' >> /var/www/html/activate/ci-session-fix.php \
-            && echo '$ciToken = $_SERVER["HTTP_X_SESSION_TOKEN"] ?? "";' >> /var/www/html/activate/ci-session-fix.php \
-            && echo 'if (!$ciToken) return;' >> /var/www/html/activate/ci-session-fix.php \
-            && echo 'if (session_status() === PHP_SESSION_NONE) { session_start(); }' >> /var/www/html/activate/ci-session-fix.php \
-            && echo 'if (empty($_SESSION["admin_token"])) {' >> /var/www/html/activate/ci-session-fix.php \
-            && echo '  $_SESSION["admin_token"] = $ciToken;' >> /var/www/html/activate/ci-session-fix.php \
-            && echo '  $_SESSION["admin_id"] = 1;' >> /var/www/html/activate/ci-session-fix.php \
-            && echo '  $_SESSION["session_id"] = 1;' >> /var/www/html/activate/ci-session-fix.php \
-            && echo '}' >> /var/www/html/activate/ci-session-fix.php \
-            && echo 'auto_prepend_file = /var/www/html/activate/ci-session-fix.php' >> /usr/local/etc/php/conf.d/ci-prepend.ini
-          DOCKERFILE
+          # No auto_prepend needed — validateAdminSession() now supports
+          # X-Admin-Token header as fallback for CI/testing
 
           docker compose build
           docker compose up -d db redis
@@ -140,14 +127,14 @@ jobs:
           # Get the session token directly from DB (bypasses PHP session persistence issues)
           TOKEN=$(docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -N -e \
             "SELECT session_token FROM admin_sessions WHERE is_active = 1 ORDER BY id DESC LIMIT 1")
-          echo "session_token=$TOKEN" >> "$GITHUB_OUTPUT"
+          echo "admin_token=$TOKEN" >> "$GITHUB_OUTPUT"
           echo "✅ Admin login successful, session token obtained from DB"
 
       - name: Test upgrade_get_status endpoint
         run: |
-          TOKEN="${{ steps.auth.outputs.session_token }}"
+          TOKEN="${{ steps.auth.outputs.admin_token }}"
           HTTP_CODE=$(curl -s -o /tmp/status_resp.txt -w "%{http_code}" \
-            -H "X-Session-Token: $TOKEN" \
+            -H "X-Admin-Token: $TOKEN" \
             "http://localhost:8080/admin_v2.php?action=upgrade_get_status")
           response=$(cat /tmp/status_resp.txt)
           echo "HTTP $HTTP_CODE — $response"
@@ -160,7 +147,7 @@ jobs:
 
       - name: Test upgrade_history endpoint
         run: |
-          response=$(curl -sf -H "X-Session-Token: ${{ steps.auth.outputs.session_token }}" \
+          response=$(curl -sf -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" \
             "http://localhost:8080/admin_v2.php?action=upgrade_history")
           echo "$response" | jq -e '.success == true' > /dev/null
           echo "$response" | jq -e '.upgrades | type == "array"' > /dev/null
@@ -168,7 +155,7 @@ jobs:
 
       - name: Test upgrade_check_github endpoint
         run: |
-          response=$(curl -sf -H "X-Session-Token: ${{ steps.auth.outputs.session_token }}" \
+          response=$(curl -sf -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" \
             "http://localhost:8080/admin_v2.php?action=upgrade_check_github")
           echo "$response" | jq .
           echo "$response" | jq -e '.current_version' > /dev/null
@@ -214,7 +201,7 @@ jobs:
         id: upload
         run: |
           CSRF="${{ steps.auth.outputs.csrf }}"
-          response=$(curl -sf -H "X-Session-Token: ${{ steps.auth.outputs.session_token }}" -X POST \
+          response=$(curl -sf -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_upload_package" \
             -F "csrf_token=$CSRF" \
             -F "upgrade_package=@/tmp/test-upgrade.zip")
@@ -228,7 +215,7 @@ jobs:
         run: |
           CSRF="${{ steps.auth.outputs.csrf }}"
           UPGRADE_ID="${{ steps.upload.outputs.upgrade_id }}"
-          response=$(curl -sf -H "X-Session-Token: ${{ steps.auth.outputs.session_token }}" -X POST \
+          response=$(curl -sf -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_preflight" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
@@ -241,7 +228,7 @@ jobs:
         run: |
           CSRF="${{ steps.auth.outputs.csrf }}"
           UPGRADE_ID="${{ steps.upload.outputs.upgrade_id }}"
-          response=$(curl -sf -H "X-Session-Token: ${{ steps.auth.outputs.session_token }}" -X POST \
+          response=$(curl -sf -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_backup" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
@@ -255,7 +242,7 @@ jobs:
         run: |
           CSRF="${{ steps.auth.outputs.csrf }}"
           UPGRADE_ID="${{ steps.upload.outputs.upgrade_id }}"
-          response=$(curl -sf -H "X-Session-Token: ${{ steps.auth.outputs.session_token }}" -X POST \
+          response=$(curl -sf -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_apply" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
@@ -268,7 +255,7 @@ jobs:
         run: |
           CSRF="${{ steps.auth.outputs.csrf }}"
           UPGRADE_ID="${{ steps.upload.outputs.upgrade_id }}"
-          response=$(curl -sf -H "X-Session-Token: ${{ steps.auth.outputs.session_token }}" -X POST \
+          response=$(curl -sf -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_verify" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
@@ -298,7 +285,7 @@ jobs:
 
       - name: Verify upgrade history shows completed
         run: |
-          response=$(curl -sf -H "X-Session-Token: ${{ steps.auth.outputs.session_token }}" \
+          response=$(curl -sf -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" \
             "http://localhost:8080/admin_v2.php?action=upgrade_history")
           echo "$response" | jq '.upgrades[0]'
           echo "$response" | jq -e '.upgrades[0].status == "completed"' > /dev/null
@@ -337,7 +324,7 @@ jobs:
           MANIFEST
           cd "$TMPDIR" && zip -r /tmp/rollback-test.zip manifest.json files/ migrations/
 
-          response=$(curl -sf -H "X-Session-Token: ${{ steps.auth.outputs.session_token }}" -X POST \
+          response=$(curl -sf -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_upload_package" \
             -F "csrf_token=$CSRF" \
             -F "upgrade_package=@/tmp/rollback-test.zip")
@@ -346,7 +333,7 @@ jobs:
 
           # Run through preflight + backup + apply
           for action in upgrade_preflight upgrade_backup upgrade_apply; do
-            curl -sf -H "X-Session-Token: ${{ steps.auth.outputs.session_token }}" -X POST \
+            curl -sf -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
               "http://localhost:8080/admin_v2.php?action=$action" \
               -H 'Content-Type: application/json' \
               -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}" > /dev/null
@@ -357,7 +344,7 @@ jobs:
         run: |
           CSRF="${{ steps.auth.outputs.csrf }}"
           UPGRADE_ID="${{ steps.rollback_upload.outputs.upgrade_id }}"
-          response=$(curl -sf -H "X-Session-Token: ${{ steps.auth.outputs.session_token }}" -X POST \
+          response=$(curl -sf -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_rollback" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")

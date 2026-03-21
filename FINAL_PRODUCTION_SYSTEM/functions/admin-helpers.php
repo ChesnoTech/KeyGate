@@ -17,6 +17,11 @@
 function validateAdminSession() {
     global $pdo;
 
+    // Support X-Admin-Token header as alternative to session (for CI/API testing)
+    if (!isset($_SESSION['admin_token']) && !empty($_SERVER['HTTP_X_ADMIN_TOKEN'])) {
+        $_SESSION['admin_token'] = $_SERVER['HTTP_X_ADMIN_TOKEN'];
+    }
+
     if (!isset($_SESSION['admin_token'])) {
         return false;
     }
