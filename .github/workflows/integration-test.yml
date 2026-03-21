@@ -290,7 +290,11 @@ jobs:
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
           echo "$response" | jq .
-          echo "$response" | jq -e '.success == true' > /dev/null
+          if ! echo "$response" | jq -e '.success == true' > /dev/null 2>&1; then
+            echo "=== PHP error log ==="
+            timeout 5 docker compose exec -T web bash -c 'tail -20 /var/www/html/activate/logs/php_errors.log 2>/dev/null || tail -20 /var/log/apache2/error.log 2>/dev/null' || echo "(no log)"
+            exit 1
+          fi
           echo "$response" | jq -e '.migrations_applied | length >= 1' > /dev/null
           echo "✅ Upgrade applied successfully"
 
