@@ -63,6 +63,34 @@ export interface UpgradeStatus {
   recent_upgrades: UpgradeHistoryRow[]
 }
 
+export interface GitHubReleaseInfo {
+  tag: string
+  name: string
+  changelog: string
+  published_at: string
+  url: string
+  prerelease: boolean
+}
+
+export interface GitHubAsset {
+  name: string
+  size: number
+  download_url: string
+  content_type: string
+  download_count: number
+}
+
+export interface GitHubCheckResult {
+  success: boolean
+  update_available: boolean
+  current_version: string
+  latest_version: string
+  release: GitHubReleaseInfo
+  asset: GitHubAsset | null
+  has_upgrade_package: boolean
+  error?: string
+}
+
 export interface MigrationResult {
   file: string
   status: 'applied' | 'skipped' | 'failed'
@@ -77,6 +105,19 @@ export interface FileResult {
 }
 
 // ── API Functions ───────────────────────────────────────────
+
+export function checkGitHubUpdate(forceRefresh = false) {
+  return apiGet<GitHubCheckResult>('upgrade_check_github', forceRefresh ? { force_refresh: '1' } : undefined)
+}
+
+export function downloadFromGitHub(downloadUrl: string, assetName: string) {
+  return apiPostJson<{
+    success: boolean
+    upgrade_id: number
+    manifest: UpgradeManifest
+    package: { filename: string; checksum: string; size_mb: number }
+  }>('upgrade_download_github', { download_url: downloadUrl, asset_name: assetName })
+}
 
 export function getUpgradeStatus() {
   return apiGet<{ success: boolean; data: UpgradeStatus }>('upgrade_get_status')

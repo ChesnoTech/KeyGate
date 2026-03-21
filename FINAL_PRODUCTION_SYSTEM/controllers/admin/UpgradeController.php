@@ -88,6 +88,330 @@ function getCurrentVersion(): array {
     ];
 }
 
+// ── GitHub Update Config ────────────────────────────────────
+// Repository to check for releases (owner/repo)
+define('GITHUB_REPO', 'ChesnoTech/OEM_Activation_System');
+define('GITHUB_API_BASE', 'https://api.github.com');
+define('GITHUB_CACHE_TTL', 3600); // 1 hour cache
+
+function getGitHubHeaders(): array {
+    $headers = [
+        'Accept: application/vnd.github+json',
+        'User-Agent: OEM-Activation-System/' . (defined('APP_VERSION') ? APP_VERSION : '2.0.0'),
+        'X-GitHub-Api-Version: 2022-11-28',
+    ];
+    // Optional: use a GitHub token from env for higher rate limits (60/hr → 5000/hr)
+    $token = $_ENV['GITHUB_TOKEN'] ?? getenv('GITHUB_TOKEN') ?? '';
+    if (!empty($token)) {
+        $headers[] = "Authorization: Bearer {$token}";
+    }
+    return $headers;
+}
+
+function fetchGitHubRelease(): ?array {
+    $url = GITHUB_API_BASE . '/repos/' . GITHUB_REPO . '/releases/latest';
+    $ctx = stream_context_create([
+        'http' => [
+            'timeout' => 10,
+            'ignore_errors' => true,
+            'header' => implode("\r\n", getGitHubHeaders()),
+        ],
+    ]);
+
+    $body = @file_get_contents($url, false, $ctx);
+    if ($body === false) return null;
+
+    // Check HTTP status from response headers
+    $status = 0;
+    if (isset($http_response_header)) {
+        foreach ($http_response_header as $header) {
+            if (preg_match('/HTTP\/\S+\s+(\d+)/', $header, $m)) {
+                $status = (int)$m[1];
+            }
+        }
+    }
+    if ($status !== 200) return null;
+
+    $data = json_decode($body, true);
+    if (!is_array($data) || empty($data['tag_name'])) return null;
+
+    return $data;
+}
+
+function parseVersionFromTag(string $tag): string {
+    // Strip leading 'v' or 'V'
+    return ltrim($tag, 'vV');
+}
+
+function findUpgradeAsset(array $release): ?array {
+    $assets = $release['assets'] ?? [];
+    foreach ($assets as $asset) {
+        $name = strtolower($asset['name'] ?? '');
+        // Match upgrade-*.zip or *-upgrade-*.zip or upgrade_*.zip
+        if (str_ends_with($name, '.zip') &&
+            (str_contains($name, 'upgrade') || str_contains($name, 'update'))) {
+            return [
+                'name'          => $asset['name'],
+                'size'          => $asset['size'] ?? 0,
+                'download_url'  => $asset['browser_download_url'] ?? '',
+                'content_type'  => $asset['content_type'] ?? '',
+                'download_count'=> $asset['download_count'] ?? 0,
+            ];
+        }
+    }
+    // Fallback: first ZIP asset
+    foreach ($assets as $asset) {
+        if (str_ends_with(strtolower($asset['name'] ?? ''), '.zip')) {
+            return [
+                'name'          => $asset['name'],
+                'size'          => $asset['size'] ?? 0,
+                'download_url'  => $asset['browser_download_url'] ?? '',
+                'content_type'  => $asset['content_type'] ?? '',
+                'download_count'=> $asset['download_count'] ?? 0,
+            ];
+        }
+    }
+    return null;
+}
+
+// ── 0. Check GitHub for Updates ─────────────────────────────
+
+function handle_upgrade_check_github(PDO $pdo, array $admin_session, $json_input): void {
+    requirePermission('system_settings', $admin_session);
+
+    $current = getCurrentVersion();
+    $forceRefresh = !empty($json_input['force_refresh']);
+
+    // Simple file-based cache
+    $cacheFile = sys_get_temp_dir() . '/oem_github_release_cache.json';
+    $cached = null;
+
+    if (!$forceRefresh && file_exists($cacheFile)) {
+        $cacheData = json_decode(file_get_contents($cacheFile), true);
+        if (is_array($cacheData) && ($cacheData['cached_at'] ?? 0) > time() - GITHUB_CACHE_TTL) {
+            $cached = $cacheData;
+        }
+    }
+
+    if ($cached) {
+        $release = $cached['release'];
+        $asset = $cached['asset'];
+    } else {
+        $release = fetchGitHubRelease();
+        if (!$release) {
+            jsonResponse([
+                'success' => true,
+                'update_available' => false,
+                'error' => 'Could not reach GitHub API. Check network or rate limits.',
+            ]);
+            return;
+        }
+
+        $asset = findUpgradeAsset($release);
+
+        // Cache the result
+        file_put_contents($cacheFile, json_encode([
+            'cached_at' => time(),
+            'release'   => [
+                'tag_name'    => $release['tag_name'],
+                'name'        => $release['name'] ?? '',
+                'body'        => $release['body'] ?? '',
+                'published_at'=> $release['published_at'] ?? '',
+                'html_url'    => $release['html_url'] ?? '',
+                'prerelease'  => $release['prerelease'] ?? false,
+                'draft'       => $release['draft'] ?? false,
+            ],
+            'asset' => $asset,
+        ]));
+    }
+
+    $latestVersion = parseVersionFromTag($release['tag_name']);
+    $updateAvailable = version_compare($latestVersion, $current['version'], '>');
+
+    // Skip pre-releases and drafts
+    if (!empty($release['prerelease']) || !empty($release['draft'])) {
+        $updateAvailable = false;
+    }
+
+    jsonResponse([
+        'success'          => true,
+        'update_available' => $updateAvailable,
+        'current_version'  => $current['version'],
+        'latest_version'   => $latestVersion,
+        'release' => [
+            'tag'          => $release['tag_name'],
+            'name'         => $release['name'] ?? '',
+            'changelog'    => $release['body'] ?? '',
+            'published_at' => $release['published_at'] ?? '',
+            'url'          => $release['html_url'] ?? '',
+            'prerelease'   => $release['prerelease'] ?? false,
+        ],
+        'asset' => $asset,
+        'has_upgrade_package' => $asset !== null,
+    ]);
+}
+
+// ── 0b. Download upgrade package from GitHub ────────────────
+
+function handle_upgrade_download_github(PDO $pdo, array $admin_session, $json_input): void {
+    requirePermission('system_settings', $admin_session);
+    set_time_limit(300);
+
+    $downloadUrl = $json_input['download_url'] ?? '';
+    $assetName = $json_input['asset_name'] ?? 'upgrade.zip';
+
+    if (empty($downloadUrl)) {
+        jsonResponse(['success' => false, 'error' => 'No download URL provided']);
+        return;
+    }
+
+    // Validate URL is from GitHub
+    if (!preg_match('#^https://github\.com/.+/releases/download/.+\.zip$#', $downloadUrl)) {
+        jsonResponse(['success' => false, 'error' => 'Invalid GitHub release asset URL']);
+        return;
+    }
+
+    // Check no active upgrade
+    $stmt = $pdo->prepare("
+        SELECT id, status FROM upgrade_history
+        WHERE status NOT IN ('completed', 'failed', 'rolled_back')
+        LIMIT 1
+    ");
+    $stmt->execute();
+    $active = $stmt->fetch();
+    if ($active) {
+        jsonResponse([
+            'success' => false,
+            'error' => "Another upgrade (#{$active['id']}) is in progress. Complete or rollback it first.",
+        ]);
+        return;
+    }
+
+    // Download the file
+    $ctx = stream_context_create([
+        'http' => [
+            'timeout' => 120,
+            'follow_location' => true,
+            'max_redirects' => 5,
+            'header' => implode("\r\n", getGitHubHeaders()),
+        ],
+    ]);
+
+    $tmpFile = tempnam(sys_get_temp_dir(), 'oem_upgrade_');
+    $source = @fopen($downloadUrl, 'rb', false, $ctx);
+    if (!$source) {
+        @unlink($tmpFile);
+        jsonResponse(['success' => false, 'error' => 'Failed to download from GitHub. Check network or token.']);
+        return;
+    }
+
+    $dest = fopen($tmpFile, 'wb');
+    $bytes = stream_copy_to_stream($source, $dest);
+    fclose($source);
+    fclose($dest);
+
+    if ($bytes === false || $bytes < 100) {
+        @unlink($tmpFile);
+        jsonResponse(['success' => false, 'error' => 'Download produced empty file']);
+        return;
+    }
+
+    // Validate ZIP and extract manifest
+    $zip = new ZipArchive();
+    if ($zip->open($tmpFile) !== true) {
+        @unlink($tmpFile);
+        jsonResponse(['success' => false, 'error' => 'Downloaded file is not a valid ZIP']);
+        return;
+    }
+
+    $manifestJson = $zip->getFromName('manifest.json');
+    if ($manifestJson === false) {
+        $zip->close();
+        @unlink($tmpFile);
+        jsonResponse(['success' => false, 'error' => 'ZIP missing manifest.json — not a valid upgrade package']);
+        return;
+    }
+
+    $manifest = json_decode($manifestJson, true);
+    if (!is_array($manifest)) {
+        $zip->close();
+        @unlink($tmpFile);
+        jsonResponse(['success' => false, 'error' => 'manifest.json is not valid JSON']);
+        return;
+    }
+
+    $validationError = validateManifest($manifest);
+    if ($validationError) {
+        $zip->close();
+        @unlink($tmpFile);
+        jsonResponse(['success' => false, 'error' => $validationError]);
+        return;
+    }
+
+    // Version compatibility check
+    $current = getCurrentVersion();
+    $minVersion = $manifest['min_current_version'] ?? '0.0.0';
+    $maxVersion = $manifest['max_current_version'] ?? '99.99.99';
+
+    if (version_compare($current['version'], $minVersion, '<') ||
+        version_compare($current['version'], $maxVersion, '>')) {
+        $zip->close();
+        @unlink($tmpFile);
+        jsonResponse([
+            'success' => false,
+            'error' => "Package requires version {$minVersion}–{$maxVersion}, current is {$current['version']}",
+        ]);
+        return;
+    }
+
+    $zip->close();
+
+    // Move to upgrade directory
+    $checksum = hash_file('sha256', $tmpFile);
+    $storedName = "upgrade_{$manifest['version']}_{$checksum}.zip";
+    $storedPath = getUpgradeDir() . '/' . $storedName;
+    rename($tmpFile, $storedPath);
+
+    // Create upgrade_history row
+    $stmt = $pdo->prepare("
+        INSERT INTO upgrade_history
+            (from_version, to_version, from_version_code, to_version_code,
+             status, manifest_json, package_filename, package_checksum,
+             admin_id, admin_username)
+        VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
+    ");
+    $stmt->execute([
+        $current['version'],
+        $manifest['version'],
+        $current['version_code'],
+        $manifest['version_code'],
+        json_encode($manifest),
+        $storedName,
+        $checksum,
+        (int)$admin_session['admin_id'],
+        $admin_session['username'],
+    ]);
+    $upgradeId = (int)$pdo->lastInsertId();
+
+    logAdminActivity(
+        $admin_session['admin_id'],
+        $admin_session['id'] ?? 0,
+        'UPGRADE_DOWNLOADED_GITHUB',
+        "Downloaded upgrade v{$manifest['version']} from GitHub (#{$upgradeId})"
+    );
+
+    jsonResponse([
+        'success'    => true,
+        'upgrade_id' => $upgradeId,
+        'manifest'   => $manifest,
+        'package'    => [
+            'filename' => $storedName,
+            'checksum' => $checksum,
+            'size_mb'  => round(filesize($storedPath) / 1024 / 1024, 2),
+        ],
+    ]);
+}
+
 // ── 1. Get Status ───────────────────────────────────────────
 
 function handle_upgrade_get_status(PDO $pdo, array $admin_session, $json_input): void {

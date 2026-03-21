@@ -1617,5 +1617,20 @@
     "toast.upgrade_applied": "Upgrade applied successfully",
     "toast.upgrade_verified": "Upgrade verified successfully",
     "toast.rollback_complete": "System rolled back successfully",
-    "empty.upgrade_history": "No upgrade history"
+    "toast.upgrade_downloaded": "Upgrade package downloaded from GitHub",
+    "empty.upgrade_history": "No upgrade history",
+    "upgrade.github_updates": "GitHub Updates",
+    "upgrade.github_desc": "Check for the latest release on GitHub.",
+    "upgrade.checking_updates": "Checking for updates...",
+    "upgrade.update_available_title": "Update Available: v{{version}}",
+    "upgrade.update_found": "Update available: v{{version}}",
+    "upgrade.up_to_date": "System is up to date",
+    "upgrade.published": "Published",
+    "upgrade.view_changelog": "View changelog",
+    "upgrade.download_install": "Download & Install",
+    "upgrade.downloading": "Downloading...",
+    "upgrade.no_package": "No upgrade package attached to this release",
+    "upgrade.view_release": "View on GitHub",
+    "upgrade.check_now": "Check Now",
+    "upgrade.manual_upload": "Manual Upload"
 }

@@ -31,9 +31,16 @@ import {
   Package,
   ArrowRight,
   Info,
+  RefreshCw,
+  CloudDownload,
+  ExternalLink,
+  Globe,
 } from 'lucide-react'
 import {
   useUpgradeStatus,
+  useCheckGitHub,
+  useRefreshGitHub,
+  useDownloadFromGitHub,
   useUploadPackage,
   useRunPreflight,
   useRunBackup,
@@ -168,6 +175,9 @@ export function SystemUpgradePage() {
   // Queries & Mutations
   const statusQuery = useUpgradeStatus()
   const historyQuery = useUpgradeHistory()
+  const githubQuery = useCheckGitHub()
+  const refreshGithubMut = useRefreshGitHub()
+  const downloadGithubMut = useDownloadFromGitHub()
   const uploadMut = useUploadPackage()
   const preflightMut = useRunPreflight()
   const backupMut = useRunBackup()
@@ -220,6 +230,14 @@ export function SystemUpgradePage() {
     const file = e.target.files?.[0]
     if (!file) return
     const result = await uploadMut.mutateAsync(file)
+    setUpgradeId(result.upgrade_id)
+    setManifest(result.manifest)
+    markComplete('upload')
+    setCurrentStep('preflight')
+  }
+
+  const handleDownloadFromGitHub = async (url: string, name: string) => {
+    const result = await downloadGithubMut.mutateAsync({ url, name })
     setUpgradeId(result.upgrade_id)
     setManifest(result.manifest)
     markComplete('upload')
@@ -288,6 +306,7 @@ export function SystemUpgradePage() {
   }
 
   const anyLoading =
+    downloadGithubMut.isPending ||
     uploadMut.isPending ||
     preflightMut.isPending ||
     backupMut.isPending ||
@@ -334,57 +353,179 @@ export function SystemUpgradePage() {
 
       {/* Step 1: Upload */}
       {currentStep === 'upload' && !upgradeComplete && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5" />
-              {t('upgrade.step_upload', 'Upload Package')}
-            </CardTitle>
-            <CardDescription>
-              {t('upgrade.upload_desc', 'Upload a .zip upgrade package containing manifest.json, migrations, and file updates.')}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".zip"
-              className="hidden"
-              onChange={handleFileSelect}
-            />
-            <div
-              className="border-2 border-dashed rounded-lg p-12 text-center cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-colors"
-              onClick={() => fileInputRef.current?.click()}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault()
-                const file = e.dataTransfer.files[0]
-                if (file?.name.endsWith('.zip')) {
-                  uploadMut.mutate(file, {
-                    onSuccess: (result) => {
-                      setUpgradeId(result.upgrade_id)
-                      setManifest(result.manifest)
-                      markComplete('upload')
-                      setCurrentStep('preflight')
-                    },
-                  })
-                }
-              }}
-            >
-              {uploadMut.isPending ? (
-                <Loader2 className="h-10 w-10 mx-auto text-primary animate-spin" />
+        <>
+          {/* GitHub Update Check */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Globe className="h-5 w-5" />
+                {t('upgrade.github_updates', 'GitHub Updates')}
+              </CardTitle>
+              <CardDescription>
+                {t('upgrade.github_desc', 'Check for the latest release on GitHub.')}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {githubQuery.isLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {t('upgrade.checking_updates', 'Checking for updates...')}
+                </div>
+              ) : githubQuery.data?.update_available ? (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <p className="font-semibold text-blue-700 dark:text-blue-400 flex items-center gap-2">
+                        <CloudDownload className="h-4 w-4" />
+                        {t('upgrade.update_available_title', 'Update Available: v{{version}}', {
+                          version: githubQuery.data.latest_version,
+                        })}
+                      </p>
+                      {githubQuery.data.release?.name && (
+                        <p className="text-sm text-blue-600 dark:text-blue-500 mt-1">
+                          {githubQuery.data.release.name}
+                        </p>
+                      )}
+                      {githubQuery.data.release?.published_at && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {t('upgrade.published', 'Published')}: {new Date(githubQuery.data.release.published_at).toLocaleDateString()}
+                        </p>
+                      )}
+                      {githubQuery.data.release?.changelog && (
+                        <details className="mt-2">
+                          <summary className="text-xs cursor-pointer text-blue-600 dark:text-blue-400 hover:underline">
+                            {t('upgrade.view_changelog', 'View changelog')}
+                          </summary>
+                          <pre className="mt-2 text-xs whitespace-pre-wrap bg-muted/50 rounded p-2 max-h-40 overflow-y-auto">
+                            {githubQuery.data.release.changelog}
+                          </pre>
+                        </details>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2 shrink-0">
+                      {githubQuery.data.has_upgrade_package && githubQuery.data.asset ? (
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            handleDownloadFromGitHub(
+                              githubQuery.data!.asset!.download_url,
+                              githubQuery.data!.asset!.name
+                            )
+                          }
+                          disabled={anyLoading}
+                        >
+                          {downloadGithubMut.isPending ? (
+                            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                          ) : (
+                            <CloudDownload className="mr-1 h-4 w-4" />
+                          )}
+                          {downloadGithubMut.isPending
+                            ? t('upgrade.downloading', 'Downloading...')
+                            : t('upgrade.download_install', 'Download & Install')}
+                        </Button>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          {t('upgrade.no_package', 'No upgrade package attached to this release')}
+                        </p>
+                      )}
+                      {githubQuery.data.release?.url && (
+                        <a
+                          href={githubQuery.data.release.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          {t('upgrade.view_release', 'View on GitHub')}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                  {githubQuery.data.asset && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {githubQuery.data.asset.name} ({(githubQuery.data.asset.size / 1024 / 1024).toFixed(1)} MB)
+                    </p>
+                  )}
+                </div>
               ) : (
-                <Upload className="h-10 w-10 mx-auto text-muted-foreground" />
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  <span>{t('upgrade.up_to_date', 'System is up to date')}</span>
+                  {githubQuery.data?.latest_version && (
+                    <span className="text-muted-foreground">(v{githubQuery.data.latest_version})</span>
+                  )}
+                </div>
               )}
-              <p className="mt-3 text-sm font-medium">
-                {t('upgrade.upload_hint', 'Drop a .zip upgrade package here, or click to browse')}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t('upgrade.upload_format', 'ZIP must contain manifest.json at root level')}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refreshGithubMut.mutate()}
+                disabled={refreshGithubMut.isPending}
+              >
+                {refreshGithubMut.isPending ? (
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                )}
+                {t('upgrade.check_now', 'Check Now')}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Manual Upload */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                {t('upgrade.manual_upload', 'Manual Upload')}
+              </CardTitle>
+              <CardDescription>
+                {t('upgrade.upload_desc', 'Upload a .zip upgrade package containing manifest.json, migrations, and file updates.')}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".zip"
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+              <div
+                className="border-2 border-dashed rounded-lg p-12 text-center cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  const file = e.dataTransfer.files[0]
+                  if (file?.name.endsWith('.zip')) {
+                    uploadMut.mutate(file, {
+                      onSuccess: (result) => {
+                        setUpgradeId(result.upgrade_id)
+                        setManifest(result.manifest)
+                        markComplete('upload')
+                        setCurrentStep('preflight')
+                      },
+                    })
+                  }
+                }}
+              >
+                {uploadMut.isPending ? (
+                  <Loader2 className="h-10 w-10 mx-auto text-primary animate-spin" />
+                ) : (
+                  <Upload className="h-10 w-10 mx-auto text-muted-foreground" />
+                )}
+                <p className="mt-3 text-sm font-medium">
+                  {t('upgrade.upload_hint', 'Drop a .zip upgrade package here, or click to browse')}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t('upgrade.upload_format', 'ZIP must contain manifest.json at root level')}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </>
       )}
 
       {/* Manifest Info (shown after upload) */}

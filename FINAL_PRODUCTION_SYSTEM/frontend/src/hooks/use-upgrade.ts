@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import {
+  checkGitHubUpdate,
+  downloadFromGitHub,
   getUpgradeStatus,
   uploadUpgradePackage,
   runPreflight,
@@ -11,6 +13,45 @@ import {
   rollbackUpgrade,
   getUpgradeHistory,
 } from '@/api/upgrade'
+
+export function useCheckGitHub() {
+  return useQuery({
+    queryKey: ['upgrade-github'],
+    queryFn: () => checkGitHubUpdate(),
+    staleTime: 60_000 * 10, // 10 min
+    refetchOnWindowFocus: false,
+  })
+}
+
+export function useRefreshGitHub() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: () => checkGitHubUpdate(true),
+    onSuccess: (data) => {
+      qc.setQueryData(['upgrade-github'], data)
+      if (data.update_available) {
+        toast.success(t('upgrade.update_found', 'Update available: v{{version}}', { version: data.latest_version }))
+      } else {
+        toast.success(t('upgrade.up_to_date', 'System is up to date'))
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+export function useDownloadFromGitHub() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: ({ url, name }: { url: string; name: string }) => downloadFromGitHub(url, name),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['upgrade-status'] })
+      toast.success(t('toast.upgrade_downloaded', 'Upgrade package downloaded from GitHub'))
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
 
 export function useUpgradeStatus() {
   return useQuery({

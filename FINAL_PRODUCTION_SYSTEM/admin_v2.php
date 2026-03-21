@@ -292,6 +292,8 @@ $action_registry = [
     'delete_product_variant'   => ['ProductVariantsController.php', 'handle_delete_product_variant',   true,  true],
 
     // system upgrade
+    'upgrade_check_github'     => ['UpgradeController.php', 'handle_upgrade_check_github',     false, true],
+    'upgrade_download_github'  => ['UpgradeController.php', 'handle_upgrade_download_github',  true,  true],
     'upgrade_get_status'       => ['UpgradeController.php', 'handle_upgrade_get_status',       false, true],
     'upgrade_upload_package'   => ['UpgradeController.php', 'handle_upgrade_upload_package',   true,  false],
     'upgrade_preflight'        => ['UpgradeController.php', 'handle_upgrade_preflight',        true,  true],

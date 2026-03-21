@@ -1617,5 +1617,20 @@
     "toast.upgrade_applied": "Обновление применено успешно",
     "toast.upgrade_verified": "Обновление проверено",
     "toast.rollback_complete": "Система откачена успешно",
-    "empty.upgrade_history": "История обновлений отсутствует"
+    "toast.upgrade_downloaded": "Пакет обновления загружен с GitHub",
+    "empty.upgrade_history": "История обновлений отсутствует",
+    "upgrade.github_updates": "Обновления с GitHub",
+    "upgrade.github_desc": "Проверить наличие новой версии на GitHub.",
+    "upgrade.checking_updates": "Проверка обновлений...",
+    "upgrade.update_available_title": "Доступно обновление: v{{version}}",
+    "upgrade.update_found": "Доступно обновление: v{{version}}",
+    "upgrade.up_to_date": "Система обновлена",
+    "upgrade.published": "Опубликовано",
+    "upgrade.view_changelog": "Показать изменения",
+    "upgrade.download_install": "Скачать и установить",
+    "upgrade.downloading": "Загрузка...",
+    "upgrade.no_package": "К этому релизу не прикреплён пакет обновления",
+    "upgrade.view_release": "Открыть на GitHub",
+    "upgrade.check_now": "Проверить сейчас",
+    "upgrade.manual_upload": "Загрузка вручную"
 }

@@ -141,6 +141,8 @@ const BACKEND_ACTIONS: Record<string, { method: 'GET' | 'POST'; csrf: boolean }>
   delete_product_variant:      { method: 'POST', csrf: true },
 
   // system upgrade
+  upgrade_check_github:        { method: 'GET',  csrf: false },
+  upgrade_download_github:     { method: 'POST', csrf: true },
   upgrade_get_status:          { method: 'GET',  csrf: false },
   upgrade_upload_package:      { method: 'POST', csrf: true },
   upgrade_preflight:           { method: 'POST', csrf: true },
