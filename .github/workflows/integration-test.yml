@@ -131,21 +131,6 @@ jobs:
           echo "Token length: ${#TOKEN}"
           echo "✅ Admin login successful, session token obtained from DB"
 
-      - name: Debug - verify X-Admin-Token support in container
-        run: |
-          echo "=== Checking admin-helpers.php for X-Admin-Token ==="
-          docker compose exec -T web grep -n "HTTP_X_ADMIN_TOKEN" /var/www/html/activate/functions/admin-helpers.php || echo "NOT FOUND in admin-helpers.php!"
-          echo "=== Testing with PHP CLI ==="
-          TOKEN="${{ steps.auth.outputs.admin_token }}"
-          docker compose exec -T web php -r "
-            \$_SERVER['HTTP_X_ADMIN_TOKEN'] = '$TOKEN';
-            session_start();
-            require '/var/www/html/activate/config.php';
-            require '/var/www/html/activate/functions/admin-helpers.php';
-            \$result = validateAdminSession();
-            echo 'Result: ' . (\$result ? 'VALID' : 'FALSE') . PHP_EOL;
-          " 2>&1
-
       - name: Test upgrade_get_status endpoint
         run: |
           TOKEN="${{ steps.auth.outputs.admin_token }}"
@@ -154,9 +139,6 @@ jobs:
             "http://localhost:8080/admin_v2.php?action=upgrade_get_status")
           response=$(cat /tmp/status_resp.txt)
           echo "HTTP $HTTP_CODE — $response"
-          echo "=== PHP error log ==="
-          docker compose exec -T web tail -20 /var/log/apache2/error.log 2>/dev/null || echo "No apache error log"
-          docker compose exec -T web tail -20 /var/www/html/activate/logs/php_errors.log 2>/dev/null || echo "No php error log"
           [ "$HTTP_CODE" = "200" ] || (echo "❌ HTTP $HTTP_CODE" && exit 1)
           echo "$response" | jq -e '.success == true' > /dev/null
           echo "$response" | jq -e '.data.current_version' > /dev/null

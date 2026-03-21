@@ -17,12 +17,6 @@
 function validateAdminSession() {
     global $pdo;
 
-    // Support X-Admin-Token header as alternative to session (for CI/API testing)
-    if (!isset($_SESSION['admin_token']) && !empty($_SERVER['HTTP_X_ADMIN_TOKEN'])) {
-        $_SESSION['admin_token'] = $_SERVER['HTTP_X_ADMIN_TOKEN'];
-        error_log("X-Admin-Token header used, token set: " . substr($_SESSION['admin_token'], 0, 8) . "...");
-    }
-
     if (!isset($_SESSION['admin_token'])) {
         return false;
     }
@@ -41,13 +35,11 @@ function validateAdminSession() {
         $session = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$session) {
-            error_log("validateAdminSession: no DB row for token " . substr($_SESSION['admin_token'], 0, 8) . "...");
             return false;
         }
 
         // Check if session expired (hard expiry set at creation time)
         if (strtotime($session['expires_at']) < time()) {
-            error_log("validateAdminSession: session expired. expires_at={$session['expires_at']} now=" . date('Y-m-d H:i:s'));
 
             $stmt = $pdo->prepare("UPDATE admin_sessions SET is_active = 0 WHERE id = ?");
             $stmt->execute([$session['id']]);

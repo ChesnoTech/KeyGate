@@ -13,6 +13,11 @@ require_once 'functions/push-helpers.php';
 // Start secure session
 session_start();
 
+// Support X-Admin-Token header for CI/API testing (bypasses PHP session persistence)
+if (!empty($_SERVER['HTTP_X_ADMIN_TOKEN']) && empty($_SESSION['admin_token'])) {
+    $_SESSION['admin_token'] = $_SERVER['HTTP_X_ADMIN_TOKEN'];
+}
+
 // Handle SPA session/CSRF checks (pre-auth — must work for unauthenticated users too)
 $pre_auth_action = $_GET['action'] ?? '';
 if ($pre_auth_action === 'check_session') {
