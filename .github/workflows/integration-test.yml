@@ -152,10 +152,16 @@ jobs:
 
       - name: Test upgrade_get_status endpoint
         run: |
-          response=$(curl -sf -H "Cookie: PHPSESSID=${{ steps.auth.outputs.sessid }}" \
+          HTTP_CODE=$(curl -s -o /tmp/status_resp.txt -w "%{http_code}" \
+            -H "Cookie: PHPSESSID=${{ steps.auth.outputs.sessid }}" \
             "http://localhost:8080/admin_v2.php?action=upgrade_get_status")
-          echo "$response" | jq .
-          echo "$response" | jq -e '.success == true' > /dev/null
+          response=$(cat /tmp/status_resp.txt)
+          echo "HTTP $HTTP_CODE — Response: $response"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ upgrade_get_status returned HTTP $HTTP_CODE"
+            exit 1
+          fi
+          echo "$response" | jq -e '.success == true' > /dev/null || (echo "❌ success != true" && exit 1)
           echo "$response" | jq -e '.data.current_version' > /dev/null
           echo "$response" | jq -e '.data.php_version' > /dev/null
           echo "$response" | jq -e '.data.mariadb_version' > /dev/null
