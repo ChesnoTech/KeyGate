@@ -51,6 +51,9 @@ jobs:
             sleep 5
           done
           docker compose up -d
+          # Disable secure cookies for CI (plain HTTP environment) and restart Apache
+          docker compose exec -T web bash -c 'echo "session.cookie_secure = 0" > /usr/local/etc/php/conf.d/zz-ci.ini && apache2ctl graceful'
+          sleep 2
           for i in $(seq 1 30); do
             curl -sf http://localhost:8080/api/health.php > /dev/null 2>&1 && break
             sleep 5
