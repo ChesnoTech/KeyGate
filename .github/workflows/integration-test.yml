@@ -80,10 +80,11 @@ jobs:
             ALTER TABLE technicians ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(5) DEFAULT 'en';
           " 2>/dev/null || true
 
-          # Ensure ACL tables exist and grant all permissions to super_admin
+          # Ensure ACL tables + permissions exist for super_admin
+          # The acl_migration.sql should have created these, but may have partially failed
           docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "
             CREATE TABLE IF NOT EXISTS acl_roles (
-              id INT AUTO_INCREMENT PRIMARY KEY, role_name VARCHAR(50), display_name VARCHAR(100),
+              id INT AUTO_INCREMENT PRIMARY KEY, role_name VARCHAR(50) UNIQUE, display_name VARCHAR(100),
               description TEXT, role_type ENUM('admin','technician') DEFAULT 'admin',
               is_system_role TINYINT(1) DEFAULT 0, priority INT DEFAULT 0, color VARCHAR(7) DEFAULT '#6b7280'
             );
@@ -93,15 +94,17 @@ jobs:
             );
             CREATE TABLE IF NOT EXISTS acl_role_permissions (
               id INT AUTO_INCREMENT PRIMARY KEY, role_id INT, permission_id INT,
-              UNIQUE KEY (role_id, permission_id)
+              UNIQUE KEY uk_role_perm (role_id, permission_id)
             );
             CREATE TABLE IF NOT EXISTS acl_user_overrides (
               id INT AUTO_INCREMENT PRIMARY KEY, user_type VARCHAR(20), user_id INT,
               permission_id INT, granted TINYINT(1) DEFAULT 1
             );
             ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS custom_role_id INT DEFAULT NULL;
-            INSERT IGNORE INTO acl_roles (role_name, display_name, role_type, is_system_role, priority)
-              VALUES ('super_admin', 'Super Admin', 'admin', 1, 100);
+          " 2>/dev/null || true
+
+          # Grant system_settings (and other needed perms) via user override for admin user id=1
+          docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "
             INSERT IGNORE INTO acl_permissions (permission_key, display_name, category) VALUES
               ('system_settings','System Settings','system'),
               ('view_keys','View Keys','keys'),
@@ -110,8 +113,8 @@ jobs:
               ('manual_backup','Manual Backup','backups'),
               ('view_logs','View Logs','logs'),
               ('view_compliance','View Compliance','compliance');
-            INSERT IGNORE INTO acl_role_permissions (role_id, permission_id)
-              SELECT r.id, p.id FROM acl_roles r CROSS JOIN acl_permissions p WHERE r.role_name = 'super_admin';
+            INSERT IGNORE INTO acl_user_overrides (user_type, user_id, permission_id, granted)
+              SELECT 'admin', 1, id, 1 FROM acl_permissions;
           " 2>/dev/null || true
 
           docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "
