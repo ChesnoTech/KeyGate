@@ -931,7 +931,13 @@ function handle_upgrade_apply(PDO $pdo, array $admin_session, $json_input): void
             if ($ext === 'sql') {
                 // Execute SQL directly (no transaction wrapper — DDL like CREATE/ALTER
                 // implicitly commits in MariaDB, breaking explicit transactions)
-                $pdo->exec($migContent);
+                // Split multi-statement SQL and execute individually to avoid pending result sets
+                $statements = array_filter(array_map('trim', explode(';', $migContent)));
+                foreach ($statements as $stmt) {
+                    if ($stmt !== '') {
+                        $pdo->exec($stmt);
+                    }
+                }
             } elseif ($ext === 'php') {
                 // Extract to temp and execute
                 $tmpFile = sys_get_temp_dir() . '/upgrade_mig_' . $upgradeId . '_' . basename($migFile);
