@@ -63,6 +63,11 @@ jobs:
             sleep 5
           done
 
+      - name: Fix permissions for upgrade tests
+        run: |
+          docker compose exec -T web bash -c 'chown -R www-data:www-data /var/www/html/activate && chmod -R u+w /var/www/html/activate'
+          docker compose exec -T web bash -c 'mkdir -p /var/www/html/activate/uploads/upgrades /var/www/html/activate/backups && chown www-data:www-data /var/www/html/activate/uploads/upgrades /var/www/html/activate/backups'
+
       - name: Test health endpoint has version
         run: |
           response=$(curl -sf http://localhost:8080/api/health.php)
