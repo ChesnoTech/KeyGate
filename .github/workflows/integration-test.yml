@@ -52,9 +52,11 @@ jobs:
           # This bypasses PHP session file persistence issues in CI Docker
           cat >> Dockerfile.php <<'DOCKERFILE'
           RUN echo '<?php' > /var/www/html/activate/ci-session-fix.php \
-            && echo 'if (session_status() === PHP_SESSION_NONE) { session_start(); }' >> /var/www/html/activate/ci-session-fix.php \
+            && echo 'if (strpos($_SERVER["REQUEST_URI"] ?? "", "admin_v2.php") === false) return;' >> /var/www/html/activate/ci-session-fix.php \
             && echo '$ciToken = $_SERVER["HTTP_X_SESSION_TOKEN"] ?? "";' >> /var/www/html/activate/ci-session-fix.php \
-            && echo 'if ($ciToken && empty($_SESSION["admin_token"])) {' >> /var/www/html/activate/ci-session-fix.php \
+            && echo 'if (!$ciToken) return;' >> /var/www/html/activate/ci-session-fix.php \
+            && echo 'if (session_status() === PHP_SESSION_NONE) { session_start(); }' >> /var/www/html/activate/ci-session-fix.php \
+            && echo 'if (empty($_SESSION["admin_token"])) {' >> /var/www/html/activate/ci-session-fix.php \
             && echo '  $_SESSION["admin_token"] = $ciToken;' >> /var/www/html/activate/ci-session-fix.php \
             && echo '  $_SESSION["admin_id"] = 1;' >> /var/www/html/activate/ci-session-fix.php \
             && echo '  $_SESSION["session_id"] = 1;' >> /var/www/html/activate/ci-session-fix.php \
