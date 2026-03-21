@@ -183,7 +183,7 @@ jobs:
 
       - name: Test upgrade_history endpoint
         run: |
-          response=$(curl -sf -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" \
+          response=$(curl -s -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" \
             "http://localhost:8080/admin_v2.php?action=upgrade_history")
           echo "$response" | jq -e '.success == true' > /dev/null
           echo "$response" | jq -e '.upgrades | type == "array"' > /dev/null
@@ -191,7 +191,7 @@ jobs:
 
       - name: Test upgrade_check_github endpoint
         run: |
-          response=$(curl -sf -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" \
+          response=$(curl -s -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" \
             "http://localhost:8080/admin_v2.php?action=upgrade_check_github")
           echo "$response" | jq .
           # GitHub API may not be reachable from CI container, just verify endpoint responds
@@ -238,10 +238,11 @@ jobs:
         id: upload
         run: |
           CSRF="${{ steps.auth.outputs.csrf }}"
-          response=$(curl -sf -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
+          response=$(curl -s -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_upload_package" \
             -F "csrf_token=$CSRF" \
             -F "upgrade_package=@/tmp/test-upgrade.zip")
+          echo "Upload response: $response"
           echo "$response" | jq .
           echo "$response" | jq -e '.success == true' > /dev/null
           UPGRADE_ID=$(echo "$response" | jq -r '.upgrade_id')
@@ -252,7 +253,7 @@ jobs:
         run: |
           CSRF="${{ steps.auth.outputs.csrf }}"
           UPGRADE_ID="${{ steps.upload.outputs.upgrade_id }}"
-          response=$(curl -sf -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
+          response=$(curl -s -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_preflight" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
@@ -265,7 +266,7 @@ jobs:
         run: |
           CSRF="${{ steps.auth.outputs.csrf }}"
           UPGRADE_ID="${{ steps.upload.outputs.upgrade_id }}"
-          response=$(curl -sf -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
+          response=$(curl -s -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_backup" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
@@ -279,7 +280,7 @@ jobs:
         run: |
           CSRF="${{ steps.auth.outputs.csrf }}"
           UPGRADE_ID="${{ steps.upload.outputs.upgrade_id }}"
-          response=$(curl -sf -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
+          response=$(curl -s -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_apply" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
@@ -292,7 +293,7 @@ jobs:
         run: |
           CSRF="${{ steps.auth.outputs.csrf }}"
           UPGRADE_ID="${{ steps.upload.outputs.upgrade_id }}"
-          response=$(curl -sf -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
+          response=$(curl -s -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_verify" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
@@ -322,7 +323,7 @@ jobs:
 
       - name: Verify upgrade history shows completed
         run: |
-          response=$(curl -sf -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" \
+          response=$(curl -s -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" \
             "http://localhost:8080/admin_v2.php?action=upgrade_history")
           echo "$response" | jq '.upgrades[0]'
           echo "$response" | jq -e '.upgrades[0].status == "completed"' > /dev/null
@@ -361,7 +362,7 @@ jobs:
           MANIFEST
           cd "$TMPDIR" && zip -r /tmp/rollback-test.zip manifest.json files/ migrations/
 
-          response=$(curl -sf -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
+          response=$(curl -s -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_upload_package" \
             -F "csrf_token=$CSRF" \
             -F "upgrade_package=@/tmp/rollback-test.zip")
@@ -370,7 +371,7 @@ jobs:
 
           # Run through preflight + backup + apply
           for action in upgrade_preflight upgrade_backup upgrade_apply; do
-            curl -sf -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
+            curl -s -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
               "http://localhost:8080/admin_v2.php?action=$action" \
               -H 'Content-Type: application/json' \
               -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}" > /dev/null
@@ -381,7 +382,7 @@ jobs:
         run: |
           CSRF="${{ steps.auth.outputs.csrf }}"
           UPGRADE_ID="${{ steps.rollback_upload.outputs.upgrade_id }}"
-          response=$(curl -sf -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
+          response=$(curl -s -H "X-Admin-Token: ${{ steps.auth.outputs.admin_token }}" -X POST \
             "http://localhost:8080/admin_v2.php?action=upgrade_rollback" \
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
