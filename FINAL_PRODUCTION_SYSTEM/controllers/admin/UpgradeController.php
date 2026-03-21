@@ -929,9 +929,9 @@ function handle_upgrade_apply(PDO $pdo, array $admin_session, $json_input): void
 
         try {
             if ($ext === 'sql') {
-                $pdo->beginTransaction();
+                // Execute SQL directly (no transaction wrapper — DDL like CREATE/ALTER
+                // implicitly commits in MariaDB, breaking explicit transactions)
                 $pdo->exec($migContent);
-                $pdo->commit();
             } elseif ($ext === 'php') {
                 // Extract to temp and execute
                 $tmpFile = sys_get_temp_dir() . '/upgrade_mig_' . $upgradeId . '_' . basename($migFile);
@@ -950,9 +950,7 @@ function handle_upgrade_apply(PDO $pdo, array $admin_session, $json_input): void
 
             $migrationsApplied[] = ['file' => $migFile, 'status' => 'applied'];
         } catch (Exception $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
+            try { if ($pdo->inTransaction()) $pdo->rollBack(); } catch (Exception $re) { /* ignore rollback error */ }
             $zip->close();
             error_log("Upgrade migration failed ({$migFile}): " . $e->getMessage());
             updateUpgradeStatus($pdo, $upgradeId, 'failed', [
