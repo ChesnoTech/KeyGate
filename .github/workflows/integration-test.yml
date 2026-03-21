@@ -144,8 +144,14 @@ jobs:
 
       - name: Verify session persistence
         run: |
-          echo "=== Session files ==="
-          docker compose exec -T web ls -la /var/lib/php/sessions/ 2>/dev/null || echo "No session dir"
+          echo "=== Cookie jar PHPSESSID ==="
+          grep PHPSESSID /tmp/cookies.txt
+          SESSID=$(grep PHPSESSID /tmp/cookies.txt | awk '{print $NF}')
+          echo "=== Session file for $SESSID ==="
+          docker compose exec -T web cat /var/lib/php/sessions/sess_$SESSID 2>/dev/null || echo "Session file not found for $SESSID"
+          echo ""
+          echo "=== All session files ==="
+          docker compose exec -T web bash -c 'for f in /var/lib/php/sessions/sess_*; do echo "--- $f ---"; cat "$f" 2>/dev/null; echo; done'
           echo "=== check_session ==="
           curl -s -b /tmp/cookies.txt "http://localhost:8080/admin_v2.php?action=check_session" | jq .
 
