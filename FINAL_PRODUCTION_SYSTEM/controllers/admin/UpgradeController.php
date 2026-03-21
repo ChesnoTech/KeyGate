@@ -931,24 +931,14 @@ function handle_upgrade_apply(PDO $pdo, array $admin_session, $json_input): void
             if ($ext === 'sql') {
                 // Use a separate PDO connection for migrations to avoid
                 // unbuffered query conflicts with the main connection
-                $migPdo = new PDO(
-                    $pdo->getAttribute(PDO::ATTR_CONNECTION_STATUS) ? $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) : 'mysql',
-                    null, null
-                );
-                // Actually, create a fresh connection from env vars
-                $migDsn = sprintf("mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4",
-                    $_ENV['DB_HOST'] ?? getenv('DB_HOST') ?? 'localhost',
-                    $_ENV['DB_PORT'] ?? getenv('DB_PORT') ?? '3306',
-                    $_ENV['DB_NAME'] ?? getenv('DB_NAME') ?? 'oem_activation'
-                );
-                $migPdo = new PDO($migDsn,
-                    $_ENV['DB_USER'] ?? getenv('DB_USER') ?? 'oem_user',
-                    $_ENV['DB_PASS'] ?? getenv('DB_PASS') ?? '',
-                    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                     PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => true]
-                );
+                global $db_config;
+                $migDsn = "mysql:host={$db_config['host']};port={$db_config['port']};dbname={$db_config['dbname']};charset={$db_config['charset']}";
+                $migPdo = new PDO($migDsn, $db_config['username'], $db_config['password'], [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => true,
+                ]);
                 $migPdo->exec($migContent);
-                $migPdo = null; // close connection
+                $migPdo = null;
             } elseif ($ext === 'php') {
                 // Extract to temp and execute
                 $tmpFile = sys_get_temp_dir() . '/upgrade_mig_' . $upgradeId . '_' . basename($migFile);
