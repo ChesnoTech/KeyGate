@@ -132,11 +132,6 @@ if ($pre_auth_action === 'get_public_branding') {
     exit;
 }
 
-// Debug: log session state before validation (temporary for CI debugging)
-if (!empty($_SERVER['HTTP_X_ADMIN_TOKEN'])) {
-    error_log("X-Admin-Token present. SESSION admin_token: " . ($_SESSION['admin_token'] ?? 'NOT_SET') . " | Header: " . $_SERVER['HTTP_X_ADMIN_TOKEN']);
-}
-
 // Validate session or redirect
 $admin_session = validateAdminSession();
 if (!$admin_session) {

@@ -134,14 +134,38 @@ jobs:
       - name: Test upgrade_get_status endpoint
         run: |
           TOKEN="${{ steps.auth.outputs.admin_token }}"
+          echo "Token being sent: [${TOKEN}] (length: ${#TOKEN})"
+
+          # Verify token matches DB
+          DB_TOKEN=$(docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -N -B -e \
+            "SELECT session_token FROM admin_sessions WHERE is_active = 1 ORDER BY id DESC LIMIT 1")
+          echo "Token in DB: [${DB_TOKEN}]"
+          echo "Match: $([ "$TOKEN" = "$DB_TOKEN" ] && echo YES || echo NO)"
+
+          # Test inline PHP validation
+          timeout 10 docker compose exec -T web php -r "
+            \$_SERVER['HTTP_X_ADMIN_TOKEN'] = '$TOKEN';
+            \$_SESSION = [];
+            session_start();
+            \$_SESSION['admin_token'] = '$TOKEN';
+            require '/var/www/html/activate/config.php';
+            require '/var/www/html/activate/functions/admin-helpers.php';
+            \$r = validateAdminSession();
+            echo 'validateAdminSession: ' . (\$r ? 'OK' : 'FAIL') . PHP_EOL;
+            if (!\$r) {
+              \$stmt = \$pdo->prepare('SELECT id, admin_id, is_active, expires_at, NOW() as n FROM admin_sessions WHERE session_token = ?');
+              \$stmt->execute(['$TOKEN']);
+              \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
+              echo 'DB row: ' . json_encode(\$row) . PHP_EOL;
+            }
+          " 2>&1 || echo "PHP test failed"
+
           HTTP_CODE=$(curl -s -o /tmp/status_resp.txt -w "%{http_code}" \
             -H "X-Admin-Token: $TOKEN" \
             "http://localhost:8080/admin_v2.php?action=upgrade_get_status")
           response=$(cat /tmp/status_resp.txt)
           echo "HTTP $HTTP_CODE — $response"
           if [ "$HTTP_CODE" != "200" ]; then
-            echo "=== Apache error log ==="
-            docker compose exec -T web tail -30 /var/log/apache2/error.log 2>/dev/null || true
             echo "❌ HTTP $HTTP_CODE"
             exit 1
           fi
