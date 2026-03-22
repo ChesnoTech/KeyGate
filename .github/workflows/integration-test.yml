@@ -44,13 +44,8 @@ jobs:
 
       - name: Start Docker stack
         run: |
-          # Patch Dockerfile for CI: disable secure cookies + fix sessions
+          # Patch Dockerfile for CI: disable secure cookies (tests use HTTP)
           sed -i "s/session.cookie_secure = 1/session.cookie_secure = 0/" Dockerfile.php
-          sed -i "s/session.use_strict_mode = 1/session.use_strict_mode = 0/" Dockerfile.php
-
-          # No auto_prepend needed — validateAdminSession() now supports
-          # X-Admin-Token header as fallback for CI/testing
-
           docker compose build
           docker compose up -d db redis
           for i in $(seq 1 40); do
@@ -110,31 +105,6 @@ jobs:
               failed_login_attempts = 0, locked_until = NULL, custom_role_id = ${SA_ROLE_ID:-NULL};
           "
 
-          docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -e "
-            CREATE TABLE IF NOT EXISTS upgrade_history (
-              id INT AUTO_INCREMENT PRIMARY KEY,
-              from_version VARCHAR(20) NOT NULL,
-              to_version VARCHAR(20) NOT NULL,
-              from_version_code INT NOT NULL DEFAULT 0,
-              to_version_code INT NOT NULL DEFAULT 0,
-              status ENUM('pending','preflight','backing_up','upgrading','verifying','completed','failed','rolled_back') NOT NULL DEFAULT 'pending',
-              step_details JSON DEFAULT NULL,
-              manifest_json JSON DEFAULT NULL,
-              package_filename VARCHAR(255) DEFAULT NULL,
-              package_checksum VARCHAR(64) DEFAULT NULL,
-              backup_db_filename VARCHAR(512) DEFAULT NULL,
-              backup_files_path VARCHAR(512) DEFAULT NULL,
-              migrations_applied JSON DEFAULT NULL,
-              files_changed JSON DEFAULT NULL,
-              error_message TEXT DEFAULT NULL,
-              started_at TIMESTAMP NULL DEFAULT NULL,
-              completed_at TIMESTAMP NULL DEFAULT NULL,
-              rolled_back_at TIMESTAMP NULL DEFAULT NULL,
-              admin_id INT NOT NULL,
-              admin_username VARCHAR(100) DEFAULT NULL,
-              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-          "
           echo "✅ Test data setup complete"
 
       - name: Test admin login + get CSRF + session token
@@ -163,14 +133,6 @@ jobs:
       - name: Test upgrade_get_status endpoint
         run: |
           TOKEN="${{ steps.auth.outputs.admin_token }}"
-          echo "Token being sent: [${TOKEN}] (length: ${#TOKEN})"
-
-          # Verify token matches DB
-          DB_TOKEN=$(docker compose exec -T db mariadb -uroot -pci_root_pass oem_activation -N -B -e \
-            "SELECT session_token FROM admin_sessions WHERE is_active = 1 ORDER BY id DESC LIMIT 1")
-          echo "Token in DB: [${DB_TOKEN}]"
-          echo "Match: $([ "$TOKEN" = "$DB_TOKEN" ] && echo YES || echo NO)"
-
           HTTP_CODE=$(curl -s -o /tmp/status_resp.txt -w "%{http_code}" \
             -H "X-Admin-Token: $TOKEN" \
             "http://localhost:8080/admin_v2.php?action=upgrade_get_status")
@@ -290,19 +252,7 @@ jobs:
             -H 'Content-Type: application/json' \
             -d "{\"upgrade_id\": $UPGRADE_ID, \"csrf_token\": \"$CSRF\"}")
           echo "$response" | jq .
-          if ! echo "$response" | jq -e '.success == true' > /dev/null 2>&1; then
-            echo "=== PHP error log ==="
-            echo "=== Checking all PHP error destinations ==="
-            timeout 5 docker compose exec -T web bash -c '
-              echo "--- /var/log/apache2/error.log ---"
-              grep -i "error\|exception\|fatal\|upgrade" /var/log/apache2/error.log 2>/dev/null | tail -10 || echo "(empty/missing)"
-              echo "--- php_errors.log ---"
-              grep -i "error\|exception\|fatal\|upgrade" /var/www/html/activate/logs/php_errors.log 2>/dev/null | tail -10 || echo "(empty/missing)"
-              echo "--- syslog ---"
-              grep -i "php\|apache" /var/log/syslog 2>/dev/null | tail -5 || echo "(no syslog)"
-            ' || echo "(timeout)"
-            exit 1
-          fi
+          echo "$response" | jq -e '.success == true' > /dev/null || (echo "❌ Apply failed: $(echo "$response" | jq -r '.error // empty')" && exit 1)
           echo "$response" | jq -e '.migrations_applied | length >= 1' > /dev/null
           echo "✅ Upgrade applied successfully"
 
