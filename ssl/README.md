@@ -1,6 +1,6 @@
 # SSL Certificate Setup
 
-The OEM Activation System requires SSL certificates at:
+The KeyGate requires SSL certificates at:
 - `ssl/server.crt` — Certificate file
 - `ssl/server.key` — Private key file
 - `ssl/chain.pem` — (Optional) CA chain for Let's Encrypt

@@ -1,6 +1,6 @@
 # OEM Hardware Bridge
 
-Professional-grade USB hardware detection bridge for the OEM Activation System, similar to HP Support Assistant and Lenovo Vantage.
+Professional-grade USB hardware detection bridge for the KeyGate, similar to HP Support Assistant and Lenovo Vantage.
 
 ## Overview
 
@@ -251,7 +251,7 @@ echo {"command":"getUSBDevices"} | .\OEMHardwareBridge.exe
 
 ## License
 
-Part of the OEM Activation System v2.0
+Part of the KeyGate v2.0
 
 ## Support
 

@@ -1,4 +1,4 @@
-# OEM Activation System - Concurrency Testing Results
+# KeyGate - Concurrency Testing Results
 
 **Test Date:** 2026-01-25
 **Environment:** Docker (PHP 8.3.30 + MariaDB 10.11.15)

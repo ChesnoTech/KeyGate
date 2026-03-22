@@ -1,4 +1,4 @@
-# OEM Activation System v3.0
+# KeyGate
 
 [![CI](https://github.com/ChesnoTech/OEM_Activation_System/actions/workflows/ci.yml/badge.svg)](https://github.com/ChesnoTech/OEM_Activation_System/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/ChesnoTech/OEM_Activation_System?label=release)](https://github.com/ChesnoTech/OEM_Activation_System/releases/latest)
@@ -7,9 +7,9 @@
 ![MariaDB](https://img.shields.io/badge/MariaDB-10.5+-003545?logo=mariadb&logoColor=white)
 ![License](https://img.shields.io/badge/license-proprietary-red)
 
-**Professional Windows OEM license management for computer assembly operations.**
+**OEM license activation, quality control & workstation provisioning platform for PC builders.**
 
-Secure, database-driven system that automates Windows OEM key distribution, activation, and tracking across technician workstations. Replaces legacy SSH/CSV workflows with a modern REST API architecture. Deploy on any LAMP server — no Docker required.
+Secure, database-driven system that automates Windows OEM key distribution, activation, and tracking across technician workstations. Includes QC compliance checks, hardware fingerprinting, white-label branding, and a Joomla-style upgrade wizard. Deploy on any LAMP server — no Docker required.
 
 ---
 
@@ -21,7 +21,7 @@ Secure, database-driven system that automates Windows OEM key distribution, acti
 |                         |          |                                          |
 |  OEM_Activator.cmd      |          |  +------------+    +----------------+   |
 |    |                    |   HTTPS  |  |            |    |                |   |
-|    +-> PowerShell v3    |--------->|  |  PHP 8.0+  |--->|  MariaDB/MySQL |   |
+|    +-> PowerShell v7    |--------->|  |  PHP 8.0+  |--->|  MariaDB/MySQL |   |
 |        (slmgr /ipk/ato) |<---------|  |  (Apache)  |    |  (oem_keys,    |   |
 |                         |   JSON   |  |            |    |   technicians, |   |
 +-------------------------+          |  +-----+------+    |   audit_log)   |   |
@@ -32,7 +32,7 @@ Secure, database-driven system that automates Windows OEM key distribution, acti
 |  React Admin Panel      |--------->|  |  Redis     |  (rate limiting,       |
 |  - Key management       |<---------|  |  (optional)|   graceful degradation)|
 |  - QC compliance        |          |  +------------+                         |
-|  - Audit logs           |          |                                          |
+|  - Subscription mgmt    |          |                                          |
 +-------------------------+          +------------------------------------------+
 ```
 
@@ -40,10 +40,10 @@ Secure, database-driven system that automates Windows OEM key distribution, acti
 
 1. Technician runs `OEM_Activator.cmd` on a fresh Windows PC
 2. CMD launcher installs PowerShell 7 (if needed), runs pre-activation tasks (WSUS cleanup, security hardening)
-3. PowerShell script authenticates via REST API, requests an OEM key
-4. Key is installed and activated using `slmgr.vbs` with progressive verification (6 checks over ~55 seconds)
+3. PowerShell script authenticates via REST API, collects hardware info, requests an OEM key
+4. Key is installed and activated using `slmgr.vbs` with adaptive timing based on server latency
 5. Result is reported back to the API; key is marked as `good` or recycled for retry
-6. Full audit trail logged in the database
+6. Full audit trail logged in the database with hardware fingerprint
 
 ---
 
@@ -55,7 +55,7 @@ Secure, database-driven system that automates Windows OEM key distribution, acti
 | Frontend | React 19 / Vite / shadcn/ui | Admin dashboard (i18n: EN + RU) |
 | Database | MariaDB 10.5+ / MySQL 5.7+ | Keys, technicians, audit logs |
 | Cache | Redis (optional) | API rate limiting (graceful degradation without it) |
-| Client | PowerShell 5.1/7 | Windows activation automation |
+| Client | PowerShell 7 (Get-CimInstance) | Windows activation automation |
 | Launcher | CMD batch | PS7 install, pre-activation tasks |
 | Hardware Bridge | C# .NET 8 + Chrome Extension | USB device detection |
 
@@ -79,15 +79,13 @@ Secure, database-driven system that automates Windows OEM key distribution, acti
 3. Follow the 6-step setup wizard:
    Step 1 - Environment check (PHP, extensions, permissions)
    Step 2 - Database connection (host, port, credentials)
-   Step 3 - Install tables (runs 19 migrations automatically)
+   Step 3 - Install tables (runs database migrations automatically)
    Step 4 - Create admin account
    Step 5 - System settings (name, URL, timezone, language)
    Step 6 - Done! Delete /install/ directory for security
 
 4. Open admin panel at http://your-server/secure-admin.php
 ```
-
-The installer automatically detects your network and adds it as a **trusted network** (2FA bypass + USB auth enabled) and to the **admin IP whitelist** -- no manual network configuration needed on first setup.
 
 No Docker, no Composer, no npm -- just upload and run the installer.
 
@@ -106,47 +104,6 @@ cd FINAL_PRODUCTION_SYSTEM/frontend && npm run dev
 
 ---
 
-## Project Structure
-
-```
-OEM_Activation_System/
-|
-|-- FINAL_PRODUCTION_SYSTEM/     # Web application root (upload this to your server)
-|   |-- install/                 #   Web installer wizard (delete after setup!)
-|   |   |-- index.php            #     6-step setup UI
-|   |   +-- ajax.php             #     Installer backend (env check, migrations, config)
-|   |-- admin_v2.php             #   Admin API action router
-|   |-- secure-admin.php         #   Admin authentication
-|   |-- config.php               #   Database config (generated by installer)
-|   |-- constants.php            #   Application constants
-|   |-- api/                     #   REST API endpoints (17 endpoints)
-|   |   |-- login.php            #     Technician authentication
-|   |   |-- get-key.php          #     Key distribution (with QC gate)
-|   |   |-- report-result.php    #     Activation result reporting
-|   |   |-- collect-hardware-v2.php #  Hardware inventory submission
-|   |   +-- health.php           #     Server health check
-|   |-- activation/              #   PowerShell client scripts
-|   |   +-- main_v3.PS1          #     Activation client (USB auth, hardware QC, adaptive timing)
-|   |-- controllers/admin/       #   Admin controllers (15 modules)
-|   |-- functions/               #   Shared PHP utilities
-|   |   |-- qc-compliance.php    #     QC engine (Secure Boot, BIOS, HackBGRT, partitions, drivers)
-|   |   +-- integration-helpers.php #  Event dispatch (osTicket, 1C ERP)
-|   |-- frontend/                #   React admin panel (Vite + shadcn/ui)
-|   |-- database/                #   SQL schema + 19 migrations
-|   +-- client/                  #   Technician distribution files
-|
-|-- hardware-bridge/             # Chrome extension + C# native app
-|-- tests/                       # Automated tests
-|   +-- installer-simulation/    #   Docker-based full deployment test
-|-- docs/                        # Development documentation
-|
-|-- Dockerfile.php               # PHP 8.3 + Apache (dev only)
-|-- docker-compose.yml           # Dev stack (optional)
-+-- CLAUDE.md                    # AI assistant context
-```
-
----
-
 ## Key Features
 
 **Key Management**
@@ -154,50 +111,42 @@ OEM_Activation_System/
 - Atomic single-key distribution (prevents race conditions)
 - Automatic key lifecycle: unused -> good/bad/retry
 - Key recycling rules for failed activations
-- Single-key retry with up to 4 automatic attempts
+- Configurable retry strategy per error code (UI-configurable)
 
 **QC Compliance**
 - Hardware quality checks: Secure Boot, BIOS version, boot logo (HackBGRT), partitions, drivers
 - Cascade enforcement hierarchy: Global -> Product Line -> Manufacturer -> Model
 - Motherboard registry with approved BIOS versions
-- Enforcement levels: Disabled / Info / Warning / Blocking
 - Unallocated disk space detection
 
-**Technician Management**
-- Individual accounts with bcrypt password hashing
-- USB hardware-bound authentication (optional passwordless)
-- Account lockout after failed login attempts
-- TOTP two-factor authentication (2FA)
+**Hardware Collection & Fingerprinting**
+- Full hardware inventory: MB, CPU, RAM, GPU, disks, TPM, network adapters, monitors
+- HWFingerprint (SHA256 hash of key hardware serials) for machine identity
+- Windows 11 25H2 compatible (Get-CimInstance, not deprecated Get-WmiObject)
 
-**Security**
-- HTTPS enforcement with HSTS
-- Redis-backed API rate limiting (per-endpoint, graceful degradation without Redis)
-- RBAC with configurable roles and ACL permissions
-- CSRF protection, CSP headers, session fixation prevention
-- IP whitelist support for admin panel
-- Trusted network detection (auto-configured during installation)
-- Installer auto-locks after setup (install.lock)
+**Network Diagnostics**
+- MAS-style tiered connectivity checks (4-host ping + COM fallback)
+- Microsoft licensing server HTTPS test
+- Pathping DNS fallback for ICMP-blocked environments
+- Hosts file inspection for blocked activation servers
 
-**Web Installer**
-- Joomla-style 6-step setup wizard -- no CLI required
-- Automatic environment validation (PHP version, extensions, permissions)
-- Runs 19 database migrations in order with rollback tracking
-- Auto-detects installer network and adds to trusted networks + admin IP whitelist
-- Generates config.php and locks itself after completion
-- Removes demo data (test technicians) on finalize
+**Subscription & Licensing**
+- Community (free) / Pro / Enterprise tiers
+- JWT-based license keys with instance fingerprinting
+- GitHub Sponsors integration (international payments)
+- Russia/CIS invoice payment support (bank transfer, crypto)
+- Feature gating with graceful degradation
 
-**Activation Client**
-- PowerShell 7 auto-install (USB MSI or winget)
-- Pre-activation tasks: WSUS cleanup, SMB hardening
-- Adaptive timing based on Microsoft activation server latency
-- Key cleanup between attempts to prevent false negatives
-- USB-based technician authentication
-- Full hardware inventory collection (MB, CPU, RAM, GPU, disks, drivers)
+**System Upgrade**
+- Joomla-style 5-step upgrade wizard (Upload -> Preflight -> Backup -> Apply -> Verify)
+- GitHub Releases as update server (auto-detect new versions)
+- Full rollback capability (DB + file restoration)
+- CI/CD release pipeline (auto-builds upgrade ZIP on version tags)
 
 **Admin Dashboard (React)**
-- Real-time statistics and charts (with extended trend ranges: 7d/30d/90d/6mo/1yr/all)
+- Real-time statistics and charts
 - Full audit log with filtering
-- QC compliance management with product lines
+- Client configuration (activation timing, retry strategy, network diagnostics)
 - Integration framework (osTicket, 1C ERP)
 - White-label branding (logo, colors, company name)
 - Bilingual interface (English / Russian)
@@ -216,25 +165,12 @@ cd FINAL_PRODUCTION_SYSTEM/frontend && npm test
 
 Runs i18n completeness, API contract, and route permission tests via Vitest.
 
-### Installer Simulation Test
+### CI Pipeline
 
-A full end-to-end deployment test that simulates a production install inside Docker:
-
-```bash
-cd tests/installer-simulation
-docker compose up --build
-```
-
-This spins up Ubuntu 22.04 with systemd, installs a full LAMP stack (Apache, PHP 8.3, MariaDB), deploys the application, runs the web installer via curl (simulating a browser), and executes 29 verification tests covering:
-
-- All 19 database migrations applied
-- 38 tables created with correct schema
-- Admin account and system config populated
-- Trusted network auto-detection working
-- Admin IP whitelist auto-populated
-- Installer lock file prevents re-runs
-- API endpoints responding correctly
-- Demo data cleaned up
+- **PHP Lint** -- syntax check all PHP files
+- **Frontend Build & Test** -- TypeScript compilation + Vitest
+- **Docker Stack** -- full container health check
+- **Integration Tests** -- API endpoint validation with real DB
 
 ---
 
@@ -253,13 +189,10 @@ This spins up Ubuntu 22.04 with systemd, installs a full LAMP stack (Apache, PHP
 |----------|----------|
 | **Web installer** | Upload `FINAL_PRODUCTION_SYSTEM/` -> navigate to `/install/` |
 | **Production deployment (aaPanel)** | [`docs/PRODUCTION_DEPLOYMENT_GUIDE.md`](docs/PRODUCTION_DEPLOYMENT_GUIDE.md) |
-| Web application details | [`FINAL_PRODUCTION_SYSTEM/README.md`](FINAL_PRODUCTION_SYSTEM/README.md) |
-| Hardware bridge setup | [`hardware-bridge/README.md`](hardware-bridge/README.md) |
-| Technician quick start | [`FINAL_PRODUCTION_SYSTEM/client/README_TECHNICIAN.md`](FINAL_PRODUCTION_SYSTEM/client/README_TECHNICIAN.md) |
 | Development guide | [`CLAUDE.md`](CLAUDE.md) |
 
 ---
 
 ## License
 
-Internal / Proprietary Use
+Proprietary — [KeyGate](https://keygate.dev) by ChesnoTech

@@ -5,7 +5,7 @@
 
 ## Overview
 
-The OEM Activation System has been upgraded to **v3.0** with a completely redesigned hardware collection architecture. The system now collects comprehensive hardware information **immediately after technician login**, regardless of whether activation succeeds, fails, or if Windows was already activated.
+The KeyGate has been upgraded to **v3.0** with a completely redesigned hardware collection architecture. The system now collects comprehensive hardware information **immediately after technician login**, regardless of whether activation succeeds, fails, or if Windows was already activated.
 
 ---
 
@@ -447,7 +447,7 @@ Potential additions for v4.0:
 
 ## 📝 Summary
 
-The OEM Activation System v3.0 represents a **fundamental architectural shift** in hardware collection. By decoupling hardware collection from activation results and moving it to login time, the system now provides:
+The KeyGate v3.0 represents a **fundamental architectural shift** in hardware collection. By decoupling hardware collection from activation results and moving it to login time, the system now provides:
 
 - **100% hardware collection rate** (regardless of activation success/failure)
 - **Complete disk topology** including all hidden/system partitions
@@ -461,5 +461,5 @@ All changes are **backward compatible** - old activation records without hardwar
 
 **Document Version:** 1.0
 **Last Updated:** 2026-01-29
-**Author:** OEM Activation System Development Team
+**Author:** KeyGate Development Team
 **System Version:** v3.0 (Hardware Collection Edition)

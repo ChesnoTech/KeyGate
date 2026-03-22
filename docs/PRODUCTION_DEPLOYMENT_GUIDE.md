@@ -2,7 +2,7 @@
 
 ## Ubuntu Server 22.04 LTS + aaPanel 7.0.30
 
-Step-by-step guide for deploying the OEM Activation System on a bare-metal (non-Docker) production server using aaPanel as the management panel.
+Step-by-step guide for deploying the KeyGate on a bare-metal (non-Docker) production server using aaPanel as the management panel.
 
 > **Note**: This guide assumes you are running a Proxmox VM (or similar hypervisor). Docker is only used for local development — this guide covers manual production deployment.
 

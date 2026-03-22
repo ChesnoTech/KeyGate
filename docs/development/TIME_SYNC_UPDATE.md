@@ -10,7 +10,7 @@
 
 ## Summary
 
-Added Windows Time synchronization function to the OEM Activation System PowerShell script. The system will now automatically sync the system time before each Windows activation attempt.
+Added Windows Time synchronization function to the KeyGate PowerShell script. The system will now automatically sync the system time before each Windows activation attempt.
 
 ---
 

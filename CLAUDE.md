@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## System Overview
 
-**OEM Activation System** — a professional Windows OEM license management system for computer assembly operations. Automates legitimate Windows activation for authorized OEM operations with full audit trail, hardware collection, and quality compliance checks.
+**KeyGate** — OEM license activation, quality control & workstation provisioning platform for PC builders. Automates legitimate Windows activation for authorized OEM operations with full audit trail, hardware fingerprinting, and quality compliance checks.
 
 ### Architecture at a Glance
 

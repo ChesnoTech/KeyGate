@@ -1,7 +1,7 @@
 > **⚠️ Historical Document** — References to `main_v2.PS1` and `OEM_Activator_v2.cmd` are outdated.
 > Current files: `activation/main_v3.PS1` and `client/OEM_Activator.cmd`. v2 was retired March 2026.
 
-# ✅ Deployment Restructure Complete - OEM Activation System
+# ✅ Deployment Restructure Complete - KeyGate
 
 ## Summary
 

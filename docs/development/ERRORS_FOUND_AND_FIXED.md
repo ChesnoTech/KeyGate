@@ -1,7 +1,7 @@
 > **⚠️ Historical Document** — References to `main_v2.PS1` are outdated.
 > Current file: `activation/main_v3.PS1`. v2 was retired March 2026.
 
-# OEM Activation System v2.0 - Errors Found During Testing
+# KeyGate v2.0 - Errors Found During Testing
 
 **Testing Date:** 2026-01-25
 **Environment:** Docker (PHP 8.3.30 + MariaDB 10.11.15)

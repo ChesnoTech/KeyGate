@@ -1,4 +1,4 @@
-# OEM Activation System - Docker Demo Access Guide
+# KeyGate - Docker Demo Access Guide
 
 **Docker Environment:** Running and Ready
 **Date:** 2026-01-25

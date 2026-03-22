@@ -1,4 +1,4 @@
-# OEM Activation System - Deployment Guide
+# KeyGate - Deployment Guide
 ## Security Hardening Features - Production Deployment
 
 **Version**: 2.0.0
@@ -721,7 +721,7 @@ After successful deployment:
 
 **Deployment Complete!** 🎉
 
-Your OEM Activation System now has enterprise-grade security features:
+Your KeyGate now has enterprise-grade security features:
 - Redis-based rate limiting
 - USB network restriction
 - Optional 2FA with Google Authenticator
