@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Save, Upload, Trash2, RotateCcw, Palette, Timer, Mail, Send, CheckCircle2, XCircle, Eye, EyeOff } from 'lucide-react'
+import { Save, Upload, Trash2, RotateCcw, Palette, Timer, Mail, Send, CheckCircle2, XCircle, Eye, EyeOff, Server, Monitor, Wifi, Clock, ToggleLeft } from 'lucide-react'
 import { AppHeader } from '@/components/layout/app-header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +15,7 @@ import {
   SelectTrigger,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   useAltServerSettings,
   useSaveAltServerSettings,
@@ -25,6 +26,8 @@ import {
   useSmtpSettings,
   useSaveSmtpSettings,
   useTestSmtpConnection,
+  useClientConfigSettings,
+  useSaveClientConfigSettings,
 } from '@/hooks/use-settings'
 import {
   useBranding,
@@ -32,7 +35,7 @@ import {
   useUploadBrandAsset,
   useDeleteBrandAsset,
 } from '@/hooks/use-branding'
-import type { AltServerConfig, OrderFieldConfig, SessionConfig, SmtpConfig } from '@/api/settings'
+import type { AltServerConfig, OrderFieldConfig, SessionConfig, SmtpConfig, ClientConfig } from '@/api/settings'
 import type { BrandingConfig } from '@/api/branding'
 
 // Labels are now provided via i18n (settings.script_type_cmd / settings.script_type_powershell)
@@ -290,6 +293,20 @@ export function SettingsPage() {
       <AppHeader title={t('nav.settings', 'Settings')} />
       <div className="flex-1 space-y-4 p-4 md:p-6">
         <h2 className="text-2xl font-bold tracking-tight">{t('nav.settings', 'Settings')}</h2>
+
+        <Tabs defaultValue="server">
+          <TabsList>
+            <TabsTrigger value="server">
+              <Server className="mr-1.5 h-4 w-4" />
+              {t('settings.tab_server', 'Server Settings')}
+            </TabsTrigger>
+            <TabsTrigger value="client">
+              <Monitor className="mr-1.5 h-4 w-4" />
+              {t('settings.tab_client', 'Client Configuration')}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="server" className="mt-4 space-y-4">
 
         {/* Branding Card */}
         <Card>
@@ -1247,7 +1264,215 @@ export function SettingsPage() {
             )}
           </CardContent>
         </Card>
+
+          </TabsContent>
+
+          <TabsContent value="client" className="mt-4 space-y-4">
+            <ClientConfigTab />
+          </TabsContent>
+
+        </Tabs>
       </div>
+    </>
+  )
+}
+
+// ── Client Configuration Tab ────────────────────────────────────
+
+const CLIENT_CONFIG_DEFAULTS: ClientConfig = {
+  client_task_wsus_cleanup: '1',
+  client_task_security_hardening: '1',
+  client_task_edrive_format: '1',
+  client_task_ps7_install: '1',
+  client_task_self_update: '1',
+  client_activation_delay_seconds: '10',
+  client_max_retry_attempts: '5',
+  client_max_check_iterations: '6',
+  client_check_delay_base: '5',
+  client_net_threshold_1: '60',
+  client_net_threshold_2: '100',
+  client_net_threshold_3: '200',
+  client_net_threshold_4: '400',
+  client_net_threshold_5: '800',
+  client_net_multiplier_1: '0.6',
+  client_net_multiplier_2: '0.8',
+  client_net_multiplier_3: '1.0',
+  client_net_multiplier_4: '1.6',
+  client_net_multiplier_5: '2.5',
+  client_net_max_multiplier: '2.5',
+  client_net_ping_samples: '3',
+  client_net_test_endpoint_1: 'https://activation.sls.microsoft.com',
+  client_net_test_endpoint_2: 'https://go.microsoft.com',
+  client_net_test_endpoint_3: 'https://dns.msftncsi.com',
+}
+
+const TASK_TOGGLES = [
+  { key: 'client_task_wsus_cleanup', labelKey: 'settings.task_wsus_cleanup', descKey: 'settings.task_wsus_cleanup_desc' },
+  { key: 'client_task_security_hardening', labelKey: 'settings.task_security_hardening', descKey: 'settings.task_security_hardening_desc' },
+  { key: 'client_task_edrive_format', labelKey: 'settings.task_edrive_format', descKey: 'settings.task_edrive_format_desc' },
+  { key: 'client_task_ps7_install', labelKey: 'settings.task_ps7_install', descKey: 'settings.task_ps7_install_desc' },
+  { key: 'client_task_self_update', labelKey: 'settings.task_self_update', descKey: 'settings.task_self_update_desc' },
+] as const
+
+function ClientConfigTab() {
+  const { t } = useTranslation()
+  const { data, isLoading } = useClientConfigSettings()
+  const saveMut = useSaveClientConfigSettings()
+  const [form, setForm] = useState<ClientConfig>(CLIENT_CONFIG_DEFAULTS)
+
+  useEffect(() => {
+    if (data?.config) setForm(data.config)
+  }, [data])
+
+  const update = (key: keyof ClientConfig, value: string) => {
+    setForm(prev => ({ ...prev, [key]: value }))
+  }
+
+  const handleSave = () => saveMut.mutate(form)
+
+  if (isLoading) {
+    return <div className="space-y-4"><Skeleton className="h-48" /><Skeleton className="h-48" /><Skeleton className="h-48" /></div>
+  }
+
+  return (
+    <>
+      {/* Pre-Activation Tasks */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <ToggleLeft className="h-5 w-5 text-primary" />
+            <div>
+              <CardTitle>{t('settings.client_tasks_title', 'Pre-Activation Tasks')}</CardTitle>
+              <CardDescription>{t('settings.client_tasks_desc', 'Toggle which tasks the launcher runs before activation.')}</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {TASK_TOGGLES.map(({ key, labelKey, descKey }) => (
+            <div key={key} className="flex items-center justify-between py-2">
+              <div>
+                <Label className="text-sm font-medium">{t(labelKey)}</Label>
+                <p className="text-xs text-muted-foreground">{t(descKey)}</p>
+              </div>
+              <Switch
+                checked={form[key as keyof ClientConfig] === '1'}
+                onCheckedChange={(checked) => update(key as keyof ClientConfig, checked ? '1' : '0')}
+              />
+            </div>
+          ))}
+          <Separator />
+          <Button onClick={handleSave} disabled={saveMut.isPending} size="sm">
+            <Save className="mr-1.5 h-4 w-4" />
+            {t('common.save', 'Save')}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Activation Timing */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Clock className="h-5 w-5 text-primary" />
+            <div>
+              <CardTitle>{t('settings.client_timing_title', 'Activation Timing')}</CardTitle>
+              <CardDescription>{t('settings.client_timing_desc', 'Configure base delays and retry behavior for activation.')}</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>{t('settings.activation_delay', 'Base Activation Delay (sec)')}</Label>
+              <Input type="number" min={1} max={120} value={form.client_activation_delay_seconds} onChange={e => update('client_activation_delay_seconds', e.target.value)} />
+            </div>
+            <div>
+              <Label>{t('settings.max_retries', 'Max Retry Attempts')}</Label>
+              <Input type="number" min={1} max={20} value={form.client_max_retry_attempts} onChange={e => update('client_max_retry_attempts', e.target.value)} />
+            </div>
+            <div>
+              <Label>{t('settings.max_check_iterations', 'Max Check Iterations')}</Label>
+              <Input type="number" min={1} max={20} value={form.client_max_check_iterations} onChange={e => update('client_max_check_iterations', e.target.value)} />
+            </div>
+            <div>
+              <Label>{t('settings.check_delay_base', 'Check Delay Base (sec)')}</Label>
+              <Input type="number" min={1} max={60} value={form.client_check_delay_base} onChange={e => update('client_check_delay_base', e.target.value)} />
+            </div>
+          </div>
+          <Separator className="my-4" />
+          <Button onClick={handleSave} disabled={saveMut.isPending} size="sm">
+            <Save className="mr-1.5 h-4 w-4" />
+            {t('common.save', 'Save')}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Network Diagnostics */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Wifi className="h-5 w-5 text-primary" />
+            <div>
+              <CardTitle>{t('settings.client_network_title', 'Network Diagnostics')}</CardTitle>
+              <CardDescription>{t('settings.client_network_desc', 'Configure latency thresholds and multipliers for adaptive timing.')}</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {/* Threshold/Multiplier Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-muted-foreground">
+                  <th className="py-2 pr-3">{t('settings.net_tier', 'Tier')}</th>
+                  <th className="py-2 pr-3">{t('settings.net_threshold', 'Latency Threshold (ms)')}</th>
+                  <th className="py-2">{t('settings.net_multiplier', 'Multiplier')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[1, 2, 3, 4, 5].map(i => (
+                  <tr key={i} className="border-b last:border-0">
+                    <td className="py-2 pr-3 font-medium">{i}</td>
+                    <td className="py-2 pr-3">
+                      <Input type="number" min={1} className="w-28" value={form[`client_net_threshold_${i}` as keyof ClientConfig]} onChange={e => update(`client_net_threshold_${i}` as keyof ClientConfig, e.target.value)} />
+                    </td>
+                    <td className="py-2">
+                      <Input type="number" step={0.1} min={0.1} max={10} className="w-28" value={form[`client_net_multiplier_${i}` as keyof ClientConfig]} onChange={e => update(`client_net_multiplier_${i}` as keyof ClientConfig, e.target.value)} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 mt-4">
+            <div>
+              <Label>{t('settings.net_max_multiplier', 'Max Multiplier')}</Label>
+              <Input type="number" step={0.1} min={0.1} max={10} value={form.client_net_max_multiplier} onChange={e => update('client_net_max_multiplier', e.target.value)} />
+            </div>
+            <div>
+              <Label>{t('settings.net_ping_samples', 'Ping Samples')}</Label>
+              <Input type="number" min={1} max={10} value={form.client_net_ping_samples} onChange={e => update('client_net_ping_samples', e.target.value)} />
+            </div>
+          </div>
+
+          <Separator className="my-4" />
+
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => (
+              <div key={i}>
+                <Label>{t('settings.net_test_endpoint', 'Test Endpoint')} {i}</Label>
+                <Input value={form[`client_net_test_endpoint_${i}` as keyof ClientConfig]} onChange={e => update(`client_net_test_endpoint_${i}` as keyof ClientConfig, e.target.value)} placeholder="https://..." />
+              </div>
+            ))}
+          </div>
+
+          <Separator className="my-4" />
+          <Button onClick={handleSave} disabled={saveMut.isPending} size="sm">
+            <Save className="mr-1.5 h-4 w-4" />
+            {t('common.save', 'Save')}
+          </Button>
+        </CardContent>
+      </Card>
     </>
   )
 }

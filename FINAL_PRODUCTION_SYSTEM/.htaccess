@@ -57,8 +57,8 @@ RewriteRule ^download/?$ client/ [NC,L]
     Deny from all
 </Files>
 
-# Block access to sensitive files
-<FilesMatch "(config|composer\.(json|lock)|\.env)">
+# Block access to sensitive files (exact match to avoid blocking api/*-config.php)
+<FilesMatch "^(config\.php|constants\.php|composer\.(json|lock)|\.env.*)$">
     Deny from all
 </FilesMatch>
 

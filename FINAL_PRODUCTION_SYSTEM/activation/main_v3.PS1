@@ -6,7 +6,9 @@ param(
 )
 
 $ActivationDelaySeconds = 10
-$MaxRetryAttempts = 5  # Retry same key up to 5 times (failures are usually network issues, not bad keys)
+$MaxRetryAttempts = 5       # Retry same key up to 5 times (failures are usually network issues, not bad keys)
+$MaxCheckIterations = 6     # Max slmgr license-status checks
+$CheckDelayBase = 5         # Base delay between status checks (seconds)
 
 # === Adaptive Network Timing ===
 # Activation delays exist because Microsoft's servers (not our LAN API) need time to
@@ -24,15 +26,21 @@ function Test-NetworkLatency {
     #>
     Write-Host ("`n" + "🌐 Testing network speed to Microsoft activation servers...") -ForegroundColor Cyan
 
-    # Microsoft endpoints that matter for activation timing
-    # These are the servers slmgr /ato actually talks to
-    $msEndpoints = @(
-        @{ Name = "Microsoft Activation (SLS)"; Uri = "https://activation.sls.microsoft.com" }
-        @{ Name = "Microsoft Licensing"; Uri = "https://go.microsoft.com" }
-        @{ Name = "Microsoft DNS Check"; Uri = "https://dns.msftncsi.com" }
-    )
+    # Microsoft endpoints that matter for activation timing (configurable from admin UI)
+    if ($script:ConfiguredEndpoints) {
+        $msEndpoints = @()
+        foreach ($ep in $script:ConfiguredEndpoints) {
+            $msEndpoints += @{ Name = ([System.Uri]$ep).Host; Uri = $ep }
+        }
+    } else {
+        $msEndpoints = @(
+            @{ Name = "Microsoft Activation (SLS)"; Uri = "https://activation.sls.microsoft.com" }
+            @{ Name = "Microsoft Licensing"; Uri = "https://go.microsoft.com" }
+            @{ Name = "Microsoft DNS Check"; Uri = "https://dns.msftncsi.com" }
+        )
+    }
 
-    $pingCount = 3  # Multiple samples per endpoint for reliability
+    $pingCount = if ($script:ConfiguredPingSamples) { $script:ConfiguredPingSamples } else { 3 }
 
     # Quick connectivity check to our API server (informational only, not used for timing)
     try {
@@ -92,7 +100,7 @@ function Test-NetworkLatency {
     if ($msLatencies.Count -eq 0) {
         # No Microsoft endpoints reachable — activation will likely fail, but use max delays to give it best shot
         Write-Host "  ⚠ Microsoft servers unreachable — using maximum wait times" -ForegroundColor Yellow
-        $script:NetworkMultiplier = 2.5
+        $script:NetworkMultiplier = if ($script:ConfiguredMaxMultiplier) { $script:ConfiguredMaxMultiplier } else { 2.5 }
         $script:NetworkLatencyMs = 9999
         return
     }
@@ -109,22 +117,23 @@ function Test-NetworkLatency {
     #   - 100-200ms: Typical broadband → use default timing
     #   - 200-400ms: Slow broadband or distant region → extend waits
     #   - 400ms+: Very slow or congested → max extension
-    if ($worstMs -le 60) {
-        $script:NetworkMultiplier = 0.6
-    } elseif ($worstMs -le 100) {
-        # Linear interpolation: 60ms→0.6, 100ms→0.8
-        $script:NetworkMultiplier = 0.6 + (($worstMs - 60) / 40) * 0.2
-    } elseif ($worstMs -le 200) {
-        # Linear interpolation: 100ms→0.8, 200ms→1.0 (baseline)
-        $script:NetworkMultiplier = 0.8 + (($worstMs - 100) / 100) * 0.2
-    } elseif ($worstMs -le 400) {
-        # Linear interpolation: 200ms→1.0, 400ms→1.6
-        $script:NetworkMultiplier = 1.0 + (($worstMs - 200) / 200) * 0.6
-    } elseif ($worstMs -le 800) {
-        # Linear interpolation: 400ms→1.6, 800ms→2.2
-        $script:NetworkMultiplier = 1.6 + (($worstMs - 400) / 400) * 0.6
+    # Thresholds and multipliers are configurable from admin UI
+    $th = if ($script:ConfiguredThresholds) { $script:ConfiguredThresholds } else { @(60, 100, 200, 400, 800) }
+    $ml = if ($script:ConfiguredMultipliers) { $script:ConfiguredMultipliers } else { @(0.6, 0.8, 1.0, 1.6, 2.5) }
+    $maxMul = if ($script:ConfiguredMaxMultiplier) { $script:ConfiguredMaxMultiplier } else { 2.5 }
+
+    if ($worstMs -le $th[0]) {
+        $script:NetworkMultiplier = $ml[0]
+    } elseif ($worstMs -le $th[1]) {
+        $script:NetworkMultiplier = $ml[0] + (($worstMs - $th[0]) / ($th[1] - $th[0])) * ($ml[1] - $ml[0])
+    } elseif ($worstMs -le $th[2]) {
+        $script:NetworkMultiplier = $ml[1] + (($worstMs - $th[1]) / ($th[2] - $th[1])) * ($ml[2] - $ml[1])
+    } elseif ($worstMs -le $th[3]) {
+        $script:NetworkMultiplier = $ml[2] + (($worstMs - $th[2]) / ($th[3] - $th[2])) * ($ml[3] - $ml[2])
+    } elseif ($worstMs -le $th[4]) {
+        $script:NetworkMultiplier = $ml[3] + (($worstMs - $th[3]) / ($th[4] - $th[3])) * ($ml[4] - $ml[3])
     } else {
-        $script:NetworkMultiplier = 2.5
+        $script:NetworkMultiplier = $maxMul
     }
 
     $script:NetworkMultiplier = [math]::Round($script:NetworkMultiplier, 2)
@@ -145,6 +154,48 @@ function Get-AdaptiveDelay {
     )
     $scaled = [math]::Max($MinSeconds, [math]::Round($BaseSeconds * $script:NetworkMultiplier))
     return [int]$scaled
+}
+
+function Get-ClientConfig {
+    <#
+    .SYNOPSIS
+        Fetches client configuration from the server after login.
+        Overrides hardcoded timing, retry, and network settings with admin-configured values.
+    #>
+    param([string]$SessionToken)
+    try {
+        $body = @{ session_token = $SessionToken } | ConvertTo-Json
+        $response = Invoke-RestMethod -Uri "$APIBaseURL/get-client-config.php" `
+            -Method POST -Body $body -ContentType "application/json" `
+            -TimeoutSec 10 -ErrorAction Stop
+        if ($response.success) {
+            Write-Host "  Client config loaded from server" -ForegroundColor Green
+
+            # Apply timing overrides
+            if ($response.config.timing) {
+                $t = $response.config.timing
+                if ($t.activation_delay_seconds) { $script:ActivationDelaySeconds = [int]$t.activation_delay_seconds }
+                if ($t.max_retry_attempts)       { $script:MaxRetryAttempts = [int]$t.max_retry_attempts }
+                if ($t.max_check_iterations)     { $script:MaxCheckIterations = [int]$t.max_check_iterations }
+                if ($t.check_delay_base)         { $script:CheckDelayBase = [int]$t.check_delay_base }
+            }
+
+            # Apply network overrides (for next call to Test-NetworkLatency)
+            if ($response.config.network) {
+                $n = $response.config.network
+                if ($n.thresholds)      { $script:ConfiguredThresholds = $n.thresholds }
+                if ($n.multipliers)     { $script:ConfiguredMultipliers = $n.multipliers }
+                if ($n.max_multiplier)  { $script:ConfiguredMaxMultiplier = [float]$n.max_multiplier }
+                if ($n.ping_samples)    { $script:ConfiguredPingSamples = [int]$n.ping_samples }
+                if ($n.test_endpoints)  { $script:ConfiguredEndpoints = $n.test_endpoints }
+            }
+
+            return $response.config
+        }
+    } catch {
+        Write-Host "  Could not fetch client config, using defaults" -ForegroundColor Yellow
+    }
+    return $null
 }
 
 # === Network Diagnostics & Recovery (MAS-inspired) ===

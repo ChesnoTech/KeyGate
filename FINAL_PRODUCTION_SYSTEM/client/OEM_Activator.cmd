@@ -80,8 +80,41 @@ echo Script Endpoint: %SCRIPT_ENDPOINT% >> "%LOG_FILE%"
 echo ========================================= >> "%LOG_FILE%"
 
 REM ============================================
+REM Fetch task toggles from server
+REM ============================================
+set "DO_WSUS=True"
+set "DO_SECURITY=True"
+set "DO_EDRIVE=True"
+set "DO_PS7=True"
+set "DO_SELFUPDATE=True"
+
+where curl >nul 2>&1
+if %ERRORLEVEL%==0 (
+    echo Fetching launcher config from server...
+    for /f "tokens=*" %%j in ('curl -s "%API_ENDPOINT%/get-launcher-config.php" 2^>nul') do set "LAUNCHER_CONFIG=%%j"
+    if defined LAUNCHER_CONFIG (
+        for /f %%v in ('powershell -NoProfile -Command "try{($env:LAUNCHER_CONFIG|ConvertFrom-Json).tasks.wsus_cleanup}catch{'True'}"') do set "DO_WSUS=%%v"
+        for /f %%v in ('powershell -NoProfile -Command "try{($env:LAUNCHER_CONFIG|ConvertFrom-Json).tasks.security_hardening}catch{'True'}"') do set "DO_SECURITY=%%v"
+        for /f %%v in ('powershell -NoProfile -Command "try{($env:LAUNCHER_CONFIG|ConvertFrom-Json).tasks.edrive_format}catch{'True'}"') do set "DO_EDRIVE=%%v"
+        for /f %%v in ('powershell -NoProfile -Command "try{($env:LAUNCHER_CONFIG|ConvertFrom-Json).tasks.ps7_install}catch{'True'}"') do set "DO_PS7=%%v"
+        for /f %%v in ('powershell -NoProfile -Command "try{($env:LAUNCHER_CONFIG|ConvertFrom-Json).tasks.self_update}catch{'True'}"') do set "DO_SELFUPDATE=%%v"
+        echo [OK] Config loaded: WSUS=%DO_WSUS% Security=%DO_SECURITY% E:=%DO_EDRIVE% PS7=%DO_PS7% Update=%DO_SELFUPDATE%
+    ) else (
+        echo [WARN] Could not fetch config, using defaults
+    )
+) else (
+    echo [INFO] curl not available, using default task config
+)
+echo.
+
+REM ============================================
 REM Pre-Activation Task 1/3: WSUS Cleanup
 REM ============================================
+if /i "%DO_WSUS%"=="False" (
+    echo [1/3] WSUS cleanup: SKIPPED ^(disabled in admin config^)
+    echo [PRE-TASK] WSUS cleanup skipped by admin config >> "%LOG_FILE%"
+    goto :skip_wsus
+)
 echo [1/3] Cleaning up WSUS configuration...
 echo [PRE-TASK] WSUS cleanup starting... >> "%LOG_FILE%"
 
@@ -101,10 +134,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 echo [OK] WSUS cleanup completed
 echo [PRE-TASK] WSUS cleanup done >> "%LOG_FILE%"
 echo.
+:skip_wsus
 
 REM ============================================
 REM Pre-Activation Task 2/3: Security Hardening
 REM ============================================
+if /i "%DO_SECURITY%"=="False" (
+    echo [2/3] Security hardening: SKIPPED ^(disabled in admin config^)
+    echo [PRE-TASK] Security hardening skipped by admin config >> "%LOG_FILE%"
+    goto :skip_security
+)
 echo [2/3] Applying security hardening...
 echo [PRE-TASK] Security hardening starting... >> "%LOG_FILE%"
 
@@ -114,10 +153,16 @@ reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" /v
 echo [OK] Guest access disabled, SMB signing enforced
 echo [PRE-TASK] Security hardening done >> "%LOG_FILE%"
 echo.
+:skip_security
 
 REM ============================================
 REM Pre-Activation Task 3/3: Format E: (BIOS)
 REM ============================================
+if /i "%DO_EDRIVE%"=="False" (
+    echo [3/3] E: drive format: SKIPPED ^(disabled in admin config^)
+    echo [PRE-TASK] E: drive format skipped by admin config >> "%LOG_FILE%"
+    goto :skip_edrive
+)
 echo [3/3] Checking E: drive (BIOS partition)...
 echo [PRE-TASK] E: drive check starting... >> "%LOG_FILE%"
 
@@ -137,6 +182,7 @@ if %errorlevel% neq 0 (
     )
 )
 echo.
+:skip_edrive
 
 REM ============================================
 REM Network Connectivity Test
@@ -157,6 +203,11 @@ if %errorlevel% neq 0 (
 REM ============================================
 REM PowerShell 7 Detection + Auto-Install
 REM ============================================
+if /i "%DO_PS7%"=="False" (
+    echo PowerShell 7 auto-install: SKIPPED ^(disabled in admin config^)
+    echo [PRE-TASK] PS7 install skipped by admin config >> "%LOG_FILE%"
+    goto :ps_check_legacy
+)
 echo Checking PowerShell compatibility...
 echo Checking PowerShell version... >> "%LOG_FILE%"
 
@@ -254,6 +305,11 @@ echo.
 REM ============================================
 REM Launcher Self-Update Check
 REM ============================================
+if /i "%DO_SELFUPDATE%"=="False" (
+    echo Launcher self-update: SKIPPED ^(disabled in admin config^)
+    echo [SELF-UPDATE] Skipped by admin config >> "%LOG_FILE%"
+    goto :skip_selfupdate
+)
 echo Checking for launcher updates...
 echo [SELF-UPDATE] Checking launcher version %LAUNCHER_VERSION% >> "%LOG_FILE%"
 
@@ -292,6 +348,7 @@ if "%UPDATE_RESULT%"=="2" (
     exit /b 0
 )
 echo.
+:skip_selfupdate
 
 REM Download the latest PowerShell script
 echo Downloading latest activation script...

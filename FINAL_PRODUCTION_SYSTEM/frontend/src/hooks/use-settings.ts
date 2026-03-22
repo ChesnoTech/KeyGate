@@ -11,10 +11,13 @@ import {
   getSmtpSettings,
   saveSmtpSettings,
   testSmtpConnection,
+  getClientConfigSettings,
+  saveClientConfigSettings,
   type AltServerConfig,
   type OrderFieldConfig,
   type SessionConfig,
   type SmtpConfig,
+  type ClientConfig,
 } from '@/api/settings'
 
 export function useAltServerSettings() {
@@ -94,6 +97,28 @@ export function useSaveSmtpSettings() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['settings', 'smtp'] })
       toast.success(t('settings.smtp_saved', 'Email settings saved'))
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+// ── Client Configuration ──────────────────────────────────────────
+
+export function useClientConfigSettings() {
+  return useQuery({
+    queryKey: ['settings', 'client-config'],
+    queryFn: () => getClientConfigSettings(),
+  })
+}
+
+export function useSaveClientConfigSettings() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: (config: ClientConfig) => saveClientConfigSettings(config),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings', 'client-config'] })
+      toast.success(t('toast.settings_saved', 'Settings saved successfully'))
     },
     onError: (e: Error) => toast.error(e.message),
   })

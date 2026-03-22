@@ -161,6 +161,107 @@ function handle_get_session_settings(PDO $pdo, array $admin_session): void {
     jsonResponse(['success' => true, 'config' => $config]);
 }
 
+// ── Client Configuration ────────────────────────────────────
+
+function getClientConfigDefaults(): array {
+    return [
+        'client_task_wsus_cleanup'        => '1',
+        'client_task_security_hardening'  => '1',
+        'client_task_edrive_format'       => '1',
+        'client_task_ps7_install'         => '1',
+        'client_task_self_update'         => '1',
+        'client_activation_delay_seconds' => '10',
+        'client_max_retry_attempts'       => '5',
+        'client_max_check_iterations'     => '6',
+        'client_check_delay_base'         => '5',
+        'client_net_threshold_1'          => '60',
+        'client_net_threshold_2'          => '100',
+        'client_net_threshold_3'          => '200',
+        'client_net_threshold_4'          => '400',
+        'client_net_threshold_5'          => '800',
+        'client_net_multiplier_1'         => '0.6',
+        'client_net_multiplier_2'         => '0.8',
+        'client_net_multiplier_3'         => '1.0',
+        'client_net_multiplier_4'         => '1.6',
+        'client_net_multiplier_5'         => '2.5',
+        'client_net_max_multiplier'       => '2.5',
+        'client_net_ping_samples'         => '3',
+        'client_net_test_endpoint_1'      => 'https://activation.sls.microsoft.com',
+        'client_net_test_endpoint_2'      => 'https://go.microsoft.com',
+        'client_net_test_endpoint_3'      => 'https://dns.msftncsi.com',
+    ];
+}
+
+function handle_get_client_config_settings(PDO $pdo, array $admin_session): void {
+    requirePermission('system_settings', $admin_session);
+    $defaults = getClientConfigDefaults();
+    $config = [];
+    foreach ($defaults as $key => $default) {
+        $config[$key] = getConfigWithDefault($key, $default);
+    }
+    jsonResponse(['success' => true, 'config' => $config]);
+}
+
+function handle_save_client_config_settings(PDO $pdo, array $admin_session, ?array $json_input = null): void {
+    requirePermission('system_settings', $admin_session);
+    if (!$json_input) {
+        jsonResponse(['success' => false, 'error' => 'Invalid JSON input']);
+        return;
+    }
+
+    $defaults = getClientConfigDefaults();
+    $configs = [];
+
+    foreach ($defaults as $key => $default) {
+        if (!isset($json_input[$key])) continue;
+        $val = $json_input[$key];
+
+        // Validate toggles
+        if (str_starts_with($key, 'client_task_')) {
+            $configs[$key] = in_array($val, ['0', '1', 0, 1, true, false], true) ? ($val ? '1' : '0') : $default;
+            continue;
+        }
+        // Validate integers
+        if (in_array($key, ['client_activation_delay_seconds', 'client_max_retry_attempts', 'client_max_check_iterations', 'client_check_delay_base', 'client_net_ping_samples'])) {
+            $int = (int) $val;
+            if ($int < 1 || $int > 120) $int = (int) $default;
+            $configs[$key] = (string) $int;
+            continue;
+        }
+        // Validate thresholds (positive integers)
+        if (str_starts_with($key, 'client_net_threshold_')) {
+            $int = (int) $val;
+            if ($int < 1 || $int > 30000) $int = (int) $default;
+            $configs[$key] = (string) $int;
+            continue;
+        }
+        // Validate multipliers (positive floats)
+        if (str_starts_with($key, 'client_net_multiplier_') || $key === 'client_net_max_multiplier') {
+            $float = (float) $val;
+            if ($float < 0.1 || $float > 10.0) $float = (float) $default;
+            $configs[$key] = (string) round($float, 2);
+            continue;
+        }
+        // Validate endpoints (URLs or empty)
+        if (str_starts_with($key, 'client_net_test_endpoint_')) {
+            $configs[$key] = (is_string($val) && (empty($val) || str_starts_with($val, 'https://'))) ? $val : $default;
+            continue;
+        }
+        $configs[$key] = (string) $val;
+    }
+
+    saveConfigBatch($pdo, $configs);
+
+    logAdminActivity(
+        $admin_session['admin_id'],
+        $admin_session['id'],
+        'UPDATE_CLIENT_CONFIG',
+        'Updated client configuration settings'
+    );
+
+    jsonResponse(['success' => true]);
+}
+
 function handle_save_session_settings(PDO $pdo, array $admin_session, ?array $json_input = null): void {
     if (!$json_input) {
         jsonResponse(['success' => false, 'error' => 'Invalid JSON input'], 400);

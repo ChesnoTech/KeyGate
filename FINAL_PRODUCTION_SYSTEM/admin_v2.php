@@ -216,6 +216,8 @@ $action_registry = [
     'save_order_field_settings'=> ['SettingsController.php',   'handle_save_order_field_settings',true,  true],
     'get_session_settings'     => ['SettingsController.php',   'handle_get_session_settings',     false, false],
     'save_session_settings'    => ['SettingsController.php',   'handle_save_session_settings',    true,  true],
+    'get_client_config_settings'  => ['SettingsController.php', 'handle_get_client_config_settings',  false, false],
+    'save_client_config_settings' => ['SettingsController.php', 'handle_save_client_config_settings', true,  true],
 
     // smtp / email
     'get_smtp_settings'        => ['SmtpController.php',      'handle_get_smtp_settings',        false, false],

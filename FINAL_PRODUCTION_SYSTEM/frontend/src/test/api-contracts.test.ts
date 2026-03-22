@@ -56,6 +56,8 @@ const BACKEND_ACTIONS: Record<string, { method: 'GET' | 'POST'; csrf: boolean }>
   save_order_field_settings: { method: 'POST', csrf: true },
   get_session_settings:      { method: 'GET',  csrf: false },
   save_session_settings:     { method: 'POST', csrf: true },
+  get_client_config_settings:  { method: 'GET',  csrf: false },
+  save_client_config_settings: { method: 'POST', csrf: true },
 
   // smtp / email
   get_smtp_settings:         { method: 'GET',  csrf: false },

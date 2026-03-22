@@ -135,3 +135,43 @@ export function testSmtpConnection(params: Record<string, unknown> = {}) {
     params
   )
 }
+
+// ── Client Configuration ──────────────────────────────────────────
+
+export interface ClientConfig {
+  client_task_wsus_cleanup: string
+  client_task_security_hardening: string
+  client_task_edrive_format: string
+  client_task_ps7_install: string
+  client_task_self_update: string
+  client_activation_delay_seconds: string
+  client_max_retry_attempts: string
+  client_max_check_iterations: string
+  client_check_delay_base: string
+  client_net_threshold_1: string
+  client_net_threshold_2: string
+  client_net_threshold_3: string
+  client_net_threshold_4: string
+  client_net_threshold_5: string
+  client_net_multiplier_1: string
+  client_net_multiplier_2: string
+  client_net_multiplier_3: string
+  client_net_multiplier_4: string
+  client_net_multiplier_5: string
+  client_net_max_multiplier: string
+  client_net_ping_samples: string
+  client_net_test_endpoint_1: string
+  client_net_test_endpoint_2: string
+  client_net_test_endpoint_3: string
+}
+
+export function getClientConfigSettings() {
+  return apiGet<{ success: boolean; config: ClientConfig }>('get_client_config_settings')
+}
+
+export function saveClientConfigSettings(config: ClientConfig) {
+  return apiPostJson<{ success: boolean; error?: string }>(
+    'save_client_config_settings',
+    config as unknown as Record<string, unknown>
+  )
+}
