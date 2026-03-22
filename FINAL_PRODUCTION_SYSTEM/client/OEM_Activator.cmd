@@ -1,16 +1,16 @@
 @echo off
 setlocal EnableDelayedExpansion
-REM OEM Activation System v3.1 - Technician Launcher
+REM KeyGate v3.1 - Technician Launcher
 REM Hardware Collection + USB Auth + Adaptive Timing + Self-Update
 REM ==============================================================
 REM LAUNCHER_VERSION=3.1.0
 
-title OEM Activation System v3.1
+title KeyGate v3.1
 
 REM Display banner
 echo.
 echo  ====================================================
-echo  OEM Activation System v3.1
+echo  KeyGate v3.1
 echo  ====================================================
 echo  Features: USB Auth, Hardware QC, Adaptive Timing
 echo  Self-Updating Launcher + Get-CimInstance (Win11 25H2)
@@ -72,7 +72,7 @@ echo.
 
 REM Create log file
 echo ========================================= > "%LOG_FILE%"
-echo OEM Activation Log - %DATE% %TIME% >> "%LOG_FILE%"
+echo KeyGate Log - %DATE% %TIME% >> "%LOG_FILE%"
 echo ========================================= >> "%LOG_FILE%"
 echo Server URL: %SERVER_URL% >> "%LOG_FILE%"
 echo API Endpoint: %API_ENDPOINT% >> "%LOG_FILE%"

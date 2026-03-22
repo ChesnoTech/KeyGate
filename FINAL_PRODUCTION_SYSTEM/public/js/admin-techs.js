@@ -1,5 +1,5 @@
 /**
- * OEM Activation System - Admin Panel: Technicians Module
+ * KeyGate - Admin Panel: Technicians Module
  * Technician management: list, add, edit, toggle, reset password, delete
  */
 

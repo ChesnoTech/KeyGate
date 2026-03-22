@@ -1,6 +1,6 @@
 <?php
 /**
- * OEM Activation System - Advanced System Diagnostics
+ * KeyGate - Advanced System Diagnostics
  * Comprehensive system analysis and troubleshooting tool
  */
 
@@ -15,7 +15,7 @@ require_once 'index.php';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OEM Activation System - System Diagnostics</title>
+    <title>KeyGate - System Diagnostics</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -142,7 +142,7 @@ require_once 'index.php';
     <div class="container">
         <div class="header">
             <h1>🔍 System Diagnostics</h1>
-            <p>OEM Activation System v<?php echo OEM_VERSION; ?></p>
+            <p>KeyGate v<?php echo OEM_VERSION; ?></p>
         </div>
         
         <div class="content">

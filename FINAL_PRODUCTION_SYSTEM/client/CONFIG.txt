@@ -1,4 +1,4 @@
-# OEM Activation System v3.1 - Configuration File
+# KeyGate v3.1 - Configuration File
 # =================================================
 # Edit this file to customize the activation client
 

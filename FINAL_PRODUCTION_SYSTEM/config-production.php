@@ -1,7 +1,7 @@
 <?php
 /**
  * Production Database Configuration
- * OEM Activation System v2.0
+ * KeyGate v2.0
  * 
  * IMPORTANT: Update these settings for your production server
  * Then rename this file to config.php to use it
@@ -348,6 +348,6 @@ if (!in_array($timezone, timezone_identifiers_list())) {
 date_default_timezone_set($timezone);
 
 // Log successful configuration load
-error_log("OEM Activation System configuration loaded successfully. Environment: " . 
+error_log("KeyGate configuration loaded successfully. Environment: " .
          ($isProduction ? "Production" : "Development"));
 ?>

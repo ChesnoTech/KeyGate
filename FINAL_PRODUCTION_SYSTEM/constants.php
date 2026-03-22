@@ -1,7 +1,7 @@
 <?php
 /**
  * Application Constants
- * OEM Activation System v2.0
+ * KeyGate v2.0
  *
  * Centralizes all magic numbers and configuration defaults.
  * Import this file wherever constants are needed.

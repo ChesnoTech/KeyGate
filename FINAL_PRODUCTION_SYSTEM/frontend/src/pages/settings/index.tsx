@@ -154,7 +154,7 @@ export function SettingsPage() {
   const deleteAssetMutation = useDeleteBrandAsset()
 
   const [brandForm, setBrandForm] = useState<Partial<BrandingConfig>>({
-    brand_company_name: 'OEM Activation',
+    brand_company_name: 'KeyGate',
     brand_app_version: 'System v2.0',
     brand_login_title: '',
     brand_login_subtitle: '',
@@ -337,7 +337,7 @@ export function SettingsPage() {
                     <Input
                       value={brandForm.brand_company_name || ''}
                       onChange={(e) => setBrandForm({ ...brandForm, brand_company_name: e.target.value })}
-                      placeholder="OEM Activation"
+                      placeholder="KeyGate"
                     />
                   </div>
                   <div className="space-y-2">
@@ -363,7 +363,7 @@ export function SettingsPage() {
                     <Input
                       value={brandForm.brand_login_subtitle || ''}
                       onChange={(e) => setBrandForm({ ...brandForm, brand_login_subtitle: e.target.value })}
-                      placeholder={t('login.subtitle', 'OEM Activation System')}
+                      placeholder={t('login.subtitle', 'KeyGate')}
                     />
                   </div>
                 </div>
@@ -1157,7 +1157,7 @@ export function SettingsPage() {
                       id="email_from_name"
                       value={smtpForm.email_from_name}
                       onChange={(e) => setSmtpForm({ ...smtpForm, email_from_name: e.target.value })}
-                      placeholder="OEM Activation System"
+                      placeholder="KeyGate"
                     />
                   </div>
                   <div className="space-y-2">

@@ -615,7 +615,7 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
     Write-Host "Running under PowerShell $($PSVersionTable.PSVersion) (PS7 not available)" -ForegroundColor Yellow
 }
 
-Write-Host "`n🔐 OEM Activation System v3.0 (Hardware Collection Edition)`n" -ForegroundColor Cyan
+Write-Host "`n🔐 KeyGate v3.0 (Hardware Collection Edition)`n" -ForegroundColor Cyan
 Write-Host "⚠️ Please do NOT close this window manually. It will close automatically.`n"
 
 # Get technician credentials
@@ -1035,13 +1035,13 @@ function Get-ServerSelection {
 
     # Highlight the preferred server
     if ($PreferredServer -eq 'oem') {
-        Write-Host "1. OEM Activation Server (Primary System) [DEFAULT]" -ForegroundColor Green
+        Write-Host "1. KeyGate Server (Primary System) [DEFAULT]" -ForegroundColor Green
         Write-Host "   Uses the OEM key database for activation" -ForegroundColor Gray
         Write-Host ""
         Write-Host "2. Alternative Activation Server (Backup)" -ForegroundColor Yellow
         Write-Host "   Uses external activation method" -ForegroundColor Gray
     } else {
-        Write-Host "1. OEM Activation Server (Primary System)" -ForegroundColor Green
+        Write-Host "1. KeyGate Server (Primary System)" -ForegroundColor Green
         Write-Host "   Uses the OEM key database for activation" -ForegroundColor Gray
         Write-Host ""
         Write-Host "2. Alternative Activation Server (Backup) [DEFAULT]" -ForegroundColor Yellow
@@ -1060,13 +1060,13 @@ function Get-ServerSelection {
                 Write-Host "✓ Using Alternative Activation Server (your default)" -ForegroundColor Yellow
                 return 'alternative'
             } else {
-                Write-Host "✓ Using OEM Activation Server (your default)" -ForegroundColor Green
+                Write-Host "✓ Using KeyGate Server (your default)" -ForegroundColor Green
                 return 'oem'
             }
         }
 
         if ($choice -eq '1') {
-            Write-Host "✓ Using OEM Activation Server" -ForegroundColor Green
+            Write-Host "✓ Using KeyGate Server" -ForegroundColor Green
             return 'oem'
         } elseif ($choice -eq '2') {
             Write-Host "✓ Using Alternative Activation Server" -ForegroundColor Yellow
@@ -2250,7 +2250,7 @@ if ($useAlternativeServer) {
 $diagnosticIssues = Invoke-PreActivationDiagnostics
 
 # === OEM SERVER PATH (PRIMARY) ===
-Write-Host "`n🔧 Using OEM Activation Server (Primary)..." -ForegroundColor Green
+Write-Host "`n🔧 Using KeyGate Server (Primary)..." -ForegroundColor Green
 
 $activationComplete = $false
 $keyAttempts = 0

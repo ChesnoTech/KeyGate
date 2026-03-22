@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================
-# OEM Activation System v2.0 — Manual Database Initialization
+# KeyGate v2.0 — Manual Database Initialization
 # =============================================================
 # Use this script for bare-metal (non-Docker) deployments.
 # Runs all SQL migrations in correct dependency order.
@@ -35,7 +35,7 @@ if [ -z "$DB_PASS" ]; then
     exit 1
 fi
 
-echo "=== OEM Activation System: Database Initialization ==="
+echo "=== KeyGate: Database Initialization ==="
 echo "Host:     $DB_HOST"
 echo "Database: $DB_NAME"
 echo "User:     $DB_USER"

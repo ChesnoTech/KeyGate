@@ -73,7 +73,7 @@ $all_passed = !in_array(false, $critical_checks, true);
 ?>
 
 <h2>Pre-installation Check</h2>
-<p>Please ensure your server meets the minimum requirements to install OEM Activation System.</p>
+<p>Please ensure your server meets the minimum requirements to install KeyGate.</p>
 
 <?php if (!empty($auto_fixes)): ?>
 <div class="alert alert-success">
@@ -296,7 +296,7 @@ $all_passed = !in_array(false, $critical_checks, true);
 <?php else: ?>
     <div class="alert alert-success">
         <strong>✅ All Requirements Met</strong><br>
-        Your server meets all the requirements for OEM Activation System installation.
+        Your server meets all the requirements for KeyGate installation.
     </div>
 <?php endif; ?>
 

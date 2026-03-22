@@ -1,5 +1,5 @@
 /**
- * Service Worker for OEM Activation System Push Notifications
+ * Service Worker for KeyGate Push Notifications
  * Handles push events and notification click actions.
  */
 

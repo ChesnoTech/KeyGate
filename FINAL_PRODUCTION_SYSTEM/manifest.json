@@ -1,6 +1,6 @@
 {
-    "name": "OEM Activation System",
-    "short_name": "OEM Activate",
+    "name": "KeyGate",
+    "short_name": "KeyGate",
     "description": "Professional Windows OEM License Management",
     "start_url": "admin_v2.php",
     "scope": ".",

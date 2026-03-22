@@ -1,7 +1,7 @@
 <?php
 /**
  * Internationalization (i18n) Helper Functions
- * OEM Activation System v2.0
+ * KeyGate v2.0
  *
  * Provides translation support for English and Russian languages.
  * Language files are stored in /lang/ directory as PHP arrays.

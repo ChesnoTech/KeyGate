@@ -1,5 +1,5 @@
 <?php
-// Admin Dashboard v2.0 - OEM Activation System
+// Admin Dashboard v2.0 - KeyGate
 // Orchestrator: session, language, CSRF, action routing, view rendering
 
 require_once 'security-headers.php';
@@ -118,7 +118,7 @@ if ($pre_auth_action === 'admin_login' && $_SERVER['REQUEST_METHOD'] === 'POST')
 if ($pre_auth_action === 'get_public_branding') {
     header('Content-Type: application/json');
     $config = [
-        'brand_company_name'   => getConfig('brand_company_name') ?? 'OEM Activation',
+        'brand_company_name'   => getConfig('brand_company_name') ?? 'KeyGate',
         'brand_app_version'    => getConfig('brand_app_version') ?? 'System v2.0',
         'brand_logo_path'      => getConfig('brand_logo_path') ?? '',
         'brand_favicon_path'   => getConfig('brand_favicon_path') ?? '',

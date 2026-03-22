@@ -1,4 +1,4 @@
-﻿# OEM Activation System v2.0 - Russian Language File
+﻿# KeyGate - Russian Language File
 # Language: Русский (ru)
 
 @{

@@ -129,10 +129,10 @@ export function AppSidebar() {
           )}
           <div className="flex flex-col">
             <span className="text-sm font-semibold">
-              {branding.companyName || t('common.app_name', 'OEM Activation')}
+              {branding.companyName || t('common.app_name', 'KeyGate')}
             </span>
             <span className="text-xs text-muted-foreground">
-              {branding.appVersion || t('common.app_version', 'System v2.0')}
+              {branding.appVersion || t('common.app_version', 'v2.1.0')}
             </span>
           </div>
         </div>

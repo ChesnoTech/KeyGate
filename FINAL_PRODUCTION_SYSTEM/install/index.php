@@ -1,6 +1,6 @@
 <?php
 /**
- * OEM Activation System — Web Installer
+ * KeyGate — Web Installer
  * Joomla-style setup wizard: upload files → navigate to /install/ → follow steps
  *
  * Steps:
@@ -38,7 +38,7 @@ if (file_exists($lockFile)) {
         <div class="card">
             <div class="icon">&#9989;</div>
             <h1>System Already Installed</h1>
-            <p>OEM Activation System was installed on<br>
+            <p>KeyGate was installed on<br>
             <strong><?= htmlspecialchars($installed['installed_at'] ?? 'unknown') ?></strong></p>
             <div class="warn">
                 <strong>Security:</strong> Delete the <code>/install/</code> directory from your server to prevent unauthorized access.
@@ -62,7 +62,7 @@ $serverUrl = $protocol . '://' . $host . $baseUrl;
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OEM Activation System — Installer</title>
+    <title>KeyGate — Installer</title>
     <style>
         :root {
             --primary: #2563eb;
@@ -315,7 +315,7 @@ $serverUrl = $protocol . '://' . $host . $baseUrl;
 <body>
 
 <div class="header">
-    <h1>OEM Activation System</h1>
+    <h1>KeyGate</h1>
     <p>Installation Wizard</p>
 </div>
 
@@ -477,7 +477,7 @@ $serverUrl = $protocol . '://' . $host . $baseUrl;
             <p class="subtitle">Basic settings for your installation</p>
             <div class="form-group">
                 <label>System Name</label>
-                <input type="text" id="cfgName" value="OEM Activation System" />
+                <input type="text" id="cfgName" value="KeyGate" />
             </div>
             <div class="form-group">
                 <label>Server URL</label>
@@ -514,7 +514,7 @@ $serverUrl = $protocol . '://' . $host . $baseUrl;
         <div class="card" style="text-align:center;">
             <div class="complete-icon">&#127881;</div>
             <h2>Installation Complete!</h2>
-            <p class="subtitle">OEM Activation System is ready to use</p>
+            <p class="subtitle">KeyGate is ready to use</p>
 
             <div style="text-align:left;margin:24px 0;">
                 <dl class="info-grid" id="completeInfo"></dl>

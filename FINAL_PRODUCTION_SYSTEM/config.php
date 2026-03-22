@@ -1,7 +1,7 @@
 <?php
 /**
  * Application Bootstrap & Database Configuration
- * OEM Activation System v2.0
+ * KeyGate v2.0
  *
  * This file:
  *  1. Loads constants
@@ -200,6 +200,6 @@ if (!in_array($timezone, timezone_identifiers_list())) {
 date_default_timezone_set($timezone);
 
 // ── Startup log ─────────────────────────────────────────────────
-error_log("OEM Activation System configuration loaded successfully. Environment: " .
+error_log("KeyGate configuration loaded successfully. Environment: " .
     ($isProduction ? "Production" : "Development"));
 ?>

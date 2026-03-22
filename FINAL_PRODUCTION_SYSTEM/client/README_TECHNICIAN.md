@@ -1,4 +1,4 @@
-# 🔐 OEM Activation System v3.0 - Technician Guide
+# 🔐 KeyGate - Technician Guide
 **USB Auth, Hardware QC, Adaptive Network Timing**
 
 ## 📋 Quick Start
@@ -151,6 +151,6 @@ SERVER_URL=http://oem-server:8080
 
 ---
 
-**🔐 OEM Activation System v3.0** - Professional license management for the modern enterprise.
+**🔐 KeyGate** - Professional license management for the modern enterprise.
 
 *For technical support, contact your system administrator.*

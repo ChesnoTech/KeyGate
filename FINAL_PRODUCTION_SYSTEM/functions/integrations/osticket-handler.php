@@ -49,7 +49,7 @@ function handle_osticket_key_assigned(array $payload, array $config): array {
     $message .= "Technician: $techName (ID: $techId)\n";
     $message .= "Product Key: " . substr($productKey, 0, 5) . "***\n";
     $message .= "Status: Key Assigned - Awaiting Activation\n";
-    $message .= "\n---\nAutomatically created by OEM Activation System";
+    $message .= "\n---\nAutomatically created by KeyGate";
 
     return osticket_create_ticket($config, [
         'technician_name'  => $techName,
@@ -85,7 +85,7 @@ function handle_osticket_activation_complete(array $payload, array $config): arr
         $message .= "  RAM: " . ($hw['total_ram_gb'] ?? '') . " GB\n";
     }
 
-    $message .= "\n---\nAutomatically updated by OEM Activation System";
+    $message .= "\n---\nAutomatically updated by KeyGate";
 
     // We need to find the ticket by order number. Since osTicket doesn't have
     // great search API, we store the ticket number from creation. For now, add

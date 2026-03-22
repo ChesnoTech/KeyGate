@@ -1,5 +1,5 @@
 /**
- * OEM Activation System - Admin Panel: Miscellaneous Module
+ * KeyGate - Admin Panel: Miscellaneous Module
  * Dashboard, history, hardware viewer, logs, settings, client resources,
  * USB devices, 2FA, trusted networks, backups
  */

@@ -53,7 +53,7 @@ export function LoginPage() {
             {branding.loginTitle || t('login.title', 'Secure Admin')}
           </CardTitle>
           <CardDescription>
-            {branding.loginSubtitle || t('login.subtitle', 'OEM Activation System')}
+            {branding.loginSubtitle || t('login.subtitle', 'KeyGate')}
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -1,7 +1,7 @@
 <?php
 /**
  * Structured JSON Logger
- * OEM Activation System v2.0
+ * KeyGate v2.0
  *
  * Outputs one JSON object per line to PHP's error_log.
  * Designed for easy parsing by log aggregators (ELK, Loki, CloudWatch, etc.).

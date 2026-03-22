@@ -1,9 +1,9 @@
-﻿# OEM Activation System v2.0 - English Language File
+﻿# KeyGate - English Language File
 # Language: English (en)
 
 @{
     # Banner
-    'banner'                    = '🔐 OEM Activation System v2.0 (Database Edition)'
+    'banner'                    = '🔐 KeyGate (Database Edition)'
     'banner_warning'            = '⚠️ Please do NOT close this window manually. It will close automatically.'
 
     # Authentication

@@ -15,7 +15,7 @@ return [
     'nav.logout' => 'Logout',
 
     // Dashboard
-    'dashboard.title' => 'Secure Admin Panel - OEM Activation System',
+    'dashboard.title' => 'Secure Admin Panel - KeyGate',
     'dashboard.welcome' => 'Welcome, %s (%s)',
     'dashboard.statistics' => 'Dashboard Statistics',
     'dashboard.total_keys' => 'Total Keys',
@@ -115,7 +115,7 @@ return [
     'keys.report_active_techs' => 'Active Technicians',
     'keys.report_generated' => 'Generated:',
     'keys.report_admin' => 'Admin:',
-    'keys.report_footer' => 'OEM Activation System v2.0 — Confidential',
+    'keys.report_footer' => 'KeyGate — Confidential',
     'keys.report_generating' => 'Generating report...',
 
     // Technicians

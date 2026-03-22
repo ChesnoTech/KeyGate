@@ -1,6 +1,6 @@
 <?php
 /**
- * OEM Activation System - Professional Installation Wizard
+ * KeyGate - Professional Installation Wizard
  * Version: 2.0.0
  * Similar to Joomla 5 installation process
  */
@@ -13,7 +13,7 @@ if (file_exists($setupLockFile)) {
     http_response_code(403);
     echo '<!DOCTYPE html><html><head><title>Setup Locked</title></head><body>';
     echo '<h1>Installation Already Complete</h1>';
-    echo '<p>The OEM Activation System has already been installed.</p>';
+    echo '<p>KeyGate has already been installed.</p>';
     echo '<p>To re-run setup, delete the <code>setup.lock</code> file from the application root.</p>';
     echo '</body></html>';
     exit;
@@ -334,7 +334,7 @@ function attemptAutoFixes() {
 }
 
 function generateBasicHtaccess() {
-    return "# OEM Activation System - Basic Security
+    return "# KeyGate - Basic Security
 # Deny access to sensitive files
 <Files \"config.php\">
     Require all denied
@@ -409,7 +409,7 @@ function handleDatabaseSetup() {
 
 function handleSystemConfiguration() {
     $_SESSION['system_config'] = [
-        'site_name' => $_POST['site_name'] ?? 'OEM Activation System',
+        'site_name' => $_POST['site_name'] ?? 'KeyGate',
         'site_url' => $_POST['site_url'] ?? '',
         'smtp_server' => $_POST['smtp_server'] ?? 'smtp.zoho.com',
         'smtp_port' => $_POST['smtp_port'] ?? '587',
@@ -558,7 +558,7 @@ function setFilePermissions() {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OEM Activation System - Installation Wizard</title>
+    <title>KeyGate - Installation Wizard</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -716,7 +716,7 @@ function setFilePermissions() {
 <body>
     <div class="installer">
         <div class="header">
-            <div class="logo">🔐 OEM Activation System</div>
+            <div class="logo">🔐 KeyGate</div>
             <div class="version">Installation Wizard - Version <?php echo OEM_VERSION; ?></div>
         </div>
         

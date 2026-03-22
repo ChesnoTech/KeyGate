@@ -2,7 +2,7 @@
 set -e
 
 # =====================================================
-# OEM Activation System - Database Backup Script
+# KeyGate - Database Backup Script
 # =====================================================
 # This script performs automated database backups with:
 # - Gzip compression
@@ -33,7 +33,7 @@ BACKUP_PATH="${BACKUP_DIR}/${BACKUP_FILE}"
 START_TIME=$(date +%s)
 
 echo "==================================="
-echo "OEM Activation System - Database Backup"
+echo "KeyGate - Database Backup"
 echo "==================================="
 echo "Date: $(date)"
 echo "Database: ${DB_NAME}"

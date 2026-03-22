@@ -15,7 +15,7 @@ return [
     'nav.logout' => 'Выход',
 
     // Dashboard
-    'dashboard.title' => 'Панель администратора - Система OEM-активации',
+    'dashboard.title' => 'Панель администратора - KeyGate',
     'dashboard.welcome' => 'Добро пожаловать, %s (%s)',
     'dashboard.statistics' => 'Статистика',
     'dashboard.total_keys' => 'Всего ключей',
@@ -115,7 +115,7 @@ return [
     'keys.report_active_techs' => 'Активных техников',
     'keys.report_generated' => 'Сформирован:',
     'keys.report_admin' => 'Администратор:',
-    'keys.report_footer' => 'OEM Activation System v2.0 — Конфиденциально',
+    'keys.report_footer' => 'KeyGate — Конфиденциально',
     'keys.report_generating' => 'Формирование отчёта...',
 
     // Technicians

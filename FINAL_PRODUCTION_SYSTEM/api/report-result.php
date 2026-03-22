@@ -448,7 +448,7 @@ function sendEmailNotification(
         $mail->Port = $smtpPort;
         $mail->CharSet = 'UTF-8';
 
-        $mail->setFrom($emailFrom, 'OEM Activation System');
+        $mail->setFrom($emailFrom, 'KeyGate');
         $mail->addAddress($emailTo);
 
         // Add technician email if available and different
@@ -560,7 +560,7 @@ function buildEmailHTML(
     {$notesHtml}
 
     <div class="footer">
-        <p>This is an automated notification from the OEM Activation System v2.0</p>
+        <p>This is an automated notification from KeyGate</p>
         <p>Please do not reply to this email.</p>
     </div>
 </body>

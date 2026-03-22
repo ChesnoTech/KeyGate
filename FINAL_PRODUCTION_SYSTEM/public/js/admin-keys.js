@@ -1,5 +1,5 @@
 /**
- * OEM Activation System - Admin Panel: Keys Module
+ * KeyGate - Admin Panel: Keys Module
  * Key management: list, search, import, export, recycle, delete, reports
  */
 

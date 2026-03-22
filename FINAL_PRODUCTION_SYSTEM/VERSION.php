@@ -1,6 +1,6 @@
 <?php
 /**
- * Application Version — OEM Activation System
+ * Application Version — KeyGate
  *
  * This file is updated automatically by the upgrade system.
  * Do NOT edit manually unless you know what you are doing.

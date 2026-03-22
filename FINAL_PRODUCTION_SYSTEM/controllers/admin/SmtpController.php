@@ -1,7 +1,7 @@
 <?php
 /**
  * SMTP / Email Settings Controller
- * OEM Activation System v2.0
+ * KeyGate v2.0
  *
  * Handles get/save/test for email delivery configuration.
  * Passwords are encrypted at rest using AES-256-GCM with an app-level key.
@@ -273,7 +273,7 @@ function handle_test_smtp_connection(PDO $pdo, array $admin_session, ?array $jso
     $password   = smtp_decrypt(getConfig('smtp_password') ?? '');
     $auth       = (getConfig('smtp_auth') ?? '1') === '1';
     $from       = getConfig('email_from') ?? '';
-    $fromName   = getConfig('email_from_name') ?? 'OEM Activation System';
+    $fromName   = getConfig('email_from_name') ?? 'KeyGate';
     $to         = $json_input['test_recipient'] ?? getConfig('email_to') ?? '';
 
     // Allow overriding with unsaved form values for testing before save
@@ -345,17 +345,17 @@ function handle_test_smtp_connection(PDO $pdo, array $admin_session, ?array $jso
         $mail->addAddress($to);
 
         $mail->isHTML(true);
-        $mail->Subject = 'OEM Activation System — Test Email';
+        $mail->Subject = 'KeyGate — Test Email';
         $mail->Body    = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">'
             . '<h2 style="color:#2563eb;">Email Configuration Test</h2>'
-            . '<p>This is a test email from the OEM Activation System.</p>'
+            . '<p>This is a test email from KeyGate.</p>'
             . '<p>If you received this, your SMTP settings are correctly configured.</p>'
             . '<hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;">'
             . '<p style="color:#6b7280;font-size:12px;">'
             . 'Server: ' . htmlspecialchars($server) . ':' . $port . ' (' . $encryption . ')<br>'
             . 'Sent at: ' . date('Y-m-d H:i:s T')
             . '</p></div>';
-        $mail->AltBody = "Email Configuration Test\n\nThis is a test email from the OEM Activation System.\n"
+        $mail->AltBody = "Email Configuration Test\n\nThis is a test email from KeyGate.\n"
             . "Server: {$server}:{$port} ({$encryption})\nSent at: " . date('Y-m-d H:i:s T');
 
         $mail->send();

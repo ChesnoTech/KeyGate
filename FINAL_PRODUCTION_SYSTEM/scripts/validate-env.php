@@ -1,6 +1,6 @@
 <?php
 /**
- * OEM Activation System — Environment Variable Validation
+ * KeyGate — Environment Variable Validation
  *
  * Run at container startup or via healthcheck to catch misconfiguration early.
  * Usage: php validate-env.php

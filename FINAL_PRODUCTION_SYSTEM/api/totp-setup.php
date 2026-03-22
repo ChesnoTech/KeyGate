@@ -63,7 +63,7 @@ try {
     $secret = $totp->getSecret();
 
     // Get issuer name from config
-    $issuer = getConfigWithDefault('totp_issuer_name', 'OEM Activation System');
+    $issuer = getConfigWithDefault('totp_issuer_name', 'KeyGate');
 
     // Set TOTP parameters
     $totp->setLabel($admin['username']);

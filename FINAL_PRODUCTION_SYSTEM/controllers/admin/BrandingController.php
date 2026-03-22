@@ -6,7 +6,7 @@
 
 function handle_get_branding(PDO $pdo, array $admin_session): void {
     $config = [
-        'brand_company_name'  => getConfig('brand_company_name') ?? 'OEM Activation',
+        'brand_company_name'  => getConfig('brand_company_name') ?? 'KeyGate',
         'brand_app_version'   => getConfig('brand_app_version') ?? 'System v2.0',
         'brand_logo_path'     => getConfig('brand_logo_path') ?? '',
         'brand_favicon_path'  => getConfig('brand_favicon_path') ?? '',

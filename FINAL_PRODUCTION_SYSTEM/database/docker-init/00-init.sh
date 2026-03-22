@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================
-# OEM Activation System v2.0 — Idempotent Database Initialization
+# KeyGate v2.0 — Idempotent Database Initialization
 # =============================================================
 # This file is the ONLY entry point for docker-entrypoint-initdb.d.
 # It runs all migration SQL files in correct dependency order,
@@ -15,7 +15,7 @@ DB="${MARIADB_DATABASE:-oem_activation}"
 SQL_DIR="/docker-entrypoint-initdb.d/sql"
 MYSQL_CMD="mysql -u root -p${MARIADB_ROOT_PASSWORD} ${DB}"
 
-echo "=== OEM Activation System: Database Initialization ==="
+echo "=== KeyGate: Database Initialization ==="
 echo "Database: $DB"
 echo "SQL directory: $SQL_DIR"
 

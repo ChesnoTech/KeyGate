@@ -1,5 +1,5 @@
 /**
- * OEM Activation System - Admin Panel: Core Module
+ * KeyGate - Admin Panel: Core Module
  * Shared globals, utilities, tab switching, and initialization
  */
 

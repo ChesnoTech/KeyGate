@@ -1,7 +1,7 @@
 <?php
 /**
  * OEM Key Helpers
- * OEM Activation System v2.0
+ * KeyGate v2.0
  *
  * Extracted from config.php — contains allocateKeyAtomically()
  * and formatProductKeySecure().

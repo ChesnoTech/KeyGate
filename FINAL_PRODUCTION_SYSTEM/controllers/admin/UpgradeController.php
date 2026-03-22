@@ -1072,7 +1072,7 @@ function handle_upgrade_apply(PDO $pdo, array $admin_session, $json_input): void
 
     // ── Phase 3: Update VERSION.php ──
     $newVersionContent = "<?php\n";
-    $newVersionContent .= "/**\n * Application Version — OEM Activation System\n *\n";
+    $newVersionContent .= "/**\n * Application Version — KeyGate\n *\n";
     $newVersionContent .= " * This file is updated automatically by the upgrade system.\n";
     $newVersionContent .= " * Do NOT edit manually unless you know what you are doing.\n */\n";
     $newVersionContent .= "define('APP_VERSION', '" . addslashes($manifest['version']) . "');\n";

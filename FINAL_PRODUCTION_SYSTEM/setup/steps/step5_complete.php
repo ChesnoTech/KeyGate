@@ -34,7 +34,7 @@ $lockFile = __DIR__ . '/../../setup.lock';
     <div style="font-size: 72px; margin-bottom: 20px;">🎉</div>
     <h2>Installation Complete!</h2>
     <p style="font-size: 18px; color: #666; margin: 20px 0;">
-        OEM Activation System v<?php echo OEM_VERSION; ?> has been successfully installed.
+        KeyGate v<?php echo OEM_VERSION; ?> has been successfully installed.
     </p>
 </div>
 
@@ -159,7 +159,7 @@ $lockFile = __DIR__ . '/../../setup.lock';
 
 <div style="text-align: center; margin: 40px 0; padding: 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 15px;">
     <h3 style="color: white; margin-bottom: 20px;">🎯 Ready to Start!</h3>
-    <p style="margin-bottom: 30px;">Your OEM Activation System is now ready for production use.</p>
+    <p style="margin-bottom: 30px;">Your KeyGate is now ready for production use.</p>
     
     <div style="display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;">
         <a href="../../secure-admin.php" class="btn" style="background: white; color: #667eea; text-decoration: none; display: inline-block;">
@@ -173,7 +173,7 @@ $lockFile = __DIR__ . '/../../setup.lock';
 
 <div style="text-align: center; margin: 30px 0; padding: 20px; border-top: 1px solid #e9ecef;">
     <p style="color: #666; font-size: 14px;">
-        <strong>OEM Activation System v<?php echo OEM_VERSION; ?></strong><br>
+        <strong>KeyGate v<?php echo OEM_VERSION; ?></strong><br>
         Installed on <?php echo date('F j, Y \a\t g:i A'); ?><br>
         Installation completed in <?php echo number_format(microtime(true) - $_SERVER['REQUEST_TIME_FLOAT'], 2); ?> seconds
     </p>

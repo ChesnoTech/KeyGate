@@ -1,6 +1,6 @@
 {
     "name": "oem-activation/system",
-    "description": "OEM Activation System v2.0 - Professional Windows License Management",
+    "description": "KeyGate v2.0 - Professional Windows License Management",
     "type": "project",
     "require": {
         "php": ">=8.0",
@@ -12,7 +12,7 @@
     },
     "authors": [
         {
-            "name": "OEM Activation System",
+            "name": "KeyGate",
             "email": "admin@example.com"
         }
     ],

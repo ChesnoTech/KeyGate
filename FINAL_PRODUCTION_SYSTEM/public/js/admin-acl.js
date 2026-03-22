@@ -1,5 +1,5 @@
 /**
- * OEM Activation System - Admin Panel: ACL Module
+ * KeyGate - Admin Panel: ACL Module
  * Roles & permissions management: CRUD, overrides, changelog
  */
 

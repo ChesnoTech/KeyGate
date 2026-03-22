@@ -7,7 +7,7 @@ unset($_SESSION['admin_error']);
 ?>
 
 <h2>Administrator Account</h2>
-<p>Create your administrator account to manage the OEM Activation System.</p>
+<p>Create your administrator account to manage the KeyGate.</p>
 
 <?php if ($admin_error): ?>
     <div class="alert alert-danger">
@@ -231,7 +231,7 @@ document.getElementById('adminForm').addEventListener('submit', function(e) {
     const progressDiv = document.createElement('div');
     progressDiv.innerHTML = `
         <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
-            <h4>🔄 Installing OEM Activation System...</h4>
+            <h4>🔄 Installing KeyGate...</h4>
             <div style="width: 100%; background: #e9ecef; border-radius: 10px; margin: 15px 0;">
                 <div style="width: 0%; height: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; transition: width 2s;" id="progress-bar"></div>
             </div>

@@ -1,5 +1,5 @@
 /**
- * OEM Activation System - Admin Panel: Notifications Module
+ * KeyGate - Admin Panel: Notifications Module
  * Push notifications: bell dropdown, service worker, subscription, preferences
  */
 

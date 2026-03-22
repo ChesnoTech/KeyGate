@@ -3,7 +3,7 @@
 ?>
 
 <h2>System Configuration</h2>
-<p>Configure your OEM Activation System settings. These can be changed later through the admin panel.</p>
+<p>Configure your KeyGate settings. These can be changed later through the admin panel.</p>
 
 <form method="post">
     <h3>🌐 General Settings</h3>
@@ -11,7 +11,7 @@
     <div class="form-group">
         <label for="site_name">System Name:</label>
         <input type="text" id="site_name" name="site_name" 
-               value="<?php echo htmlspecialchars($_POST['site_name'] ?? 'OEM Activation System'); ?>" 
+               value="<?php echo htmlspecialchars($_POST['site_name'] ?? 'KeyGate'); ?>" 
                placeholder="Your organization name" required>
         <small style="color: #666;">This will appear in emails and admin panel</small>
     </div>

@@ -5,7 +5,7 @@
  * Returns alternative server configuration along with the technician's preferred server
  * This is called by the PowerShell client after login to determine activation server settings
  *
- * @author OEM Activation System
+ * @author KeyGate
  * @version 1.0
  */
 
