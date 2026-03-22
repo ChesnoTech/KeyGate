@@ -18,7 +18,6 @@ import {
 import {
   Shield,
   Key,
-  Users,
   Database,
   CheckCircle2,
   XCircle,
@@ -34,7 +33,6 @@ import {
   CreditCard,
   Clock,
   Zap,
-  Infinity,
   Check,
 } from 'lucide-react'
 import {
@@ -314,12 +312,15 @@ export function LicensePage() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-3">
-                <Button asChild>
-                  <a href="https://github.com/sponsors/ChesnoTech" target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    {t('sub.pay_github', 'Pay via GitHub Sponsors')}
-                  </a>
-                </Button>
+                <a
+                  href="https://github.com/sponsors/ChesnoTech"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
+                >
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  {t('sub.pay_github', 'Pay via GitHub Sponsors')}
+                </a>
               </div>
               <p className="text-xs text-muted-foreground mt-3">
                 {t('sub.intl_note', 'After payment, you will receive a license key via email. Paste it in the License Key tab.')}
