@@ -1,9 +1,9 @@
 @echo off
-REM Quick restart script for OEM Activation System containers
+REM Quick restart script for KeyGate containers
 REM Run this after code updates to ensure containers are running
 
 echo ========================================
-echo OEM Activation System - Container Restart
+echo KeyGate - Container Restart
 echo ========================================
 echo.
 

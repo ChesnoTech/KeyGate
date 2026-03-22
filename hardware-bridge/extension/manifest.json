@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "OEM Hardware Bridge",
   "version": "1.0.1",
-  "description": "Secure bridge for detecting USB hardware information for OEM Activation System",
+  "description": "Secure bridge for detecting USB hardware information for KeyGate",
   "permissions": [
     "nativeMessaging"
   ],

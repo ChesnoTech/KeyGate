@@ -1,4 +1,4 @@
-# OEM Activation System — Production Docker Compose
+# KeyGate — Production Docker Compose
 # Usage: docker compose -f docker-compose.prod.yml up -d
 #
 # Differences from dev (docker-compose.yml):

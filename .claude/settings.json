@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.command // \"\"' | grep -qE 'git commit|git push' && { cd \"$PWD\"; MATCHES=$(git grep -rl 'OEM Activation System' -- '*.php' '*.ts' '*.tsx' '*.json' '*.ps1' '*.cmd' '*.md' '*.yml' 2>/dev/null | head -10); if [ -n \"$MATCHES\" ]; then echo \"{\\\"systemMessage\\\":\\\"⚠️ Old branding found! Files still containing 'OEM Activation System': $(echo $MATCHES | tr '\\n' ', '). Please rename to KeyGate.\\\"}\"; fi; } || true",
+            "timeout": 10,
+            "statusMessage": "Checking branding consistency..."
+          }
+        ]
+      }
+    ]
+  }
+}

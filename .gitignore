@@ -37,6 +37,8 @@ vision_tests/
 
 # ── Claude Session Data ──────────────────────────────────
 .claude/
+!.claude/settings.json
+!.claude/launch.json
 
 # ── IDE & OS ─────────────────────────────────────────────
 .vscode/

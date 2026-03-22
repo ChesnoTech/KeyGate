@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y \
     logrotate \
     && rm -rf /var/lib/apt/lists/*
 
-# Install PHP extensions required for OEM Activation System
+# Install PHP extensions required for KeyGate
 RUN docker-php-ext-install \
     pdo \
     pdo_mysql \

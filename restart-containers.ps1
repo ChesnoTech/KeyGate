@@ -1,9 +1,9 @@
 #!/usr/bin/env powershell
-# Quick restart script for OEM Activation System containers
+# Quick restart script for KeyGate containers
 # Run this after code updates to ensure containers are running
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "OEM Activation System - Container Restart" -ForegroundColor Cyan
+Write-Host "KeyGate - Container Restart" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 

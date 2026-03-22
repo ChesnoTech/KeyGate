@@ -177,7 +177,7 @@ jobs:
             "min_current_version": "$MIN_VERSION",
             "max_current_version": "99.99.99",
             "release_date": "$RELEASE_DATE",
-            "description": "OEM Activation System v${VERSION}",
+            "description": "KeyGate v${VERSION}",
             "author": "ChesnoTech",
             "requirements": {
               "php_min": "8.1",
