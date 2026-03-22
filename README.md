@@ -1,7 +1,7 @@
 # KeyGate
 
-[![CI](https://github.com/ChesnoTech/OEM_Activation_System/actions/workflows/ci.yml/badge.svg)](https://github.com/ChesnoTech/OEM_Activation_System/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/ChesnoTech/OEM_Activation_System?label=release)](https://github.com/ChesnoTech/OEM_Activation_System/releases/latest)
+[![CI](https://github.com/ChesnoTech/KeyGate/actions/workflows/ci.yml/badge.svg)](https://github.com/ChesnoTech/KeyGate/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/ChesnoTech/KeyGate?label=release)](https://github.com/ChesnoTech/KeyGate/releases/latest)
 ![PHP](https://img.shields.io/badge/PHP-8.0+-777BB4?logo=php&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![MariaDB](https://img.shields.io/badge/MariaDB-10.5+-003545?logo=mariadb&logoColor=white)
