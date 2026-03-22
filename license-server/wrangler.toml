@@ -5,7 +5,7 @@ compatibility_date = "2024-01-01"
 # KV Namespace for license storage
 [[kv_namespaces]]
 binding = "LICENSES"
-id = "YOUR_KV_NAMESPACE_ID"  # Replace with actual KV namespace ID
+id = "44c93c6286f44ae1ba2711651a34e78a"
 
 # Environment variables (set via Cloudflare dashboard for secrets)
 # GITHUB_WEBHOOK_SECRET = "your-webhook-secret"

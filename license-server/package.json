@@ -1,0 +1,21 @@
+{
+  "name": "license-server",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker that handles license generation and validation for KeyGate.",
+  "main": "worker.js",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "login": "wrangler login",
+    "kv:create": "wrangler kv:namespace create LICENSES",
+    "secret:jwt": "wrangler secret put JWT_SECRET",
+    "secret:webhook": "wrangler secret put GITHUB_WEBHOOK_SECRET"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "wrangler": "^4.76.0"
+  }
+}

@@ -11,6 +11,10 @@
  *   enterprise — pro + multi-site, SSO, custom integrations
  */
 
+// ── License Server Configuration ────────────────────────────
+define('KEYGATE_LICENSE_SERVER', 'https://keygate-license-server.msamirvip.workers.dev');
+define('KEYGATE_SPONSORS_URL', 'https://github.com/sponsors/ChesnoTech');
+
 // ── Tier Definitions ────────────────────────────────────────
 
 define('LICENSE_TIERS', [
