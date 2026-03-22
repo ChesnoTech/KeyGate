@@ -32,5 +32,14 @@ INSERT INTO system_config (config_key, config_value, description) VALUES
 ('client_net_ping_samples', '3', 'Number of ping samples per endpoint'),
 ('client_net_test_endpoint_1', 'https://activation.sls.microsoft.com', 'Microsoft test endpoint 1'),
 ('client_net_test_endpoint_2', 'https://go.microsoft.com', 'Microsoft test endpoint 2'),
-('client_net_test_endpoint_3', 'https://dns.msftncsi.com', 'Microsoft test endpoint 3')
+('client_net_test_endpoint_3', 'https://dns.msftncsi.com', 'Microsoft test endpoint 3'),
+-- Key Retry & Fallback
+('client_max_keys_to_try', '3', 'Max different keys to request before giving up'),
+('client_key_exhaustion_action', 'failover', 'Action when all keys fail: stop, failover, or retry_loop'),
+('client_retry_cooldown_seconds', '60', 'Cooldown before retry_loop restarts from beginning'),
+('client_network_error_retries', '4', 'Extra retry attempts for network errors before skipping key'),
+('client_network_reconnect_wait', '30', 'Seconds to wait between internet reconnection checks'),
+('client_server_busy_delay', '30', 'Base delay when Microsoft servers are throttling'),
+('client_skip_key_on_invalid', '1', 'Immediately skip to next key on key_invalid error'),
+('client_skip_key_on_service_error', '0', 'Skip to next key on service errors instead of retrying')
 ON DUPLICATE KEY UPDATE config_key = config_key;

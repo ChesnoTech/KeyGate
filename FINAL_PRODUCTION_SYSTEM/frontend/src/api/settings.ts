@@ -163,6 +163,15 @@ export interface ClientConfig {
   client_net_test_endpoint_1: string
   client_net_test_endpoint_2: string
   client_net_test_endpoint_3: string
+  // Key Retry & Fallback
+  client_max_keys_to_try: string
+  client_key_exhaustion_action: string
+  client_retry_cooldown_seconds: string
+  client_network_error_retries: string
+  client_network_reconnect_wait: string
+  client_server_busy_delay: string
+  client_skip_key_on_invalid: string
+  client_skip_key_on_service_error: string
 }
 
 export function getClientConfigSettings() {

@@ -72,6 +72,16 @@ try {
                 getConfigWithDefault('client_net_test_endpoint_3', 'https://dns.msftncsi.com'),
             ]),
         ],
+        'retry' => [
+            'max_keys_to_try'          => (int) getConfigWithDefault('client_max_keys_to_try', '3'),
+            'key_exhaustion_action'    => getConfigWithDefault('client_key_exhaustion_action', 'failover'),
+            'retry_cooldown_seconds'   => (int) getConfigWithDefault('client_retry_cooldown_seconds', '60'),
+            'network_error_retries'    => (int) getConfigWithDefault('client_network_error_retries', '4'),
+            'network_reconnect_wait'   => (int) getConfigWithDefault('client_network_reconnect_wait', '30'),
+            'server_busy_delay'        => (int) getConfigWithDefault('client_server_busy_delay', '30'),
+            'skip_key_on_invalid'      => getConfigWithDefault('client_skip_key_on_invalid', '1') === '1',
+            'skip_key_on_service_error' => getConfigWithDefault('client_skip_key_on_service_error', '0') === '1',
+        ],
     ];
 
     jsonResponse(['success' => true, 'config' => $config]);

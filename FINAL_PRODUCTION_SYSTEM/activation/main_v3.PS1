@@ -9,6 +9,14 @@ $ActivationDelaySeconds = 10
 $MaxRetryAttempts = 5       # Retry same key up to 5 times (failures are usually network issues, not bad keys)
 $MaxCheckIterations = 6     # Max slmgr license-status checks
 $CheckDelayBase = 5         # Base delay between status checks (seconds)
+$MaxKeysToTry = 3           # Max different keys to request before giving up
+$KeyExhaustionAction = 'failover'  # stop, failover, or retry_loop
+$RetryCooldownSeconds = 60  # Cooldown before retry_loop restarts
+$NetworkErrorRetries = 4    # Extra retry attempts for network errors
+$NetworkReconnectWait = 30  # Seconds to wait between reconnection checks
+$ServerBusyDelay = 30       # Base delay when Microsoft servers are throttling
+$SkipKeyOnInvalid = $true   # Immediately skip to next key on key_invalid error
+$SkipKeyOnServiceError = $false  # Skip to next key on service errors
 
 # === Adaptive Network Timing ===
 # Activation delays exist because Microsoft's servers (not our LAN API) need time to
@@ -178,6 +186,19 @@ function Get-ClientConfig {
                 if ($t.max_retry_attempts)       { $script:MaxRetryAttempts = [int]$t.max_retry_attempts }
                 if ($t.max_check_iterations)     { $script:MaxCheckIterations = [int]$t.max_check_iterations }
                 if ($t.check_delay_base)         { $script:CheckDelayBase = [int]$t.check_delay_base }
+            }
+
+            # Apply retry/fallback overrides
+            if ($response.config.retry) {
+                $r = $response.config.retry
+                if ($r.max_keys_to_try)          { $script:MaxKeysToTry = [int]$r.max_keys_to_try }
+                if ($r.key_exhaustion_action)     { $script:KeyExhaustionAction = $r.key_exhaustion_action }
+                if ($r.retry_cooldown_seconds)    { $script:RetryCooldownSeconds = [int]$r.retry_cooldown_seconds }
+                if ($r.network_error_retries)     { $script:NetworkErrorRetries = [int]$r.network_error_retries }
+                if ($r.network_reconnect_wait)    { $script:NetworkReconnectWait = [int]$r.network_reconnect_wait }
+                if ($r.server_busy_delay)         { $script:ServerBusyDelay = [int]$r.server_busy_delay }
+                if ($null -ne $r.skip_key_on_invalid)      { $script:SkipKeyOnInvalid = [bool]$r.skip_key_on_invalid }
+                if ($null -ne $r.skip_key_on_service_error) { $script:SkipKeyOnServiceError = [bool]$r.skip_key_on_service_error }
             }
 
             # Apply network overrides (for next call to Test-NetworkLatency)
@@ -1967,10 +1988,16 @@ function Main-ActivationLoop {
             } else {
                 Write-Host "`n❌ Activation failed: $($reportResponse.message)" -ForegroundColor Red
 
-                # Key is definitively invalid — don't retry
-                if ($errorCat -eq 'key_invalid') {
+                # Key is definitively invalid — skip to next key (configurable)
+                if ($errorCat -eq 'key_invalid' -and $SkipKeyOnInvalid) {
                     Write-Host "  🔑 Error category: INVALID KEY — this key cannot activate this system." -ForegroundColor Red
                     Write-Host "  Skipping remaining retry attempts for this key." -ForegroundColor Yellow
+                    return $false
+                }
+
+                # Service error — optionally skip to next key
+                if ($errorCat -eq 'service' -and $SkipKeyOnServiceError) {
+                    Write-Host "  🔧 Error category: SERVICE — skipping to next key (configured)." -ForegroundColor Yellow
                     return $false
                 }
 
@@ -1981,8 +2008,8 @@ function Main-ActivationLoop {
                     if ($errorCat -eq 'network') {
                         Write-Host "  📡 Error category: NETWORK — checking connectivity..." -ForegroundColor Yellow
 
-                        # Re-test internet before retrying
-                        $maxReconnectAttempts = 4
+                        # Re-test internet before retrying (configurable)
+                        $maxReconnectAttempts = $NetworkErrorRetries
                         $reconnected = $false
                         for ($r = 1; $r -le $maxReconnectAttempts; $r++) {
                             if (Test-InternetConnectivity) {
@@ -1990,8 +2017,8 @@ function Main-ActivationLoop {
                                 Write-Host "  ✅ Internet connection restored" -ForegroundColor Green
                                 break
                             }
-                            Write-Host "  ⏳ No internet (attempt $r/$maxReconnectAttempts) — waiting 30 seconds..." -ForegroundColor Yellow
-                            Start-Sleep -Seconds 30
+                            Write-Host "  ⏳ No internet (attempt $r/$maxReconnectAttempts) — waiting $NetworkReconnectWait seconds..." -ForegroundColor Yellow
+                            Start-Sleep -Seconds $NetworkReconnectWait
                         }
 
                         if (-not $reconnected) {
@@ -2003,7 +2030,7 @@ function Main-ActivationLoop {
 
                     } elseif ($errorCat -eq 'server_busy') {
                         Write-Host "  🔄 Error category: SERVER BUSY — Microsoft servers are throttling" -ForegroundColor Yellow
-                        $busyDelay = Get-AdaptiveDelay -BaseSeconds 30 -MinSeconds 15
+                        $busyDelay = Get-AdaptiveDelay -BaseSeconds $ServerBusyDelay -MinSeconds 15
                         Write-Host "  ⏳ Waiting $busyDelay seconds before retry..." -ForegroundColor Yellow
                         Start-Sleep -Seconds $busyDelay
                         continue
@@ -2227,9 +2254,8 @@ Write-Host "`n🔧 Using OEM Activation Server (Primary)..." -ForegroundColor Gr
 
 $activationComplete = $false
 $keyAttempts = 0
-$maxKeyAttempts = 1  # Single key per PC — retry same key up to $MaxRetryAttempts times
 
-while (-not $activationComplete -and $keyAttempts -lt $maxKeyAttempts) {
+while (-not $activationComplete -and $keyAttempts -lt $MaxKeysToTry) {
     $keyAttempts++
 
     Write-Host "`n🔍 Requesting activation key..." -ForegroundColor Cyan
@@ -2349,7 +2375,29 @@ while (-not $activationComplete -and $keyAttempts -lt $maxKeyAttempts) {
 }
 
 if (-not $activationComplete) {
-    Write-Host "`n⚠️ Activation failed after $MaxRetryAttempts attempts." -ForegroundColor Red
+    if ($KeyExhaustionAction -eq 'retry_loop') {
+        Write-Host "`n⚠️ All $MaxKeysToTry key(s) exhausted. Waiting $RetryCooldownSeconds seconds before retrying..." -ForegroundColor Yellow
+        Start-Sleep -Seconds $RetryCooldownSeconds
+        Write-Host "🔄 Restarting activation from the beginning..." -ForegroundColor Cyan
+        # Reset and loop back
+        $keyAttempts = 0
+        $activationComplete = $false
+        # Re-enter the key loop (goto equivalent via while wrapper)
+    } elseif ($KeyExhaustionAction -eq 'failover' -and $altServerConfig -and $altServerConfig.config.enabled) {
+        Write-Host "`n⚠️ All $MaxKeysToTry key(s) exhausted. Switching to alternative server..." -ForegroundColor Yellow
+        $scriptSuccess = Invoke-AlternativeServerScript `
+            -ScriptPath $altServerConfig.config.script_path `
+            -ScriptArgs $altServerConfig.config.script_args `
+            -ScriptType $altServerConfig.config.script_type `
+            -TimeoutSeconds $altServerConfig.config.timeout_seconds `
+            -PreCommand $altServerConfig.config.pre_command
+        if ($scriptSuccess) {
+            Write-Host "`n🎉 Activation complete via alternative server (key exhaustion failover)!" -ForegroundColor Green
+            exit 0
+        }
+    }
+
+    Write-Host "`n⚠️ Activation failed after trying $MaxKeysToTry key(s) x $MaxRetryAttempts retries." -ForegroundColor Red
     Write-Host "This may be a network issue. Try again later or contact your supervisor." -ForegroundColor Yellow
     Write-Host "Hardware information was collected successfully." -ForegroundColor Cyan
     Write-Host "`nPress any key to close..." -ForegroundColor Gray

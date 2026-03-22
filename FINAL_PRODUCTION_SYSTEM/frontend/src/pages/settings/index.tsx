@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Save, Upload, Trash2, RotateCcw, Palette, Timer, Mail, Send, CheckCircle2, XCircle, Eye, EyeOff, Server, Monitor, Wifi, Clock, ToggleLeft } from 'lucide-react'
+import { Save, Upload, Trash2, RotateCcw, Palette, Timer, Mail, Send, CheckCircle2, XCircle, Eye, EyeOff, Server, Monitor, Wifi, Clock, ToggleLeft, KeyRound } from 'lucide-react'
 import { AppHeader } from '@/components/layout/app-header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -1304,6 +1304,14 @@ const CLIENT_CONFIG_DEFAULTS: ClientConfig = {
   client_net_test_endpoint_1: 'https://activation.sls.microsoft.com',
   client_net_test_endpoint_2: 'https://go.microsoft.com',
   client_net_test_endpoint_3: 'https://dns.msftncsi.com',
+  client_max_keys_to_try: '3',
+  client_key_exhaustion_action: 'failover',
+  client_retry_cooldown_seconds: '60',
+  client_network_error_retries: '4',
+  client_network_reconnect_wait: '30',
+  client_server_busy_delay: '30',
+  client_skip_key_on_invalid: '1',
+  client_skip_key_on_service_error: '0',
 }
 
 const TASK_TOGGLES = [
@@ -1464,6 +1472,95 @@ function ClientConfigTab() {
                 <Input value={form[`client_net_test_endpoint_${i}` as keyof ClientConfig]} onChange={e => update(`client_net_test_endpoint_${i}` as keyof ClientConfig, e.target.value)} placeholder="https://..." />
               </div>
             ))}
+          </div>
+
+          <Separator className="my-4" />
+          <Button onClick={handleSave} disabled={saveMut.isPending} size="sm">
+            <Save className="mr-1.5 h-4 w-4" />
+            {t('common.save', 'Save')}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Key Retry & Fallback */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <KeyRound className="h-5 w-5 text-primary" />
+            <div>
+              <CardTitle>{t('settings.client_retry_title', 'Key Retry & Fallback')}</CardTitle>
+              <CardDescription>{t('settings.client_retry_desc', 'Configure how the system handles activation failures and key exhaustion.')}</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>{t('settings.max_keys_to_try', 'Max Keys to Try')}</Label>
+              <Input type="number" min={1} max={10} value={form.client_max_keys_to_try} onChange={e => update('client_max_keys_to_try', e.target.value)} />
+              <p className="text-xs text-muted-foreground mt-1">{t('settings.max_keys_to_try_desc', 'Number of different keys to request before giving up')}</p>
+            </div>
+            <div>
+              <Label>{t('settings.key_exhaustion_action', 'When All Keys Fail')}</Label>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                value={form.client_key_exhaustion_action}
+                onChange={e => update('client_key_exhaustion_action', e.target.value)}
+              >
+                <option value="stop">{t('settings.exhaustion_stop', 'Stop with error')}</option>
+                <option value="failover">{t('settings.exhaustion_failover', 'Auto-failover to alt server')}</option>
+                <option value="retry_loop">{t('settings.exhaustion_retry_loop', 'Retry from beginning after cooldown')}</option>
+              </select>
+            </div>
+            <div>
+              <Label>{t('settings.retry_cooldown', 'Retry Cooldown (sec)')}</Label>
+              <Input type="number" min={10} max={600} value={form.client_retry_cooldown_seconds} onChange={e => update('client_retry_cooldown_seconds', e.target.value)} />
+              <p className="text-xs text-muted-foreground mt-1">{t('settings.retry_cooldown_desc', 'Wait time before retry_loop restarts')}</p>
+            </div>
+            <div>
+              <Label>{t('settings.server_busy_delay', 'Server Busy Delay (sec)')}</Label>
+              <Input type="number" min={5} max={300} value={form.client_server_busy_delay} onChange={e => update('client_server_busy_delay', e.target.value)} />
+              <p className="text-xs text-muted-foreground mt-1">{t('settings.server_busy_delay_desc', 'Wait when Microsoft servers are throttling')}</p>
+            </div>
+          </div>
+
+          <Separator className="my-4" />
+
+          <h4 className="text-sm font-medium mb-3">{t('settings.error_strategies', 'Error-Specific Strategies')}</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>{t('settings.network_error_retries', 'Network Error Extra Retries')}</Label>
+              <Input type="number" min={0} max={10} value={form.client_network_error_retries} onChange={e => update('client_network_error_retries', e.target.value)} />
+              <p className="text-xs text-muted-foreground mt-1">{t('settings.network_error_retries_desc', 'Extra reconnection attempts on network errors')}</p>
+            </div>
+            <div>
+              <Label>{t('settings.network_reconnect_wait', 'Reconnect Wait (sec)')}</Label>
+              <Input type="number" min={5} max={120} value={form.client_network_reconnect_wait} onChange={e => update('client_network_reconnect_wait', e.target.value)} />
+              <p className="text-xs text-muted-foreground mt-1">{t('settings.network_reconnect_wait_desc', 'Wait between internet reconnection checks')}</p>
+            </div>
+          </div>
+
+          <div className="space-y-4 mt-4">
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <Label className="text-sm font-medium">{t('settings.skip_key_on_invalid', 'Skip Key on Invalid Error')}</Label>
+                <p className="text-xs text-muted-foreground">{t('settings.skip_key_on_invalid_desc', 'Immediately try next key when current key is blocked/invalid')}</p>
+              </div>
+              <Switch
+                checked={form.client_skip_key_on_invalid === '1'}
+                onCheckedChange={(checked) => update('client_skip_key_on_invalid', checked ? '1' : '0')}
+              />
+            </div>
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <Label className="text-sm font-medium">{t('settings.skip_key_on_service', 'Skip Key on Service Error')}</Label>
+                <p className="text-xs text-muted-foreground">{t('settings.skip_key_on_service_desc', 'Try next key instead of retrying on Windows service errors')}</p>
+              </div>
+              <Switch
+                checked={form.client_skip_key_on_service_error === '1'}
+                onCheckedChange={(checked) => update('client_skip_key_on_service_error', checked ? '1' : '0')}
+              />
+            </div>
           </div>
 
           <Separator className="my-4" />

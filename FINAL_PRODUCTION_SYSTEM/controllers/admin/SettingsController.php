@@ -189,6 +189,15 @@ function getClientConfigDefaults(): array {
         'client_net_test_endpoint_1'      => 'https://activation.sls.microsoft.com',
         'client_net_test_endpoint_2'      => 'https://go.microsoft.com',
         'client_net_test_endpoint_3'      => 'https://dns.msftncsi.com',
+        // Key Retry & Fallback
+        'client_max_keys_to_try'          => '3',
+        'client_key_exhaustion_action'    => 'failover',
+        'client_retry_cooldown_seconds'   => '60',
+        'client_network_error_retries'    => '4',
+        'client_network_reconnect_wait'   => '30',
+        'client_server_busy_delay'        => '30',
+        'client_skip_key_on_invalid'      => '1',
+        'client_skip_key_on_service_error' => '0',
     ];
 }
 
@@ -245,6 +254,11 @@ function handle_save_client_config_settings(PDO $pdo, array $admin_session, ?arr
         // Validate endpoints (URLs or empty)
         if (str_starts_with($key, 'client_net_test_endpoint_')) {
             $configs[$key] = (is_string($val) && (empty($val) || str_starts_with($val, 'https://'))) ? $val : $default;
+            continue;
+        }
+        // Validate key exhaustion action (enum)
+        if ($key === 'client_key_exhaustion_action') {
+            $configs[$key] = in_array($val, ['stop', 'failover', 'retry_loop']) ? $val : $default;
             continue;
         }
         $configs[$key] = (string) $val;
