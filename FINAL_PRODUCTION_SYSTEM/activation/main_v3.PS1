@@ -173,21 +173,70 @@ function Test-InternetConnectivity {
     return $false
 }
 
+function Test-MicrosoftLicensingServers {
+    <#
+    .SYNOPSIS
+        Tests HTTPS reachability to Microsoft licensing endpoints.
+        Inspired by MAS: a server returning ANY HTTP response (even 4xx/5xx)
+        means the server is reachable. Only $null response = network failure.
+    #>
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $endpoints = @(
+        'https://licensing.mp.microsoft.com/v7.0/licenses/content',
+        'https://purchase.mp.microsoft.com/v7.0/users/me/orders',
+        'https://activation.sls.microsoft.com'
+    )
+    $results = @{}
+    foreach ($ep in $endpoints) {
+        $shortName = ([Uri]$ep).Host
+        try {
+            $response = Invoke-WebRequest -Uri $ep -Method POST -TimeoutSec 10 -UseBasicParsing -ErrorAction SilentlyContinue 2>&1
+            # ANY response (even error) means server is reachable
+            $results[$shortName] = @{ Reachable = $true; StatusCode = $response.StatusCode }
+        } catch [System.Net.WebException] {
+            $webEx = $_.Exception
+            if ($webEx.Response) {
+                # HTTP error response (4xx/5xx) = server IS reachable
+                $results[$shortName] = @{ Reachable = $true; StatusCode = [int]$webEx.Response.StatusCode }
+            } else {
+                # No response at all = network failure
+                $results[$shortName] = @{ Reachable = $false; StatusCode = 0 }
+            }
+        } catch {
+            $results[$shortName] = @{ Reachable = $false; StatusCode = 0 }
+        }
+    }
+    return $results
+}
+
 function Test-DnsResolution {
     <#
     .SYNOPSIS
         Tests DNS resolution for Microsoft activation servers.
-        Returns hashtable with results per hostname.
+        Uses .NET DNS first, falls back to pathping for corporate networks
+        where ICMP is blocked but DNS resolution still works.
     #>
     $hosts = @('activation.sls.microsoft.com', 'go.microsoft.com', 'dns.msftncsi.com', 'licensing.mp.microsoft.com')
     $results = @{}
     foreach ($h in $hosts) {
+        # Method 1: .NET DNS resolver (fastest)
         try {
             $resolved = [System.Net.Dns]::GetHostAddresses($h)
             $results[$h] = @{ Success = $true; IP = $resolved[0].IPAddressToString }
-        } catch {
-            $results[$h] = @{ Success = $false; IP = $null }
-        }
+            continue
+        } catch { }
+
+        # Method 2: pathping fallback (resolves DNS without needing ICMP echo replies)
+        try {
+            $pathpingOut = & pathping -4 -h 1 -n -p 1 -q 1 -w 1 $h 2>&1 | Select-Object -First 3
+            $ipMatch = [regex]::Match(($pathpingOut -join ' '), '\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b')
+            if ($ipMatch.Success) {
+                $results[$h] = @{ Success = $true; IP = $ipMatch.Groups[1].Value }
+                continue
+            }
+        } catch { }
+
+        $results[$h] = @{ Success = $false; IP = $null }
     }
     return $results
 }
@@ -413,7 +462,24 @@ function Invoke-PreActivationDiagnostics {
         $issues += "DNS resolution completely failed"
     }
 
-    # 3. Hosts file blocking
+    # 3. Microsoft licensing server reachability
+    if ($internetOk) {
+        $msResults = Test-MicrosoftLicensingServers
+        $msReachable = ($msResults.Values | Where-Object { $_.Reachable }).Count
+        $msTotal = $msResults.Count
+        if ($msReachable -eq $msTotal) {
+            Write-Host "  ✅ Microsoft licensing servers: $msReachable/$msTotal reachable" -ForegroundColor Green
+        } elseif ($msReachable -gt 0) {
+            Write-Host "  ⚠️ Microsoft licensing servers: $msReachable/$msTotal reachable" -ForegroundColor Yellow
+            $unreachable = ($msResults.GetEnumerator() | Where-Object { -not $_.Value.Reachable } | ForEach-Object { $_.Key }) -join ', '
+            $issues += "Licensing servers unreachable: $unreachable"
+        } else {
+            Write-Host "  ❌ Microsoft licensing servers: ALL unreachable (0/$msTotal)" -ForegroundColor Red
+            $issues += "All Microsoft licensing servers unreachable — firewall or proxy may be blocking HTTPS"
+        }
+    }
+
+    # 5. Hosts file blocking
     $blocked = Test-HostsFileBlocking
     if ($blocked.Count -eq 0) {
         Write-Host "  ✅ Hosts file: No Microsoft domains blocked" -ForegroundColor Green
@@ -423,7 +489,7 @@ function Invoke-PreActivationDiagnostics {
         $issues += "Hosts file blocks: $($blocked -join ', ')"
     }
 
-    # 4. Licensing services
+    # 6. Licensing services
     $svcResults = Test-LicensingServices
     $svcRunning = ($svcResults.Values | Where-Object { $_ -eq 'running' }).Count
     $svcFound = ($svcResults.Values | Where-Object { $_ -ne 'not_found' }).Count
