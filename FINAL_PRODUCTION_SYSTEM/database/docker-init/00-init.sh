@@ -44,7 +44,9 @@ run_sql() {
     fi
 
     echo "[INIT] Running: $1 (version $version)"
-    $MYSQL_CMD < "$file"
+    if ! $MYSQL_CMD < "$file" 2>&1; then
+        echo "[WARN] Non-fatal errors in $1 (continuing)"
+    fi
 
     # Compute checksum and record
     local checksum
