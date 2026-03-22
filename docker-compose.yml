@@ -29,6 +29,7 @@ services:
       - REDIS_PORT=${REDIS_PORT}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - CORS_ORIGINS=${CORS_ORIGINS:-}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - APP_TIMEZONE=${APP_TIMEZONE:-UTC}
     depends_on:
       db:
