@@ -169,6 +169,9 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-2">
+        <div className="text-center py-1">
+          <span className="text-[9px] text-muted-foreground/60 tracking-wide">Powered by KeyGate</span>
+        </div>
         <Separator className="mb-2" />
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1">

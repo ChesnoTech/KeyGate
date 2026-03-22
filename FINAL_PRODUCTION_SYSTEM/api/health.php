@@ -78,6 +78,14 @@ if (defined('APP_VERSION')) {
     $checks['app_version'] = ['status' => 'warn', 'message' => 'VERSION.php not loaded'];
 }
 
+// ── Branding Integrity ─────────────────────────────────────
+require_once __DIR__ . '/../functions/branding-integrity.php';
+$integrity = checkBrandingIntegrity();
+$checks['branding_integrity'] = [
+    'status'  => $integrity['passed'] ? 'ok' : 'warn',
+    'version' => $integrity['version'],
+];
+
 // ── Response ────────────────────────────────────────────────
 http_response_code($healthy ? 200 : 503);
 echo json_encode([

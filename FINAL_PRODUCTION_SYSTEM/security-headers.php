@@ -27,8 +27,10 @@ function setSecurityHeaders() {
         header('Strict-Transport-Security: max-age=' . HSTS_MAX_AGE . '; includeSubDomains; preload');
     }
     
-    // Hide server information
-    header('Server: OEM-Activation-System');
+    // KeyGate branding headers
+    header('Server: KeyGate');
+    require_once __DIR__ . '/functions/branding-integrity.php';
+    addBrandingHeaders();
     
     // Prevent caching of sensitive pages
     if (strpos($_SERVER['REQUEST_URI'], 'admin') !== false || strpos($_SERVER['REQUEST_URI'], 'api') !== false) {
