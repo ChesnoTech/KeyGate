@@ -28,6 +28,9 @@ import {
   Copy,
   Loader2,
   ExternalLink,
+  FileText,
+  Send,
+  Globe,
 } from 'lucide-react'
 import {
   useLicenseStatus,
@@ -228,6 +231,72 @@ export function LicensePage() {
               </AlertDialog>
             </>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Purchase Options */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Globe className="h-4 w-4" />
+            {t('license.purchase_options', 'Purchase Options')}
+          </CardTitle>
+          <CardDescription>
+            {t('license.purchase_desc', 'Choose the payment method that works for your region.')}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* International — LemonSqueezy / GitHub Sponsors */}
+          <div className="flex items-start gap-3 p-4 rounded-lg border bg-muted/30">
+            <ExternalLink className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium">{t('license.intl_payment', 'International Payment')}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {t('license.intl_payment_desc', 'Pay with credit card, PayPal, or other international methods. Instant license delivery.')}
+              </p>
+              <div className="flex gap-2 mt-3">
+                <Button variant="outline" size="sm" asChild>
+                  <a href="https://github.com/sponsors/ChesnoTech" target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                    GitHub Sponsors
+                  </a>
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Russia / CIS — Invoice request */}
+          <div className="flex items-start gap-3 p-4 rounded-lg border bg-muted/30">
+            <FileText className="h-5 w-5 text-orange-600 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium flex items-center gap-2">
+                {t('license.ru_payment', 'Russia & CIS — Invoice Payment')}
+                <Badge variant="outline" className="text-[10px]">🇷🇺</Badge>
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {t('license.ru_payment_desc', 'Due to international payment restrictions, Russian and CIS companies can purchase via bank transfer (wire transfer). We accept payments in RUB, USD, or EUR to our business account.')}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {t('license.ru_payment_methods', 'Accepted: bank wire transfer, USDT/BTC, payment through Turkish or UAE intermediary banks.')}
+              </p>
+              <div className="mt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const subject = encodeURIComponent('KeyGate Pro License — Invoice Request')
+                    const body = encodeURIComponent(
+                      `Company Name: \nCountry: \nContact Person: \nEmail: \n\nLicense Tier: Pro / Enterprise\nPreferred Payment Method: Bank Transfer / Crypto / Other\nPreferred Currency: RUB / USD / EUR\n\nInstance ID: ${license?.instance_id || 'N/A'}\n`
+                    )
+                    window.open(`mailto:sales@keygate.dev?subject=${subject}&body=${body}`, '_blank')
+                  }}
+                >
+                  <Send className="mr-1.5 h-3.5 w-3.5" />
+                  {t('license.request_invoice', 'Request Invoice')}
+                </Button>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

@@ -1710,5 +1710,13 @@
     "license.dev_desc": "Generate test licenses for development. Only available on localhost.",
     "license.gen_pro": "Generate Pro",
     "license.gen_enterprise": "Generate Enterprise",
-    "license.dev_generated": "Dev license generated"
+    "license.dev_generated": "Dev license generated",
+    "license.purchase_options": "Purchase Options",
+    "license.purchase_desc": "Choose the payment method that works for your region.",
+    "license.intl_payment": "International Payment",
+    "license.intl_payment_desc": "Pay with credit card, PayPal, or other international methods. Instant license delivery.",
+    "license.ru_payment": "Russia & CIS — Invoice Payment",
+    "license.ru_payment_desc": "Due to international payment restrictions, Russian and CIS companies can purchase via bank transfer (wire transfer). We accept payments in RUB, USD, or EUR to our business account.",
+    "license.ru_payment_methods": "Accepted: bank wire transfer, USDT/BTC, payment through Turkish or UAE intermediary banks.",
+    "license.request_invoice": "Request Invoice"
 }
