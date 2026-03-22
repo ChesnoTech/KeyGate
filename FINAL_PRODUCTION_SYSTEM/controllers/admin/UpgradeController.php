@@ -153,7 +153,7 @@ function findUpgradeAsset(array $release): ?array {
             return [
                 'name'          => $asset['name'],
                 'size'          => $asset['size'] ?? 0,
-                'download_url'  => $asset['browser_download_url'] ?? '',
+                'download_url'  => $asset['url'] ?? $asset['browser_download_url'] ?? '',
                 'content_type'  => $asset['content_type'] ?? '',
                 'download_count'=> $asset['download_count'] ?? 0,
             ];
@@ -165,7 +165,7 @@ function findUpgradeAsset(array $release): ?array {
             return [
                 'name'          => $asset['name'],
                 'size'          => $asset['size'] ?? 0,
-                'download_url'  => $asset['browser_download_url'] ?? '',
+                'download_url'  => $asset['url'] ?? $asset['browser_download_url'] ?? '',
                 'content_type'  => $asset['content_type'] ?? '',
                 'download_count'=> $asset['download_count'] ?? 0,
             ];
@@ -265,8 +265,10 @@ function handle_upgrade_download_github(PDO $pdo, array $admin_session, $json_in
         return;
     }
 
-    // Validate URL is from GitHub
-    if (!preg_match('#^https://github\.com/.+/releases/download/.+\.zip$#', $downloadUrl)) {
+    // Validate URL is from GitHub (browser or API URL)
+    $isGitHubUrl = preg_match('#^https://github\.com/.+/releases/download/.+\.zip$#', $downloadUrl)
+                || preg_match('#^https://api\.github\.com/repos/.+/releases/assets/\d+$#', $downloadUrl);
+    if (!$isGitHubUrl) {
         jsonResponse(['success' => false, 'error' => 'Invalid GitHub release asset URL']);
         return;
     }
@@ -287,32 +289,24 @@ function handle_upgrade_download_github(PDO $pdo, array $admin_session, $json_in
         return;
     }
 
-    // Download the file
-    $ctx = stream_context_create([
-        'http' => [
-            'timeout' => 120,
-            'follow_location' => true,
-            'max_redirects' => 5,
-            'header' => implode("\r\n", getGitHubHeaders()),
-        ],
-    ]);
-
+    // Download the file using curl (PHP fopen drops auth header on redirects)
     $tmpFile = tempnam(sys_get_temp_dir(), 'oem_upgrade_');
-    $source = @fopen($downloadUrl, 'rb', false, $ctx);
-    if (!$source) {
-        @unlink($tmpFile);
-        jsonResponse(['success' => false, 'error' => 'Failed to download from GitHub. Check network or token.']);
-        return;
+    $token = $_ENV['GITHUB_TOKEN'] ?? getenv('GITHUB_TOKEN') ?? '';
+    $curlHeaders = '-H "Accept: application/octet-stream" -H "User-Agent: OEM-Activation-System"';
+    if (!empty($token)) {
+        $curlHeaders .= ' -H "Authorization: Bearer ' . $token . '"';
     }
+    $cmd = sprintf(
+        'curl -sL %s -o %s -w "%%{http_code}" %s 2>&1',
+        $curlHeaders,
+        escapeshellarg($tmpFile),
+        escapeshellarg($downloadUrl)
+    );
+    $httpCode = trim(shell_exec($cmd));
 
-    $dest = fopen($tmpFile, 'wb');
-    $bytes = stream_copy_to_stream($source, $dest);
-    fclose($source);
-    fclose($dest);
-
-    if ($bytes === false || $bytes < 100) {
+    if ($httpCode !== '200' || !file_exists($tmpFile) || filesize($tmpFile) < 100) {
         @unlink($tmpFile);
-        jsonResponse(['success' => false, 'error' => 'Download produced empty file']);
+        jsonResponse(['success' => false, 'error' => "Download failed (HTTP $httpCode). Check token or URL."]);
         return;
     }
 
@@ -982,19 +976,40 @@ function handle_upgrade_apply(PDO $pdo, array $admin_session, $json_input): void
 
         if ($action === 'replace' && !empty($source)) {
             $content = $zip->getFromName($source);
-            if ($content === false) {
-                $zip->close();
-                updateUpgradeStatus($pdo, $upgradeId, 'failed', [
-                    'error_message' => "File not found in package: {$source}",
-                    'migrations_applied' => json_encode($migrationsApplied),
-                    'files_changed' => json_encode($filesChanged),
-                ]);
-                jsonResponse(['success' => false, 'error' => "File not found in package: {$source}"]);
-                return;
+            if ($content !== false) {
+                // Source is a single file
+                $stagingPath = $stagingDir . '/' . $target;
+                @mkdir(dirname($stagingPath), 0755, true);
+                file_put_contents($stagingPath, $content);
+            } else {
+                // Source might be a directory — extract all entries under it
+                $sourceDir = rtrim($source, '/') . '/';
+                $found = false;
+                for ($i = 0; $i < $zip->numFiles; $i++) {
+                    $entryName = $zip->getNameIndex($i);
+                    if (str_starts_with($entryName, $sourceDir) && $entryName !== $sourceDir) {
+                        $relPath = substr($entryName, strlen($sourceDir));
+                        if (empty($relPath) || str_ends_with($entryName, '/')) continue;
+                        $entryContent = $zip->getFromIndex($i);
+                        if ($entryContent !== false) {
+                            $stagingPath = $stagingDir . '/' . $target . '/' . $relPath;
+                            @mkdir(dirname($stagingPath), 0755, true);
+                            file_put_contents($stagingPath, $entryContent);
+                            $found = true;
+                        }
+                    }
+                }
+                if (!$found) {
+                    $zip->close();
+                    updateUpgradeStatus($pdo, $upgradeId, 'failed', [
+                        'error_message' => "File/directory not found in package: {$source}",
+                        'migrations_applied' => json_encode($migrationsApplied),
+                        'files_changed' => json_encode($filesChanged),
+                    ]);
+                    jsonResponse(['success' => false, 'error' => "Not found in package: {$source}"]);
+                    return;
+                }
             }
-            $stagingPath = $stagingDir . '/' . $target;
-            @mkdir(dirname($stagingPath), 0755, true);
-            file_put_contents($stagingPath, $content);
         }
     }
 
@@ -1008,13 +1023,21 @@ function handle_upgrade_apply(PDO $pdo, array $admin_session, $json_input): void
         try {
             if ($action === 'replace') {
                 $stagingPath = $stagingDir . '/' . $target;
-                if (!file_exists($stagingPath)) {
-                    throw new Exception("Staging file missing for: {$target}");
+                if (!file_exists($stagingPath) && !is_dir($stagingPath)) {
+                    throw new Exception("Staging file/dir missing for: {$target}");
                 }
-                @mkdir(dirname($targetPath), 0755, true);
-                // Use copy+unlink for cross-filesystem safety
-                if (!copy($stagingPath, $targetPath)) {
-                    throw new Exception("Failed to copy file to: {$target}");
+                if (is_dir($stagingPath)) {
+                    @mkdir($targetPath, 0755, true);
+                    $cpCmd = sprintf('cp -rf %s/* %s/ 2>&1', escapeshellarg($stagingPath), escapeshellarg($targetPath));
+                    exec($cpCmd, $cpOut, $cpRet);
+                    if ($cpRet !== 0) {
+                        throw new Exception("Failed to copy directory: {$target}");
+                    }
+                } else {
+                    @mkdir(dirname($targetPath), 0755, true);
+                    if (!copy($stagingPath, $targetPath)) {
+                        throw new Exception("Failed to copy file to: {$target}");
+                    }
                 }
                 $filesChanged[] = ['action' => 'replace', 'target' => $target, 'status' => 'ok'];
             } elseif ($action === 'delete') {
