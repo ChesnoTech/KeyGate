@@ -58,6 +58,8 @@ const BACKEND_ACTIONS: Record<string, { method: 'GET' | 'POST'; csrf: boolean }>
   save_session_settings:     { method: 'POST', csrf: true },
   get_client_config_settings:  { method: 'GET',  csrf: false },
   save_client_config_settings: { method: 'POST', csrf: true },
+  get_language_settings:       { method: 'GET',  csrf: false },
+  save_language_settings:      { method: 'POST', csrf: true },
 
   // smtp / email
   get_smtp_settings:         { method: 'GET',  csrf: false },

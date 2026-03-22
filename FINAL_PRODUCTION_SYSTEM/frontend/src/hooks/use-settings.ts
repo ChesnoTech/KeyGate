@@ -8,6 +8,8 @@ import {
   saveOrderFieldSettings,
   getSessionSettings,
   saveSessionSettings,
+  getLanguageSettings,
+  saveLanguageSettings,
   getSmtpSettings,
   saveSmtpSettings,
   testSmtpConnection,
@@ -130,6 +132,29 @@ export function useTestSmtpConnection() {
     mutationFn: (params: Record<string, unknown>) => testSmtpConnection(params),
     onSuccess: (data) => {
       toast.success(data.message || t('settings.smtp_test_ok', 'Test email sent successfully'))
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+// ── Language Settings ────────────────────────────────────────────
+
+export function useLanguageSettings() {
+  return useQuery({
+    queryKey: ['settings', 'languages'],
+    queryFn: () => getLanguageSettings(),
+  })
+}
+
+export function useSaveLanguageSettings() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: ({ enabled, defaultLang }: { enabled: string[]; defaultLang: string }) =>
+      saveLanguageSettings(enabled, defaultLang),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings', 'languages'] })
+      toast.success(t('settings.languages_saved', 'Language settings saved'))
     },
     onError: (e: Error) => toast.error(e.message),
   })

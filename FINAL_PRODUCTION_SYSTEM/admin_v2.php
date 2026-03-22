@@ -218,6 +218,8 @@ $action_registry = [
     'save_session_settings'    => ['SettingsController.php',   'handle_save_session_settings',    true,  true],
     'get_client_config_settings'  => ['SettingsController.php', 'handle_get_client_config_settings',  false, false],
     'save_client_config_settings' => ['SettingsController.php', 'handle_save_client_config_settings', true,  true],
+    'get_language_settings'       => ['SettingsController.php', 'handle_get_language_settings',       false, false],
+    'save_language_settings'      => ['SettingsController.php', 'handle_save_language_settings',      true,  true],
 
     // smtp / email
     'get_smtp_settings'        => ['SmtpController.php',      'handle_get_smtp_settings',        false, false],

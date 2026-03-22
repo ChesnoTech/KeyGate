@@ -28,6 +28,8 @@ import {
   useTestSmtpConnection,
   useClientConfigSettings,
   useSaveClientConfigSettings,
+  useLanguageSettings,
+  useSaveLanguageSettings,
 } from '@/hooks/use-settings'
 import {
   useBranding,
@@ -1265,6 +1267,9 @@ export function SettingsPage() {
           </CardContent>
         </Card>
 
+        {/* Language Management Card */}
+        <LanguageManagementCard />
+
           </TabsContent>
 
           <TabsContent value="client" className="mt-4 space-y-4">
@@ -1321,6 +1326,122 @@ const TASK_TOGGLES = [
   { key: 'client_task_ps7_install', labelKey: 'settings.task_ps7_install', descKey: 'settings.task_ps7_install_desc' },
   { key: 'client_task_self_update', labelKey: 'settings.task_self_update', descKey: 'settings.task_self_update_desc' },
 ] as const
+
+function LanguageManagementCard() {
+  const { t } = useTranslation()
+  const { data, isLoading } = useLanguageSettings()
+  const saveMut = useSaveLanguageSettings()
+  const [enabled, setEnabled] = useState<string[]>([])
+  const [defaultLang, setDefaultLang] = useState('en')
+  const [dirty, setDirty] = useState(false)
+
+  useEffect(() => {
+    if (data?.config) {
+      setEnabled(data.config.enabled_languages)
+      setDefaultLang(data.config.default_language)
+    }
+  }, [data?.config])
+
+  const toggleLang = (code: string) => {
+    if (code === 'en') return // English always enabled
+    setEnabled(prev =>
+      prev.includes(code)
+        ? prev.filter(c => c !== code)
+        : [...prev, code]
+    )
+    setDirty(true)
+  }
+
+  const handleSave = () => {
+    saveMut.mutate({ enabled, defaultLang }, {
+      onSuccess: () => setDirty(false),
+    })
+  }
+
+  const available = data?.config?.available_languages ?? []
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
+          <div>
+            <CardTitle>{t('settings.languages_title', 'Languages')}</CardTitle>
+            <CardDescription>
+              {t('settings.languages_desc', 'Enable or disable languages available in the admin panel. English is always enabled as fallback.')}
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isLoading ? (
+          <Skeleton className="h-32 w-full" />
+        ) : (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+              {available.map(lang => {
+                const isEnabled = enabled.includes(lang.code)
+                const isDefault = defaultLang === lang.code
+                return (
+                  <div
+                    key={lang.code}
+                    className={`flex items-center justify-between p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                      isEnabled
+                        ? 'bg-primary/5 border-primary/30'
+                        : 'bg-muted/30 border-transparent opacity-60'
+                    }`}
+                    onClick={() => toggleLang(lang.code)}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Switch
+                        checked={isEnabled}
+                        disabled={lang.code === 'en'}
+                        onCheckedChange={() => toggleLang(lang.code)}
+                        className="scale-75"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium truncate">{lang.nativeName}</p>
+                        <p className="text-[10px] text-muted-foreground">{lang.name}{lang.rtl ? ' (RTL)' : ''}</p>
+                      </div>
+                    </div>
+                    {isDefault && (
+                      <span className="text-[9px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full shrink-0">
+                        {t('settings.default', 'Default')}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Label className="text-sm shrink-0">{t('settings.default_language', 'Default Language')}:</Label>
+              <select
+                className="h-9 rounded-md border bg-background px-3 text-sm"
+                value={defaultLang}
+                onChange={(e) => { setDefaultLang(e.target.value); setDirty(true) }}
+              >
+                {available.filter(l => enabled.includes(l.code)).map(l => (
+                  <option key={l.code} value={l.code}>{l.nativeName} ({l.name})</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button onClick={handleSave} disabled={!dirty || saveMut.isPending} size="sm">
+                <Save className="mr-1.5 h-4 w-4" />
+                {t('common.save', 'Save')}
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {enabled.length} / {available.length} {t('settings.languages_enabled', 'languages enabled')}
+              </span>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
 
 function ClientConfigTab() {
   const { t } = useTranslation()

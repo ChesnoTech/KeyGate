@@ -1800,5 +1800,11 @@
     "sub.lemon_desc": "Credit card, PayPal, Apple Pay, Google Pay. Works worldwide. Instant license delivery.",
     "sub.pay_lemon": "Buy License",
     "sub.github_title": "GitHub Sponsors",
-    "sub.github_desc": "Subscribe through GitHub. Great if you already have a GitHub account."
+    "sub.github_desc": "Subscribe through GitHub. Great if you already have a GitHub account.",
+    "settings.languages_title": "Languages",
+    "settings.languages_desc": "Enable or disable languages available in the admin panel. English is always enabled as fallback.",
+    "settings.languages_saved": "Language settings saved",
+    "settings.default": "Default",
+    "settings.default_language": "Default Language",
+    "settings.languages_enabled": "languages enabled"
 }

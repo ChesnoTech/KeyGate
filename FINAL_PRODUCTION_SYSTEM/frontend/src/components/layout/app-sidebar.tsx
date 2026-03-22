@@ -49,6 +49,8 @@ import { Separator } from '@/components/ui/separator'
 import { useAuth } from '@/hooks/use-auth'
 import { useTheme } from '@/components/theme-provider'
 import { useBrandingContext } from '@/components/branding-provider'
+import { switchLanguage, LANGUAGE_META } from '@/i18n/config'
+import { useLanguageSettings } from '@/hooks/use-settings'
 
 const navGroups = [
   {
@@ -112,11 +114,8 @@ export function AppSidebar() {
     return false
   }
 
-  const toggleLanguage = () => {
-    const newLang = i18n.language === 'en' ? 'ru' : 'en'
-    i18n.changeLanguage(newLang)
-    localStorage.setItem('oem-ui-lang', newLang)
-  }
+  const langSettings = useLanguageSettings()
+  const enabledLangs = langSettings.data?.config?.enabled_languages ?? ['en', 'ru']
 
   const ThemeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor
 
@@ -192,9 +191,27 @@ export function AppSidebar() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={toggleLanguage}>
-              <Languages className="h-3.5 w-3.5" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground h-7 w-7">
+                <Languages className="h-3.5 w-3.5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {enabledLangs.map(code => {
+                  const meta = LANGUAGE_META[code]
+                  if (!meta) return null
+                  return (
+                    <DropdownMenuItem
+                      key={code}
+                      onClick={() => switchLanguage(code)}
+                      className={i18n.language === code ? 'bg-accent' : ''}
+                    >
+                      <span className="mr-2 text-xs font-mono w-5">{code.toUpperCase()}</span>
+                      {meta.nativeName}
+                    </DropdownMenuItem>
+                  )
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           <div className="flex items-center gap-2">

@@ -1800,5 +1800,11 @@
     "sub.lemon_desc": "Банковская карта, PayPal, Apple Pay, Google Pay. Работает по всему миру. Мгновенная доставка лицензии.",
     "sub.pay_lemon": "Купить лицензию",
     "sub.github_title": "GitHub Sponsors",
-    "sub.github_desc": "Подписка через GitHub. Удобно, если у вас уже есть аккаунт GitHub."
+    "sub.github_desc": "Подписка через GitHub. Удобно, если у вас уже есть аккаунт GitHub.",
+    "settings.languages_title": "Языки",
+    "settings.languages_desc": "Включение и отключение языков в панели администратора. Английский всегда включён как резервный.",
+    "settings.languages_saved": "Языковые настройки сохранены",
+    "settings.default": "По умолч.",
+    "settings.default_language": "Язык по умолчанию",
+    "settings.languages_enabled": "языков включено"
 }

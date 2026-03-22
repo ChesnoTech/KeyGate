@@ -309,3 +309,73 @@ function handle_save_session_settings(PDO $pdo, array $admin_session, ?array $js
         'admin_force_password_change_days' => $passwordDays,
     ]]);
 }
+
+// ── Language Settings ───────────────────────────────────────
+
+function handle_get_language_settings(PDO $pdo, array $admin_session): void {
+    requirePermission('system_settings', $admin_session);
+
+    // All available languages with metadata
+    $allLanguages = [
+        ['code' => 'en', 'name' => 'English',    'nativeName' => 'English',    'rtl' => false],
+        ['code' => 'ru', 'name' => 'Russian',     'nativeName' => 'Русский',    'rtl' => false],
+        ['code' => 'ar', 'name' => 'Arabic',      'nativeName' => 'العربية',     'rtl' => true],
+        ['code' => 'tr', 'name' => 'Turkish',     'nativeName' => 'Türkçe',     'rtl' => false],
+        ['code' => 'zh', 'name' => 'Chinese',     'nativeName' => '简体中文',     'rtl' => false],
+        ['code' => 'es', 'name' => 'Spanish',     'nativeName' => 'Español',    'rtl' => false],
+        ['code' => 'pt', 'name' => 'Portuguese',  'nativeName' => 'Português',  'rtl' => false],
+        ['code' => 'de', 'name' => 'German',      'nativeName' => 'Deutsch',    'rtl' => false],
+        ['code' => 'fr', 'name' => 'French',      'nativeName' => 'Français',   'rtl' => false],
+        ['code' => 'ja', 'name' => 'Japanese',    'nativeName' => '日本語',      'rtl' => false],
+        ['code' => 'ko', 'name' => 'Korean',      'nativeName' => '한국어',      'rtl' => false],
+        ['code' => 'it', 'name' => 'Italian',     'nativeName' => 'Italiano',   'rtl' => false],
+        ['code' => 'pl', 'name' => 'Polish',      'nativeName' => 'Polski',     'rtl' => false],
+        ['code' => 'nl', 'name' => 'Dutch',       'nativeName' => 'Nederlands', 'rtl' => false],
+        ['code' => 'uk', 'name' => 'Ukrainian',   'nativeName' => 'Українська', 'rtl' => false],
+        ['code' => 'hi', 'name' => 'Hindi',       'nativeName' => 'हिन्दी',       'rtl' => false],
+        ['code' => 'id', 'name' => 'Indonesian',  'nativeName' => 'Bahasa Indonesia', 'rtl' => false],
+        ['code' => 'vi', 'name' => 'Vietnamese',  'nativeName' => 'Tiếng Việt', 'rtl' => false],
+    ];
+
+    $enabledRaw = getConfig('enabled_languages') ?? 'en,ru';
+    $enabled = array_filter(array_map('trim', explode(',', $enabledRaw)));
+    $defaultLang = getConfig('default_language') ?? 'en';
+
+    jsonResponse([
+        'success' => true,
+        'config' => [
+            'available_languages' => $allLanguages,
+            'enabled_languages' => $enabled,
+            'default_language' => $defaultLang,
+        ],
+    ]);
+}
+
+function handle_save_language_settings(PDO $pdo, array $admin_session, ?array $json_input = null): void {
+    requirePermission('system_settings', $admin_session);
+
+    $enabled = $json_input['enabled_languages'] ?? ['en'];
+    $defaultLang = $json_input['default_language'] ?? 'en';
+
+    // English must always be enabled (fallback)
+    if (!in_array('en', $enabled)) {
+        $enabled[] = 'en';
+    }
+
+    // Default language must be in enabled list
+    if (!in_array($defaultLang, $enabled)) {
+        $defaultLang = 'en';
+    }
+
+    $configs = [
+        'enabled_languages' => implode(',', $enabled),
+        'default_language' => $defaultLang,
+    ];
+
+    saveConfigBatch($pdo, $configs);
+
+    jsonResponse(['success' => true, 'config' => [
+        'enabled_languages' => $enabled,
+        'default_language' => $defaultLang,
+    ]]);
+}

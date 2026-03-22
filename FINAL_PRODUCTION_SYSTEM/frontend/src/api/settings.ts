@@ -184,3 +184,32 @@ export function saveClientConfigSettings(config: ClientConfig) {
     config as unknown as Record<string, unknown>
   )
 }
+
+// ── Language Settings ─────────────────────────────────────────────
+
+export interface LanguageInfo {
+  code: string
+  name: string
+  nativeName: string
+  rtl: boolean
+}
+
+export interface LanguageSettingsResponse {
+  success: boolean
+  config: {
+    available_languages: LanguageInfo[]
+    enabled_languages: string[]
+    default_language: string
+  }
+}
+
+export function getLanguageSettings() {
+  return apiGet<LanguageSettingsResponse>('get_language_settings')
+}
+
+export function saveLanguageSettings(enabledLanguages: string[], defaultLanguage: string) {
+  return apiPostJson<{ success: boolean; error?: string }>(
+    'save_language_settings',
+    { enabled_languages: enabledLanguages, default_language: defaultLanguage }
+  )
+}
