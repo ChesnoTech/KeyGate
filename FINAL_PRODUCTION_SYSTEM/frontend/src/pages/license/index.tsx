@@ -310,19 +310,46 @@ export function LicensePage() {
                 {t('sub.intl_payment_desc', 'Pay with credit card, PayPal, or other international methods. Instant license delivery.')}
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-3">
-                <a
-                  href="https://github.com/sponsors/ChesnoTech"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
-                >
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  {t('sub.pay_github', 'Pay via GitHub Sponsors')}
-                </a>
+            <CardContent className="space-y-4">
+              <div className="flex items-start gap-3 p-4 rounded-lg border bg-muted/30">
+                <CreditCard className="h-5 w-5 text-green-600 mt-0.5 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">{t('sub.lemon_title', 'LemonSqueezy (Recommended)')}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t('sub.lemon_desc', 'Credit card, PayPal, Apple Pay, Google Pay. Works worldwide. Instant license delivery.')}
+                  </p>
+                  <a
+                    href="https://keygate.lemonsqueezy.com/buy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center rounded-md text-sm font-medium bg-green-600 text-white hover:bg-green-700 h-9 px-4 py-2 mt-3"
+                  >
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    {t('sub.pay_lemon', 'Buy License')}
+                  </a>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-3">
+
+              <div className="flex items-start gap-3 p-4 rounded-lg border bg-muted/30">
+                <ExternalLink className="h-5 w-5 text-gray-500 mt-0.5 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">{t('sub.github_title', 'GitHub Sponsors')}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t('sub.github_desc', 'Subscribe through GitHub. Great if you already have a GitHub account.')}
+                  </p>
+                  <a
+                    href="https://github.com/sponsors/ChesnoTech"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center rounded-md text-sm font-medium border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2 mt-3"
+                  >
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    {t('sub.pay_github', 'GitHub Sponsors')}
+                  </a>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
                 {t('sub.intl_note', 'After payment, you will receive a license key via email. Paste it in the License Key tab.')}
               </p>
             </CardContent>

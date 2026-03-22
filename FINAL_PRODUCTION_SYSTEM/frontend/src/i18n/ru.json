@@ -1795,5 +1795,10 @@
     "sub.upgrade_now": "Обновить тариф",
     "sub.instance_info": "Информация об экземпляре",
     "sub.max_techs": "Макс. техников",
-    "sub.max_keys": "Макс. ключей"
+    "sub.max_keys": "Макс. ключей",
+    "sub.lemon_title": "LemonSqueezy (Рекомендуется)",
+    "sub.lemon_desc": "Банковская карта, PayPal, Apple Pay, Google Pay. Работает по всему миру. Мгновенная доставка лицензии.",
+    "sub.pay_lemon": "Купить лицензию",
+    "sub.github_title": "GitHub Sponsors",
+    "sub.github_desc": "Подписка через GitHub. Удобно, если у вас уже есть аккаунт GitHub."
 }

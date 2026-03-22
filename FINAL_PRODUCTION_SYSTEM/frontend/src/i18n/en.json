@@ -1795,5 +1795,10 @@
     "sub.upgrade_now": "Upgrade Now",
     "sub.instance_info": "Instance Information",
     "sub.max_techs": "Max Technicians",
-    "sub.max_keys": "Max Keys"
+    "sub.max_keys": "Max Keys",
+    "sub.lemon_title": "LemonSqueezy (Recommended)",
+    "sub.lemon_desc": "Credit card, PayPal, Apple Pay, Google Pay. Works worldwide. Instant license delivery.",
+    "sub.pay_lemon": "Buy License",
+    "sub.github_title": "GitHub Sponsors",
+    "sub.github_desc": "Subscribe through GitHub. Great if you already have a GitHub account."
 }
