@@ -142,6 +142,12 @@ const BACKEND_ACTIONS: Record<string, { method: 'GET' | 'POST'; csrf: boolean }>
   save_product_variant:        { method: 'POST', csrf: true },
   delete_product_variant:      { method: 'POST', csrf: true },
 
+  // licensing
+  license_status:              { method: 'GET',  csrf: false },
+  license_register:            { method: 'POST', csrf: true },
+  license_deactivate:          { method: 'POST', csrf: true },
+  license_generate_dev:        { method: 'POST', csrf: true },
+
   // system upgrade
   upgrade_check_github:        { method: 'GET',  csrf: false },
   upgrade_download_github:     { method: 'POST', csrf: true },

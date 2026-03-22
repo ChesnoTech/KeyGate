@@ -101,6 +101,9 @@ run_sql "upgrade_system_migration.sql"        21
 # Phase 10: Client configuration defaults
 run_sql "client_config_migration.sql"         22
 
+# Phase 11: Licensing system
+run_sql "license_migration.sql"               23
+
 echo ""
 echo "=== Database initialization complete ==="
 echo ""

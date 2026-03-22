@@ -302,6 +302,12 @@ $action_registry = [
     'save_product_variant'     => ['ProductVariantsController.php', 'handle_save_product_variant',     true,  true],
     'delete_product_variant'   => ['ProductVariantsController.php', 'handle_delete_product_variant',   true,  true],
 
+    // licensing
+    'license_status'           => ['LicenseController.php', 'handle_license_status',         false, true],
+    'license_register'         => ['LicenseController.php', 'handle_license_register',       true,  true],
+    'license_deactivate'       => ['LicenseController.php', 'handle_license_deactivate',     true,  true],
+    'license_generate_dev'     => ['LicenseController.php', 'handle_license_generate_dev',   true,  true],
+
     // system upgrade
     'upgrade_check_github'     => ['UpgradeController.php', 'handle_upgrade_check_github',     false, true],
     'upgrade_download_github'  => ['UpgradeController.php', 'handle_upgrade_download_github',  true,  true],

@@ -29,6 +29,7 @@ const IntegrationsPage = lazy(() => import('@/pages/integrations').then(m => ({ 
 const ProductLinesPage = lazy(() => import('@/pages/product-lines').then(m => ({ default: m.ProductLinesPage })))
 const DownloadsPage = lazy(() => import('@/pages/downloads').then(m => ({ default: m.DownloadsPage })))
 const SystemUpgradePage = lazy(() => import('@/pages/system-upgrade').then(m => ({ default: m.SystemUpgradePage })))
+const LicensePage = lazy(() => import('@/pages/license').then(m => ({ default: m.LicensePage })))
 
 function PageLoader() {
   return (
@@ -77,6 +78,7 @@ export default function App() {
                   <Route path="integrations" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="system_settings"><IntegrationsPage /></RequirePermission></Suspense>} />
                   <Route path="downloads" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="view_downloads"><DownloadsPage /></RequirePermission></Suspense>} />
                   <Route path="system-upgrade" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="system_settings"><SystemUpgradePage /></RequirePermission></Suspense>} />
+                  <Route path="license" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="system_settings"><LicensePage /></RequirePermission></Suspense>} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
