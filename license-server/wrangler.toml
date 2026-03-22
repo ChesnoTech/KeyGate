@@ -1,0 +1,17 @@
+name = "keygate-license-server"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# KV Namespace for license storage
+[[kv_namespaces]]
+binding = "LICENSES"
+id = "YOUR_KV_NAMESPACE_ID"  # Replace with actual KV namespace ID
+
+# Environment variables (set via Cloudflare dashboard for secrets)
+# GITHUB_WEBHOOK_SECRET = "your-webhook-secret"
+# JWT_SECRET = "your-jwt-signing-secret"
+# SENDGRID_API_KEY = "your-sendgrid-key"
+# ADMIN_EMAIL = "admin@keygate.dev"
+
+[vars]
+ENVIRONMENT = "production"
