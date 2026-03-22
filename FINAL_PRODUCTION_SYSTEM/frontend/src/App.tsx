@@ -78,7 +78,7 @@ export default function App() {
                   <Route path="integrations" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="system_settings"><IntegrationsPage /></RequirePermission></Suspense>} />
                   <Route path="downloads" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="view_downloads"><DownloadsPage /></RequirePermission></Suspense>} />
                   <Route path="system-upgrade" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="system_settings"><SystemUpgradePage /></RequirePermission></Suspense>} />
-                  <Route path="license" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="system_settings"><LicensePage /></RequirePermission></Suspense>} />
+                  <Route path="subscription" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="system_settings"><LicensePage /></RequirePermission></Suspense>} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

@@ -88,7 +88,7 @@ const navGroups = [
       { path: '/settings', labelKey: 'nav.settings', icon: Settings, minRole: 'admin' as const },
       { path: '/integrations', labelKey: 'nav.integrations', icon: Plug2, minRole: 'admin' as const },
       { path: '/downloads', labelKey: 'nav.downloads', icon: Download, minRole: 'admin' as const },
-      { path: '/license', labelKey: 'nav.license', icon: KeyRound, minRole: 'super_admin' as const },
+      { path: '/subscription', labelKey: 'nav.subscription', icon: KeyRound, minRole: 'super_admin' as const },
       { path: '/system-upgrade', labelKey: 'nav.system_upgrade', icon: ArrowUpCircle, minRole: 'super_admin' as const },
       { path: '/backups', labelKey: 'nav.backups', icon: Database, minRole: 'super_admin' as const },
       { path: '/logs', labelKey: 'nav.logs', icon: ScrollText },
