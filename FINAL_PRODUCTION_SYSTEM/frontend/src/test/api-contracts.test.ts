@@ -144,6 +144,22 @@ const BACKEND_ACTIONS: Record<string, { method: 'GET' | 'POST'; csrf: boolean }>
   save_product_variant:        { method: 'POST', csrf: true },
   delete_product_variant:      { method: 'POST', csrf: true },
 
+  // production tracking & enterprise key management
+  list_build_reports:            { method: 'GET',  csrf: false },
+  get_build_report:              { method: 'GET',  csrf: false },
+  export_build_report:           { method: 'GET',  csrf: false },
+  update_build_report_shipping:  { method: 'POST', csrf: true },
+  get_key_pool_status:           { method: 'GET',  csrf: false },
+  save_key_pool_config:          { method: 'POST', csrf: true },
+  check_hardware_binding:        { method: 'GET',  csrf: false },
+  release_hardware_binding:      { method: 'POST', csrf: true },
+  import_dpk_batch:              { method: 'POST', csrf: true },
+  list_dpk_batches:              { method: 'GET',  csrf: false },
+  list_work_orders:              { method: 'GET',  csrf: false },
+  save_work_order:               { method: 'POST', csrf: true },
+  get_work_order:                { method: 'GET',  csrf: false },
+  delete_work_order:             { method: 'POST', csrf: true },
+
   // task pipeline
   list_task_templates:         { method: 'GET',  csrf: false },
   save_task_template:          { method: 'POST', csrf: true },

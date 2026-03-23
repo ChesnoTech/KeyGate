@@ -304,6 +304,22 @@ $action_registry = [
     'save_product_variant'     => ['ProductVariantsController.php', 'handle_save_product_variant',     true,  true],
     'delete_product_variant'   => ['ProductVariantsController.php', 'handle_delete_product_variant',   true,  true],
 
+    // production tracking & enterprise key management
+    'list_build_reports'           => ['ProductionController.php', 'handle_list_build_reports',           false, true],
+    'get_build_report'             => ['ProductionController.php', 'handle_get_build_report',             false, true],
+    'export_build_report'          => ['ProductionController.php', 'handle_export_build_report',          false, true],
+    'update_build_report_shipping' => ['ProductionController.php', 'handle_update_build_report_shipping', true,  true],
+    'get_key_pool_status'          => ['ProductionController.php', 'handle_get_key_pool_status',          false, true],
+    'save_key_pool_config'         => ['ProductionController.php', 'handle_save_key_pool_config',         true,  true],
+    'check_hardware_binding'       => ['ProductionController.php', 'handle_check_hardware_binding',       false, true],
+    'release_hardware_binding'     => ['ProductionController.php', 'handle_release_hardware_binding',     true,  true],
+    'import_dpk_batch'             => ['ProductionController.php', 'handle_import_dpk_batch',             true,  false],
+    'list_dpk_batches'             => ['ProductionController.php', 'handle_list_dpk_batches',             false, true],
+    'list_work_orders'             => ['ProductionController.php', 'handle_list_work_orders',             false, true],
+    'save_work_order'              => ['ProductionController.php', 'handle_save_work_order',              true,  true],
+    'get_work_order'               => ['ProductionController.php', 'handle_get_work_order',               false, true],
+    'delete_work_order'            => ['ProductionController.php', 'handle_delete_work_order',            true,  true],
+
     // task pipeline
     'list_task_templates'      => ['TaskPipelineController.php', 'handle_list_task_templates',      false, true],
     'save_task_template'       => ['TaskPipelineController.php', 'handle_save_task_template',       true,  true],
@@ -339,7 +355,7 @@ if (isset($_GET['action']) || isset($_POST['action']) || isset($json_input['acti
     $action = $_GET['action'] ?? $_POST['action'] ?? $json_input['action'] ?? '';
 
     // File-streaming actions set their own Content-Type; everything else is JSON
-    $file_download_actions = ['download_report', 'download_client_resource'];
+    $file_download_actions = ['download_report', 'download_client_resource', 'export_build_report'];
     if (!in_array($action, $file_download_actions, true)) {
         header('Content-Type: application/json');
     }

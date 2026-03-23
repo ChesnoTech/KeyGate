@@ -107,6 +107,9 @@ run_sql "license_migration.sql"               23
 # Phase 12: Task pipeline system
 run_sql "task_pipeline_migration.sql"         24
 
+# Phase 13: Production tracking & enterprise key management
+run_sql "production_tracking_migration.sql"   25
+
 echo ""
 echo "=== Database initialization complete ==="
 echo ""
