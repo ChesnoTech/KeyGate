@@ -74,6 +74,7 @@ const navGroups = [
       { path: '/compliance', labelKey: 'nav.compliance', icon: ClipboardCheck, minRole: 'admin' as const },
       { path: '/compliance/results', labelKey: 'nav.compliance_results', icon: ShieldCheck },
       { path: '/product-lines', labelKey: 'nav.product_lines', icon: Boxes, minRole: 'admin' as const },
+      { path: '/task-pipeline', labelKey: 'nav.task_pipeline', icon: Play, minRole: 'admin' as const },
     ],
   },
   {

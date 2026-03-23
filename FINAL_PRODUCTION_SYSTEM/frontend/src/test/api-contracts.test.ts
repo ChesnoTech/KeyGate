@@ -144,6 +144,16 @@ const BACKEND_ACTIONS: Record<string, { method: 'GET' | 'POST'; csrf: boolean }>
   save_product_variant:        { method: 'POST', csrf: true },
   delete_product_variant:      { method: 'POST', csrf: true },
 
+  // task pipeline
+  list_task_templates:         { method: 'GET',  csrf: false },
+  save_task_template:          { method: 'POST', csrf: true },
+  delete_task_template:        { method: 'POST', csrf: true },
+  get_product_line_tasks:      { method: 'GET',  csrf: false },
+  save_product_line_tasks:     { method: 'POST', csrf: true },
+  list_task_executions:        { method: 'GET',  csrf: false },
+  get_activation_pipeline:     { method: 'GET',  csrf: false },
+  log_task_execution:          { method: 'POST', csrf: true },
+
   // licensing
   license_status:              { method: 'GET',  csrf: false },
   license_register:            { method: 'POST', csrf: true },

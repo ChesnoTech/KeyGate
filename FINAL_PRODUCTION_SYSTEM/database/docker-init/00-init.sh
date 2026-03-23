@@ -104,6 +104,9 @@ run_sql "client_config_migration.sql"         22
 # Phase 11: Licensing system
 run_sql "license_migration.sql"               23
 
+# Phase 12: Task pipeline system
+run_sql "task_pipeline_migration.sql"         24
+
 echo ""
 echo "=== Database initialization complete ==="
 echo ""

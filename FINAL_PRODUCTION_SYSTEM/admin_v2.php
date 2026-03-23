@@ -304,6 +304,16 @@ $action_registry = [
     'save_product_variant'     => ['ProductVariantsController.php', 'handle_save_product_variant',     true,  true],
     'delete_product_variant'   => ['ProductVariantsController.php', 'handle_delete_product_variant',   true,  true],
 
+    // task pipeline
+    'list_task_templates'      => ['TaskPipelineController.php', 'handle_list_task_templates',      false, true],
+    'save_task_template'       => ['TaskPipelineController.php', 'handle_save_task_template',       true,  true],
+    'delete_task_template'     => ['TaskPipelineController.php', 'handle_delete_task_template',     true,  true],
+    'get_product_line_tasks'   => ['TaskPipelineController.php', 'handle_get_product_line_tasks',   false, true],
+    'save_product_line_tasks'  => ['TaskPipelineController.php', 'handle_save_product_line_tasks',  true,  true],
+    'list_task_executions'     => ['TaskPipelineController.php', 'handle_list_task_executions',     false, true],
+    'get_activation_pipeline'  => ['TaskPipelineController.php', 'handle_get_activation_pipeline',  false, true],
+    'log_task_execution'       => ['TaskPipelineController.php', 'handle_log_task_execution',       true,  true],
+
     // licensing
     'license_status'           => ['LicenseController.php', 'handle_license_status',         false, true],
     'license_register'         => ['LicenseController.php', 'handle_license_register',       true,  true],
