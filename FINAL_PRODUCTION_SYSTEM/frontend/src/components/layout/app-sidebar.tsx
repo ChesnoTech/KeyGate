@@ -25,6 +25,7 @@ import {
   Download,
   ArrowUpCircle,
   KeyRound,
+  Play,
 } from 'lucide-react'
 import {
   Sidebar,
