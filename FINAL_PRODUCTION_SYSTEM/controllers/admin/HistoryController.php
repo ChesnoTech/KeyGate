@@ -46,7 +46,7 @@ function handle_list_history(PDO $pdo, array $admin_session): void {
         SELECT
             aa.id, aa.attempted_date, aa.attempted_time, aa.technician_id,
             aa.order_number, k.product_key, aa.attempt_result, aa.notes,
-            aa.hardware_collected, aa.activation_server, aa.activation_unique_id
+            aa.hardware_collected
         FROM activation_attempts aa
         LEFT JOIN oem_keys k ON aa.key_id = k.id
         $whereClause

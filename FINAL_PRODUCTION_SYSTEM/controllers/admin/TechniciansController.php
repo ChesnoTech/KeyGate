@@ -31,7 +31,7 @@ function handle_list_techs(PDO $pdo, array $admin_session): void {
     $params[] = (int)$limit;
     $params[] = (int)$offset;
     $stmt = $pdo->prepare("
-        SELECT id, technician_id, full_name, email, is_active, last_login, created_at, preferred_server
+        SELECT id, technician_id, full_name, email, is_active, last_login, created_at, preferred_language
         FROM technicians
         $whereClause
         ORDER BY created_at DESC
