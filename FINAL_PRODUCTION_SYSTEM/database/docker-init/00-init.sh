@@ -104,11 +104,14 @@ run_sql "client_config_migration.sql"         22
 # Phase 11: Licensing system
 run_sql "license_migration.sql"               23
 
-# Phase 12: Task pipeline system
-run_sql "task_pipeline_migration.sql"         24
+# Phase 12: USB device authentication
+run_sql "usb_devices_migration.sql"           24
 
-# Phase 13: Production tracking & enterprise key management
-run_sql "production_tracking_migration.sql"   25
+# Phase 13: Task pipeline system
+run_sql "task_pipeline_migration.sql"         25
+
+# Phase 14: Production tracking & enterprise key management
+run_sql "production_tracking_migration.sql"   26
 
 echo ""
 echo "=== Database initialization complete ==="

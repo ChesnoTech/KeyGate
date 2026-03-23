@@ -26,6 +26,8 @@ import {
   ArrowUpCircle,
   KeyRound,
   Play,
+  ClipboardList,
+  Layers,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -67,6 +69,8 @@ const navGroups = [
       { path: '/technicians', labelKey: 'nav.technicians', icon: Users },
       { path: '/history', labelKey: 'nav.history', icon: History },
       { path: '/devices', labelKey: 'nav.usb_devices', icon: Usb },
+      { path: '/work-orders', labelKey: 'nav.work_orders', icon: ClipboardList, minRole: 'admin' as const },
+      { path: '/key-pool', labelKey: 'nav.key_pool', icon: Layers, minRole: 'admin' as const },
     ],
   },
   {

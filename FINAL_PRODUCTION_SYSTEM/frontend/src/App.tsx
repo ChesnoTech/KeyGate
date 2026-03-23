@@ -30,6 +30,8 @@ const ProductLinesPage = lazy(() => import('@/pages/product-lines').then(m => ({
 const DownloadsPage = lazy(() => import('@/pages/downloads').then(m => ({ default: m.DownloadsPage })))
 const SystemUpgradePage = lazy(() => import('@/pages/system-upgrade').then(m => ({ default: m.SystemUpgradePage })))
 const TaskPipelinePage = lazy(() => import('@/pages/task-pipeline').then(m => ({ default: m.TaskPipelinePage })))
+const WorkOrdersPage = lazy(() => import('@/pages/work-orders').then(m => ({ default: m.WorkOrdersPage })))
+const KeyPoolPage = lazy(() => import('@/pages/key-pool').then(m => ({ default: m.KeyPoolPage })))
 const LicensePage = lazy(() => import('@/pages/license').then(m => ({ default: m.LicensePage })))
 
 function PageLoader() {
@@ -80,6 +82,8 @@ export default function App() {
                   <Route path="downloads" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="view_downloads"><DownloadsPage /></RequirePermission></Suspense>} />
                   <Route path="system-upgrade" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="system_settings"><SystemUpgradePage /></RequirePermission></Suspense>} />
                   <Route path="task-pipeline" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="system_settings"><TaskPipelinePage /></RequirePermission></Suspense>} />
+                  <Route path="work-orders" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="view_activations"><WorkOrdersPage /></RequirePermission></Suspense>} />
+                  <Route path="key-pool" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="view_keys"><KeyPoolPage /></RequirePermission></Suspense>} />
                   <Route path="subscription" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="system_settings"><LicensePage /></RequirePermission></Suspense>} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
