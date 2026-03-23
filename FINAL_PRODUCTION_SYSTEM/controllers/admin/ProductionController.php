@@ -219,17 +219,17 @@ function handle_update_build_report_shipping(PDO $pdo, array $admin_session, $js
 function handle_get_key_pool_status(PDO $pdo, array $admin_session, $json_input): void {
     requirePermission('view_keys', $admin_session);
 
-    // Get key counts grouped by product type
+    // Get key counts grouped by oem_identifier (product edition)
     $stmt = $pdo->query("
         SELECT
-            COALESCE(product_type, 'Unknown') AS product_edition,
+            COALESCE(oem_identifier, 'Unknown') AS product_edition,
             COUNT(*) AS total_keys,
-            SUM(CASE WHEN status = 'unused' THEN 1 ELSE 0 END) AS unused_keys,
-            SUM(CASE WHEN status = 'allocated' THEN 1 ELSE 0 END) AS allocated_keys,
-            SUM(CASE WHEN status = 'used' THEN 1 ELSE 0 END) AS used_keys,
-            SUM(CASE WHEN status = 'bad' THEN 1 ELSE 0 END) AS bad_keys
+            SUM(CASE WHEN key_status = 'unused' THEN 1 ELSE 0 END) AS unused_keys,
+            SUM(CASE WHEN key_status = 'allocated' THEN 1 ELSE 0 END) AS allocated_keys,
+            SUM(CASE WHEN key_status = 'good' THEN 1 ELSE 0 END) AS used_keys,
+            SUM(CASE WHEN key_status = 'bad' THEN 1 ELSE 0 END) AS bad_keys
         FROM oem_keys
-        GROUP BY product_type
+        GROUP BY oem_identifier
     ");
     $pools = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -273,7 +273,7 @@ function handle_get_key_pool_status(PDO $pdo, array $admin_session, $json_input)
 }
 
 function handle_save_key_pool_config(PDO $pdo, array $admin_session, $json_input): void {
-    requirePermission('manage_keys', $admin_session);
+    requirePermission('import_keys', $admin_session);
 
     $edition = trim($json_input['product_edition'] ?? '');
     $lowThreshold = (int)($json_input['low_threshold'] ?? 10);
@@ -325,14 +325,14 @@ function handle_check_hardware_binding(PDO $pdo, array $admin_session, $json_inp
     if (empty($where)) {
         // Return recent bindings
         $stmt = $pdo->query("
-            SELECT hkb.*, ok.product_key, ok.product_type
+            SELECT hkb.*, ok.product_key, ok.oem_identifier AS product_type
             FROM hardware_key_bindings hkb
             LEFT JOIN oem_keys ok ON ok.id = hkb.product_key_id
             ORDER BY hkb.bound_at DESC LIMIT 50
         ");
     } else {
         $stmt = $pdo->prepare("
-            SELECT hkb.*, ok.product_key, ok.product_type
+            SELECT hkb.*, ok.product_key, ok.oem_identifier AS product_type
             FROM hardware_key_bindings hkb
             LEFT JOIN oem_keys ok ON ok.id = hkb.product_key_id
             WHERE " . implode(' AND ', $where) . "
@@ -362,7 +362,7 @@ function handle_check_hardware_binding(PDO $pdo, array $admin_session, $json_inp
 }
 
 function handle_release_hardware_binding(PDO $pdo, array $admin_session, $json_input): void {
-    requirePermission('manage_keys', $admin_session);
+    requirePermission('import_keys', $admin_session);
 
     $id = (int)($json_input['id'] ?? 0);
     if ($id <= 0) {
@@ -387,7 +387,7 @@ function handle_release_hardware_binding(PDO $pdo, array $admin_session, $json_i
 // ═══════════════════════════════════════════════════════════
 
 function handle_import_dpk_batch(PDO $pdo, array $admin_session): void {
-    requirePermission('manage_keys', $admin_session);
+    requirePermission('import_keys', $admin_session);
     set_time_limit(300);
 
     $batchName = $_POST['batch_name'] ?? 'Import ' . date('Y-m-d H:i');
@@ -448,8 +448,8 @@ function handle_import_dpk_batch(PDO $pdo, array $admin_session): void {
 
     $checkExisting = $pdo->prepare("SELECT COUNT(*) FROM oem_keys WHERE product_key = ?");
     $insertKey = $pdo->prepare("
-        INSERT INTO oem_keys (product_key, product_type, status, added_by, import_batch_id)
-        VALUES (?, ?, 'unused', ?, ?)
+        INSERT INTO oem_keys (product_key, oem_identifier, key_status)
+        VALUES (?, ?, 'unused')
     ");
 
     foreach ($keys as $key) {
@@ -459,7 +459,7 @@ function handle_import_dpk_batch(PDO $pdo, array $admin_session): void {
                 $duplicates++;
                 continue;
             }
-            $insertKey->execute([$key, $productEdition, $admin_session['username'], $batchId]);
+            $insertKey->execute([$key, $productEdition ?: null]);
             $imported++;
         } catch (Exception $e) {
             $failed++;
