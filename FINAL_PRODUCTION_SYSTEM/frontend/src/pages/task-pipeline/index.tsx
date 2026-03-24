@@ -354,8 +354,6 @@ export function TaskPipelinePage() {
       default_on_failure: template.default_on_failure,
       is_system: template.is_system,
       icon: template.icon,
-      created_at: '',
-      updated_at: '',
     }
 
     updateLocalTasks(prev => [...prev, newTask])
