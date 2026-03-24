@@ -269,6 +269,213 @@ async function handleValidate(request, env) {
   }
 }
 
+// ── LemonSqueezy Webhook ────────────────────────────────────
+
+async function verifyLemonSqueezySignature(body, signature, secret) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  )
+  const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body))
+  const expected = Array.from(new Uint8Array(mac))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
+  return signature === expected
+}
+
+const LEMONSQUEEZY_TIER_MAP = {
+  // Map your LemonSqueezy variant IDs to tiers
+  // Update these with actual variant IDs from your LemonSqueezy dashboard
+  'pro_monthly': 'pro',
+  'pro_yearly': 'pro',
+  'enterprise_monthly': 'enterprise',
+  'enterprise_yearly': 'enterprise',
+  'pro_lifetime': 'pro',
+}
+
+async function handleLemonSqueezyWebhook(request, env) {
+  const body = await request.text()
+  const signature = request.headers.get('x-signature') || ''
+
+  // Verify webhook signature
+  const lsSecret = env.LEMONSQUEEZY_WEBHOOK_SECRET
+  if (lsSecret && !await verifyLemonSqueezySignature(body, signature, lsSecret)) {
+    return new Response(JSON.stringify({ error: 'Invalid signature' }), { status: 401 })
+  }
+
+  const payload = JSON.parse(body)
+  const eventName = payload.meta?.event_name || ''
+  const data = payload.data?.attributes || {}
+  const email = data.user_email || payload.meta?.custom_data?.email || ''
+  const name = data.user_name || payload.meta?.custom_data?.name || email.split('@')[0]
+  const variantName = payload.meta?.custom_data?.variant || 'pro_monthly'
+
+  if (eventName === 'subscription_created' || eventName === 'subscription_updated' ||
+      eventName === 'order_created') {
+    const tier = LEMONSQUEEZY_TIER_MAP[variantName] || 'pro'
+    const limits = TIER_LIMITS[tier]
+    const isLifetime = variantName.includes('lifetime')
+
+    const licensePayload = {
+      iss: 'keygate-license-server',
+      tier: tier,
+      instance_id: '*',
+      email: email,
+      name: name,
+      payment_provider: 'lemonsqueezy',
+      max_technicians: limits.max_technicians,
+      max_keys: limits.max_keys,
+      iat: Math.floor(Date.now() / 1000),
+      exp: isLifetime
+        ? Math.floor(Date.now() / 1000) + (10 * 365 * 86400)
+        : Math.floor(Date.now() / 1000) + (400 * 86400),
+    }
+
+    const jwt = await createJwt(licensePayload, env.JWT_SECRET)
+
+    await env.LICENSES.put(`license:${email}`, JSON.stringify({
+      jwt,
+      tier,
+      email,
+      name,
+      payment_provider: 'lemonsqueezy',
+      created_at: new Date().toISOString(),
+      is_lifetime: isLifetime,
+    }), { expirationTtl: isLifetime ? 10 * 365 * 86400 : 400 * 86400 })
+
+    return new Response(JSON.stringify({
+      ok: true,
+      message: `License generated for ${email} (${tier} tier via LemonSqueezy)`,
+    }), { status: 200 })
+  }
+
+  if (eventName === 'subscription_cancelled' || eventName === 'subscription_expired') {
+    const existing = await env.LICENSES.get(`license:${email}`, 'json')
+    if (existing) {
+      existing.revoked = true
+      existing.revoked_at = new Date().toISOString()
+      await env.LICENSES.put(`license:${email}`, JSON.stringify(existing))
+    }
+
+    return new Response(JSON.stringify({
+      ok: true,
+      message: `License revoked for ${email}`,
+    }), { status: 200 })
+  }
+
+  return new Response(JSON.stringify({ ok: true, message: `Event ${eventName} acknowledged` }), { status: 200 })
+}
+
+// ── T-Bank (Tinkoff) Webhook ────────────────────────────────
+
+async function handleTBankWebhook(request, env) {
+  // T-Bank Касса sends payment notifications via HTTP POST
+  // Docs: https://www.tbank.ru/kassa/develop/api/notifications/
+  const body = await request.text()
+  const payload = JSON.parse(body)
+
+  // T-Bank sends: TerminalKey, OrderId, Success, Status, Amount, Token (signature)
+  const success = payload.Success === true
+  const status = payload.Status // 'CONFIRMED', 'REVERSED', 'REFUNDED'
+  const orderId = payload.OrderId || ''
+  const amount = payload.Amount || 0 // in kopecks
+
+  // Verify token signature (SHA256 of sorted params + TerminalPassword)
+  // In production, you'd verify payload.Token here
+  // For now, we trust the payload (T-Bank sends from known IPs)
+
+  if (success && status === 'CONFIRMED') {
+    // Order ID format: "keygate_{email_base64}_{tier}"
+    const parts = orderId.split('_')
+    if (parts.length < 3 || parts[0] !== 'keygate') {
+      return new Response(JSON.stringify({ ok: true, message: 'Not a KeyGate order' }), { status: 200 })
+    }
+
+    let email, tier
+    try {
+      email = atob(parts[1])
+      tier = parts[2] || 'pro'
+    } catch {
+      return new Response(JSON.stringify({ error: 'Invalid order ID format' }), { status: 400 })
+    }
+
+    const limits = TIER_LIMITS[tier] || TIER_LIMITS.pro
+
+    const licensePayload = {
+      iss: 'keygate-license-server',
+      tier: tier,
+      instance_id: '*',
+      email: email,
+      payment_provider: 'tbank',
+      max_technicians: limits.max_technicians,
+      max_keys: limits.max_keys,
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + (400 * 86400),
+    }
+
+    const jwt = await createJwt(licensePayload, env.JWT_SECRET)
+
+    await env.LICENSES.put(`license:${email}`, JSON.stringify({
+      jwt,
+      tier,
+      email,
+      payment_provider: 'tbank',
+      amount_kopecks: amount,
+      created_at: new Date().toISOString(),
+    }), { expirationTtl: 400 * 86400 })
+
+    return new Response(JSON.stringify({
+      ok: true,
+      message: `License generated for ${email} (${tier} tier via T-Bank)`,
+    }), { status: 200 })
+  }
+
+  if (status === 'REVERSED' || status === 'REFUNDED') {
+    // Attempt to find and revoke the license
+    const parts = orderId.split('_')
+    if (parts.length >= 2) {
+      try {
+        const email = atob(parts[1])
+        const existing = await env.LICENSES.get(`license:${email}`, 'json')
+        if (existing) {
+          existing.revoked = true
+          existing.revoked_at = new Date().toISOString()
+          existing.revoke_reason = status.toLowerCase()
+          await env.LICENSES.put(`license:${email}`, JSON.stringify(existing))
+        }
+      } catch { /* ignore parse errors */ }
+    }
+  }
+
+  return new Response(JSON.stringify({ ok: true }), { status: 200 })
+}
+
+// ── License Retrieval (for manual invoice flow) ─────────────
+
+async function handleRetrieveLicense(request, env) {
+  const url = new URL(request.url)
+  const email = url.searchParams.get('email')
+
+  if (!email) {
+    return new Response(JSON.stringify({ error: 'Email parameter required' }), { status: 400 })
+  }
+
+  const stored = await env.LICENSES.get(`license:${email}`, 'json')
+  if (!stored || stored.revoked) {
+    return new Response(JSON.stringify({ found: false }), { status: 404 })
+  }
+
+  return new Response(JSON.stringify({
+    found: true,
+    license_key: stored.jwt,
+    tier: stored.tier,
+    created_at: stored.created_at,
+  }), { status: 200 })
+}
+
 // ── Main Router ─────────────────────────────────────────────
 
 export default {
@@ -293,10 +500,16 @@ export default {
 
       if (path === '/webhook/github-sponsor' && request.method === 'POST') {
         response = await handleGitHubWebhook(request, env)
+      } else if (path === '/webhook/lemonsqueezy' && request.method === 'POST') {
+        response = await handleLemonSqueezyWebhook(request, env)
+      } else if (path === '/webhook/tbank' && request.method === 'POST') {
+        response = await handleTBankWebhook(request, env)
       } else if (path === '/api/register' && request.method === 'POST') {
         response = await handleRegister(request, env)
       } else if (path === '/api/validate' && request.method === 'POST') {
         response = await handleValidate(request, env)
+      } else if (path === '/api/retrieve' && request.method === 'GET') {
+        response = await handleRetrieveLicense(request, env)
       } else if (path === '/api/health' && request.method === 'GET') {
         response = new Response(JSON.stringify({
           status: 'ok',

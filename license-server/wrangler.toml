@@ -7,11 +7,13 @@ compatibility_date = "2024-01-01"
 binding = "LICENSES"
 id = "44c93c6286f44ae1ba2711651a34e78a"
 
-# Environment variables (set via Cloudflare dashboard for secrets)
-# GITHUB_WEBHOOK_SECRET = "your-webhook-secret"
-# JWT_SECRET = "your-jwt-signing-secret"
-# SENDGRID_API_KEY = "your-sendgrid-key"
-# ADMIN_EMAIL = "admin@keygate.dev"
+# Environment variables (set via Cloudflare dashboard or `wrangler secret put`)
+# GITHUB_WEBHOOK_SECRET      = "your-github-webhook-secret"
+# LEMONSQUEEZY_WEBHOOK_SECRET = "your-lemonsqueezy-signing-secret"
+# TBANK_TERMINAL_PASSWORD     = "your-tbank-terminal-password"
+# JWT_SECRET                  = "your-jwt-signing-secret"
+# SENDGRID_API_KEY            = "your-sendgrid-key"
+# ADMIN_EMAIL                 = "admin@keygate.dev"
 
 [vars]
 ENVIRONMENT = "production"
