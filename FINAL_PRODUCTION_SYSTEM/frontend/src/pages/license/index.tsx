@@ -221,17 +221,22 @@ export function LicensePage() {
               <CardHeader className="text-center pb-2">
                 <Crown className="h-8 w-8 mx-auto text-blue-600" />
                 <CardTitle className="text-lg">Pro</CardTitle>
-                <div className="text-3xl font-bold">$9<span className="text-sm font-normal text-muted-foreground">/{t('sub.month', 'mo')}</span></div>
+                <div className="text-3xl font-bold">$29<span className="text-sm font-normal text-muted-foreground">/{t('sub.month', 'mo')}</span></div>
+                <p className="text-xs text-muted-foreground">or $249/{t('sub.year', 'yr')}</p>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 <PlanFeature text={t('sub.plan_unlimited_techs', 'Unlimited technicians')} highlight />
                 <PlanFeature text={t('sub.plan_unlimited_keys', 'Unlimited OEM keys')} highlight />
                 <PlanFeature text={t('sub.plan_compliance', 'QC compliance')} />
+                <PlanFeature text={t('sub.plan_work_orders', 'Work orders & production tracking')} />
+                <PlanFeature text={t('sub.plan_cbr', 'Computer Build Reports (CBR)')} />
+                <PlanFeature text={t('sub.plan_key_pool', 'Key pool alerts & DPK import')} />
+                <PlanFeature text={t('sub.plan_task_pipeline', 'Custom task pipeline')} />
                 <PlanFeature text={t('sub.plan_integrations', 'Integrations (osTicket, 1C)')} />
                 <PlanFeature text={t('sub.plan_backups', 'Automated backups')} />
                 <PlanFeature text={t('sub.plan_branding', 'White-label branding')} />
                 <PlanFeature text={t('sub.plan_upgrade', 'System upgrade wizard')} />
-                <PlanFeature text={t('sub.plan_priority', 'Priority support')} />
+                <PlanFeature text={t('sub.plan_email_support', 'Email support')} />
                 {license?.tier === 'community' && (
                   <Button className="w-full mt-3" onClick={() => setActiveTab('payment')}>
                     {t('sub.upgrade_to_pro', 'Upgrade to Pro')}
@@ -250,14 +255,16 @@ export function LicensePage() {
               <CardHeader className="text-center pb-2">
                 <Building2 className="h-8 w-8 mx-auto text-purple-600" />
                 <CardTitle className="text-lg">Enterprise</CardTitle>
-                <div className="text-3xl font-bold">$29<span className="text-sm font-normal text-muted-foreground">/{t('sub.month', 'mo')}</span></div>
+                <div className="text-3xl font-bold">$99<span className="text-sm font-normal text-muted-foreground">/{t('sub.month', 'mo')}</span></div>
+                <p className="text-xs text-muted-foreground">or $799/{t('sub.year', 'yr')}</p>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 <PlanFeature text={t('sub.plan_everything_pro', 'Everything in Pro')} />
                 <PlanFeature text={t('sub.plan_multi_site', 'Multi-site deployment')} highlight />
-                <PlanFeature text={t('sub.plan_api', 'API access')} highlight />
-                <PlanFeature text={t('sub.plan_sla', 'SLA & dedicated support')} />
-                <PlanFeature text={t('sub.plan_custom', 'Custom integrations')} />
+                <PlanFeature text={t('sub.plan_hardware_binding', 'Hardware binding verification')} highlight />
+                <PlanFeature text={t('sub.plan_api', 'REST API access')} />
+                <PlanFeature text={t('sub.plan_sla', 'SLA & priority support')} />
+                <PlanFeature text={t('sub.plan_custom', 'Custom integrations & onboarding')} />
                 {license?.tier !== 'enterprise' && (
                   <Button variant="outline" className="w-full mt-3" onClick={() => setActiveTab('payment')}>
                     {t('sub.upgrade_to_enterprise', 'Upgrade to Enterprise')}

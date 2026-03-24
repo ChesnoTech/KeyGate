@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KeyGate — OEM License Activation Platform for PC Builders</title>
+  <meta name="description" content="Automate Windows OEM activation, quality control, and workstation provisioning. Built for PC assembly businesses.">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .gradient-bg { background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%); }
+    .gradient-text { background: linear-gradient(135deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  </style>
+</head>
+<body class="bg-white text-gray-900">
+
+  <!-- Hero -->
+  <div class="gradient-bg text-white">
+    <nav class="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <svg class="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+        <span class="text-xl font-bold">KeyGate</span>
+      </div>
+      <div class="hidden md:flex items-center gap-8 text-sm text-gray-300">
+        <a href="#features" class="hover:text-white">Features</a>
+        <a href="#pricing" class="hover:text-white">Pricing</a>
+        <a href="#how-it-works" class="hover:text-white">How It Works</a>
+        <a href="https://github.com/ChesnoTech/KeyGate" class="hover:text-white">GitHub</a>
+      </div>
+      <a href="https://github.com/ChesnoTech/KeyGate" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">Get Started</a>
+    </nav>
+
+    <div class="max-w-4xl mx-auto px-6 py-24 text-center">
+      <div class="inline-flex items-center gap-2 bg-white/10 px-3 py-1 rounded-full text-sm text-blue-300 mb-6">
+        <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+        v2.1.0 — Now with Get-CimInstance for Windows 11 25H2
+      </div>
+      <h1 class="text-5xl md:text-6xl font-extrabold leading-tight">
+        OEM Activation<br>
+        <span class="gradient-text">Done Right</span>
+      </h1>
+      <p class="mt-6 text-xl text-gray-300 max-w-2xl mx-auto">
+        Automate Windows OEM license activation, quality control, and workstation provisioning. Built for PC assembly businesses that need speed, accuracy, and compliance.
+      </p>
+      <div class="mt-10 flex items-center justify-center gap-4">
+        <a href="https://github.com/ChesnoTech/KeyGate" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold text-lg transition">Download Free</a>
+        <a href="#how-it-works" class="border border-gray-500 hover:border-gray-300 text-gray-200 px-8 py-3 rounded-lg font-medium text-lg transition">See How It Works</a>
+      </div>
+      <p class="mt-4 text-sm text-gray-400">Free for 1 technician + 50 keys. No credit card required.</p>
+    </div>
+  </div>
+
+  <!-- Social Proof -->
+  <div class="bg-gray-50 py-8 border-b">
+    <div class="max-w-4xl mx-auto px-6 flex flex-wrap items-center justify-center gap-8 text-gray-400 text-sm">
+      <span>Self-hosted</span>
+      <span class="text-gray-300">|</span>
+      <span>18 Languages</span>
+      <span class="text-gray-300">|</span>
+      <span>Win11 25H2 Ready</span>
+      <span class="text-gray-300">|</span>
+      <span>Docker Deploy</span>
+      <span class="text-gray-300">|</span>
+      <span>BSL Licensed</span>
+    </div>
+  </div>
+
+  <!-- Features -->
+  <section id="features" class="max-w-6xl mx-auto px-6 py-24">
+    <h2 class="text-3xl font-bold text-center">Everything You Need to Run a PC Assembly Line</h2>
+    <p class="text-center text-gray-500 mt-3 max-w-2xl mx-auto">From key management to quality control to shipping — one platform for your entire operation.</p>
+
+    <div class="grid md:grid-cols-3 gap-8 mt-16">
+      <div class="p-6 rounded-xl border bg-white hover:shadow-lg transition">
+        <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center mb-4">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+        </div>
+        <h3 class="font-semibold text-lg">OEM Key Management</h3>
+        <p class="text-gray-500 mt-2 text-sm">Import keys in bulk (DPK, CSV, XML). Automatic distribution to technicians. Pool monitoring with low-stock email alerts.</p>
+      </div>
+
+      <div class="p-6 rounded-xl border bg-white hover:shadow-lg transition">
+        <div class="w-10 h-10 bg-green-100 text-green-600 rounded-lg flex items-center justify-center mb-4">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <h3 class="font-semibold text-lg">Quality Control</h3>
+        <p class="text-gray-500 mt-2 text-sm">Automatic hardware checks: Secure Boot, BIOS version, HackBGRT detection. Motherboard whitelist. Block activation on non-compliant builds.</p>
+      </div>
+
+      <div class="p-6 rounded-xl border bg-white hover:shadow-lg transition">
+        <div class="w-10 h-10 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center mb-4">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/></svg>
+        </div>
+        <h3 class="font-semibold text-lg">Hardware Fingerprinting</h3>
+        <p class="text-gray-500 mt-2 text-sm">SHA256 hardware fingerprint from MB serial + BIOS + disk + MAC + UUID. Detect key reuse on different hardware. Full audit trail.</p>
+      </div>
+
+      <div class="p-6 rounded-xl border bg-white hover:shadow-lg transition">
+        <div class="w-10 h-10 bg-orange-100 text-orange-600 rounded-lg flex items-center justify-center mb-4">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        </div>
+        <h3 class="font-semibold text-lg">One-Touch Activation</h3>
+        <p class="text-gray-500 mt-2 text-sm">Technician plugs USB or runs CMD. Automatic: auth, hardware scan, QC check, key install, activation, report. 30 seconds per PC.</p>
+      </div>
+
+      <div class="p-6 rounded-xl border bg-white hover:shadow-lg transition">
+        <div class="w-10 h-10 bg-red-100 text-red-600 rounded-lg flex items-center justify-center mb-4">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        </div>
+        <h3 class="font-semibold text-lg">Production Tracking</h3>
+        <p class="text-gray-500 mt-2 text-sm">Work orders, Computer Build Reports (CBR), shipping status tracking. Know exactly which key went into which machine and where it shipped.</p>
+      </div>
+
+      <div class="p-6 rounded-xl border bg-white hover:shadow-lg transition">
+        <div class="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center mb-4">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        </div>
+        <h3 class="font-semibold text-lg">Dynamic Task Pipeline</h3>
+        <p class="text-gray-500 mt-2 text-sm">Configure custom PowerShell tasks per product line. Install drivers, set power plans, run benchmarks — all from the admin panel.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section id="how-it-works" class="bg-gray-50 py-24">
+    <div class="max-w-4xl mx-auto px-6">
+      <h2 class="text-3xl font-bold text-center">How It Works</h2>
+      <div class="mt-16 space-y-12">
+        <div class="flex gap-6 items-start">
+          <div class="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold shrink-0">1</div>
+          <div>
+            <h3 class="font-semibold text-lg">Deploy KeyGate on your server</h3>
+            <p class="text-gray-500 mt-1">Docker one-liner. 4 containers: web, database, Redis, phpMyAdmin. Self-hosted — your keys never leave your network.</p>
+            <code class="block mt-2 bg-gray-900 text-green-400 p-3 rounded-lg text-sm">docker compose up -d</code>
+          </div>
+        </div>
+        <div class="flex gap-6 items-start">
+          <div class="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold shrink-0">2</div>
+          <div>
+            <h3 class="font-semibold text-lg">Import your OEM keys</h3>
+            <p class="text-gray-500 mt-1">Upload CSV, TXT, or Microsoft DPK XML files. Keys are stored encrypted, distributed one-at-a-time to technicians.</p>
+          </div>
+        </div>
+        <div class="flex gap-6 items-start">
+          <div class="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold shrink-0">3</div>
+          <div>
+            <h3 class="font-semibold text-lg">Technician runs the launcher on each PC</h3>
+            <p class="text-gray-500 mt-1">Double-click OEM_Activator.cmd. It auto-downloads the latest script, authenticates, collects hardware, runs QC, activates Windows, and reports back.</p>
+          </div>
+        </div>
+        <div class="flex gap-6 items-start">
+          <div class="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold shrink-0">4</div>
+          <div>
+            <h3 class="font-semibold text-lg">Track everything from the admin panel</h3>
+            <p class="text-gray-500 mt-1">24 pages: dashboard, keys, history, work orders, compliance, reports. Real-time visibility into your entire production line.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section id="pricing" class="max-w-5xl mx-auto px-6 py-24">
+    <h2 class="text-3xl font-bold text-center">Simple, Transparent Pricing</h2>
+    <p class="text-center text-gray-500 mt-3">Start free. Upgrade when you grow.</p>
+
+    <div class="grid md:grid-cols-3 gap-8 mt-12">
+      <!-- Starter -->
+      <div class="border rounded-2xl p-8 hover:shadow-lg transition">
+        <h3 class="font-semibold text-lg text-gray-600">Starter</h3>
+        <div class="mt-4">
+          <span class="text-4xl font-extrabold">Free</span>
+        </div>
+        <p class="text-gray-400 text-sm mt-2">For solo PC builders</p>
+        <ul class="mt-6 space-y-3 text-sm">
+          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> 1 technician</li>
+          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> 50 OEM keys</li>
+          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> Windows activation</li>
+          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> Hardware collection</li>
+          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> Dashboard</li>
+          <li class="flex items-center gap-2 text-gray-400"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg> No support</li>
+        </ul>
+        <a href="https://github.com/ChesnoTech/KeyGate" class="block mt-8 text-center border border-gray-300 hover:border-gray-400 py-2.5 rounded-lg font-medium transition">Download Free</a>
+      </div>
+
+      <!-- Pro -->
+      <div class="border-2 border-blue-500 rounded-2xl p-8 relative shadow-lg">
+        <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-full">MOST POPULAR</div>
+        <h3 class="font-semibold text-lg text-blue-600">Pro</h3>
+        <div class="mt-4">
+          <span class="text-4xl font-extrabold">$29</span>
+          <span class="text-gray-400">/month</span>
+        </div>
+        <p class="text-gray-400 text-sm mt-1">or $249/year (save 28%)</p>
+        <ul class="mt-6 space-y-3 text-sm">
+          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> <strong>Unlimited</strong> technicians</li>
+          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> <strong>Unlimited</strong> OEM keys</li>
+          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> QC compliance engine</li>
+          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> Work orders & CBR reports</li>
+          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> Custom task pipeline</li>
+          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> DPK batch import</li>
+          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> White-label branding</li>
+          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> Email support</li>
+        </ul>
+        <a href="#" class="block mt-8 text-center bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-medium transition">Get Pro License</a>
+      </div>
+
+      <!-- Enterprise -->
+      <div class="border rounded-2xl p-8 hover:shadow-lg transition">
+        <h3 class="font-semibold text-lg text-purple-600">Enterprise</h3>
+        <div class="mt-4">
+          <span class="text-4xl font-extrabold">$99</span>
+          <span class="text-gray-400">/month</span>
+        </div>
+        <p class="text-gray-400 text-sm mt-1">or $799/year (save 33%)</p>
+        <ul class="mt-6 space-y-3 text-sm">
+          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> Everything in Pro</li>
+          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> <strong>Multi-site</strong> deployment</li>
+          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> Hardware binding verification</li>
+          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> REST API access</li>
+          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> SLA & priority support</li>
+          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> Custom integrations</li>
+          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> Onboarding assistance</li>
+        </ul>
+        <a href="#" class="block mt-8 text-center border border-purple-300 hover:border-purple-400 text-purple-600 py-2.5 rounded-lg font-medium transition">Contact Sales</a>
+      </div>
+    </div>
+
+    <p class="text-center text-gray-400 text-sm mt-8">All plans are self-hosted. Your data stays on your server. BSL license — source code included.</p>
+  </section>
+
+  <!-- CTA -->
+  <section class="gradient-bg text-white py-20">
+    <div class="max-w-3xl mx-auto px-6 text-center">
+      <h2 class="text-3xl font-bold">Ready to streamline your PC assembly?</h2>
+      <p class="text-gray-300 mt-4">Deploy KeyGate in 5 minutes. Start activating Windows the right way.</p>
+      <a href="https://github.com/ChesnoTech/KeyGate" class="inline-block mt-8 bg-white text-gray-900 hover:bg-gray-100 px-8 py-3 rounded-lg font-semibold text-lg transition">Get Started Free</a>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="bg-gray-900 text-gray-400 py-12">
+    <div class="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-2">
+        <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+        <span class="text-sm">KeyGate by ChesnoTech</span>
+      </div>
+      <div class="flex gap-6 text-sm">
+        <a href="https://github.com/ChesnoTech/KeyGate" class="hover:text-white">GitHub</a>
+        <a href="mailto:license@keygate.dev" class="hover:text-white">Contact</a>
+        <a href="#" class="hover:text-white">Documentation</a>
+      </div>
+      <p class="text-xs">BSL 1.1 License. Source available.</p>
+    </div>
+  </footer>
+
+</body>
+</html>
