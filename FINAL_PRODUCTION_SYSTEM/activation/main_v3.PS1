@@ -2067,6 +2067,187 @@ function Main-ActivationLoop {
 }
 
 # ============================================================================
+# === DYNAMIC TASK PIPELINE ===
+# ============================================================================
+
+function Get-TaskPipeline {
+    param(
+        [string]$SessionToken,
+        [int]$ProductLineId = 0
+    )
+    try {
+        $body = @{ session_token = $SessionToken; product_line_id = $ProductLineId }
+        $response = Invoke-APICall -Endpoint "admin_v2.php?action=get_activation_pipeline" -Body $body
+        if ($response -and $response.success -and $response.pipeline) {
+            return $response.pipeline
+        }
+    } catch {
+        Write-Host "⚠️ Could not fetch task pipeline from server. Using default flow." -ForegroundColor Yellow
+    }
+    return $null
+}
+
+function Invoke-TaskPipeline {
+    param(
+        [array]$Pipeline,
+        [hashtable]$Context  # Contains SessionToken, OrderNumber, HardwareData, etc.
+    )
+
+    $results = @()
+    $totalTasks = $Pipeline.Count
+    $taskNum = 0
+
+    foreach ($task in $Pipeline) {
+        $taskNum++
+        $taskKey = $task.task_key
+        $taskName = $task.task_name
+        $taskType = $task.task_type
+        $timeout = [int]($task.timeout_seconds ?? 60)
+        $onFailure = $task.on_failure ?? 'stop'
+        $code = $task.code
+
+        Write-Host "`n[$taskNum/$totalTasks] $taskName" -ForegroundColor Cyan
+        Write-Host "  Key: $taskKey | Type: $taskType | Timeout: ${timeout}s | OnFail: $onFailure" -ForegroundColor DarkGray
+
+        $taskResult = @{
+            task_template_id = $task.task_template_id
+            task_key         = $taskKey
+            task_name        = $taskName
+            status           = 'running'
+            started_at       = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+            duration_ms      = 0
+            output           = ''
+            error_message    = $null
+            technician_id    = $Context.TechnicianId
+            order_number     = $Context.OrderNumber
+            product_line_id  = $Context.ProductLineId
+        }
+
+        $sw = [System.Diagnostics.Stopwatch]::StartNew()
+
+        try {
+            if ($taskType -eq 'built_in') {
+                # Execute built-in tasks by key
+                switch ($taskKey) {
+                    'hardware_collection' {
+                        $Context.HardwareData = Collect-HardwareInfo
+                        $taskResult.output = "Collected hardware data: $($Context.HardwareData.Keys.Count) fields"
+                    }
+                    'network_diagnostics' {
+                        Test-NetworkLatency
+                        if (Get-Command 'Test-MicrosoftLicensingServers' -ErrorAction SilentlyContinue) {
+                            Test-MicrosoftLicensingServers
+                        }
+                        $taskResult.output = "Network diagnostics complete. Multiplier: $($script:NetworkMultiplier)"
+                    }
+                    'qc_compliance' {
+                        # QC is checked server-side during hardware submission
+                        $taskResult.output = "QC compliance will be verified during hardware submission"
+                    }
+                    'generate_fingerprint' {
+                        if ($Context.HardwareData) {
+                            $fp = $Context.HardwareData['device_fingerprint']
+                            $taskResult.output = "HW Fingerprint: $($fp.Substring(0, [Math]::Min(16, $fp.Length)))..."
+                        } else {
+                            $taskResult.output = "Skipped — no hardware data collected yet"
+                        }
+                    }
+                    'submit_hardware' {
+                        if ($Context.HardwareData) {
+                            Submit-HardwareInfo-v2 -SessionToken $Context.SessionToken -OrderNumber $Context.OrderNumber -HardwareData $Context.HardwareData | Out-Null
+                            $taskResult.output = "Hardware data submitted to server"
+                        } else {
+                            throw "No hardware data to submit"
+                        }
+                    }
+                    'oem_activation' {
+                        # This is handled separately by the main activation loop
+                        $taskResult.output = "OEM activation runs in main loop after pipeline"
+                        $taskResult.status = 'skipped'
+                    }
+                    'report_result' {
+                        $taskResult.output = "Result reporting runs after activation"
+                        $taskResult.status = 'skipped'
+                    }
+                    default {
+                        $taskResult.output = "Unknown built-in task: $taskKey"
+                        $taskResult.status = 'skipped'
+                    }
+                }
+                if ($taskResult.status -eq 'running') { $taskResult.status = 'success' }
+            }
+            elseif ($taskType -eq 'custom' -and $code) {
+                # Execute custom PowerShell code with timeout
+                $env:ORDER_NUMBER = $Context.OrderNumber
+                $env:TECHNICIAN_ID = $Context.TechnicianId
+                $env:SESSION_TOKEN = $Context.SessionToken
+
+                $scriptBlock = [ScriptBlock]::Create($code)
+                $job = Start-Job -ScriptBlock $scriptBlock
+                $completed = Wait-Job -Job $job -Timeout $timeout
+
+                if ($completed) {
+                    $output = Receive-Job -Job $job 2>&1
+                    $taskResult.output = ($output | Out-String).Trim()
+                    if ($job.State -eq 'Failed') {
+                        throw "Custom task failed: $($taskResult.output)"
+                    }
+                    $taskResult.status = 'success'
+                } else {
+                    Stop-Job -Job $job -PassThru | Remove-Job -Force
+                    throw "Task timed out after ${timeout}s"
+                }
+                Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+            }
+            else {
+                $taskResult.output = "No code to execute"
+                $taskResult.status = 'skipped'
+            }
+        } catch {
+            $sw.Stop()
+            $taskResult.status = 'failed'
+            $taskResult.error_message = $_.Exception.Message
+            $taskResult.duration_ms = $sw.ElapsedMilliseconds
+
+            Write-Host "  ❌ FAILED: $($_.Exception.Message)" -ForegroundColor Red
+
+            if ($onFailure -eq 'stop') {
+                Write-Host "  🛑 Pipeline stopped (on_failure = stop)" -ForegroundColor Red
+                $results += $taskResult
+                break
+            } elseif ($onFailure -eq 'warn') {
+                Write-Host "  ⚠️ Continuing with warning (on_failure = warn)" -ForegroundColor Yellow
+            } else {
+                Write-Host "  ⏭️ Skipping (on_failure = skip)" -ForegroundColor DarkGray
+            }
+        }
+
+        $sw.Stop()
+        $taskResult.duration_ms = $sw.ElapsedMilliseconds
+        $taskResult.completed_at = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+
+        if ($taskResult.status -eq 'success') {
+            Write-Host "  ✅ Done (${([math]::Round($taskResult.duration_ms/1000, 1))}s)" -ForegroundColor Green
+        }
+
+        $results += $taskResult
+    }
+
+    # Report all task execution results to server
+    try {
+        $reportBody = @{
+            session_token = $Context.SessionToken
+            entries = $results
+        }
+        Invoke-APICall -Endpoint "admin_v2.php?action=log_task_execution" -Body $reportBody | Out-Null
+    } catch {
+        Write-Host "⚠️ Failed to report task execution log" -ForegroundColor Yellow
+    }
+
+    return $results
+}
+
+# ============================================================================
 # === MAIN EXECUTION ===
 # ============================================================================
 
@@ -2153,15 +2334,32 @@ if ($SessionInfo.product_lines -and $SessionInfo.product_lines.Count -gt 0) {
     $OrderNumber = Get-Valid-OrderNumber @orderFieldParams
 }
 
-# === COLLECT HARDWARE IMMEDIATELY (Regardless of activation status) ===
-Write-Host "`n🔧 Starting hardware collection..." -ForegroundColor Cyan
-$hardwareData = Collect-HardwareInfo
+# === TRY DYNAMIC TASK PIPELINE (server-configured) ===
+$productLineId = if ($selectedLine) { [int]$selectedLine.id } else { 0 }
+$pipeline = Get-TaskPipeline -SessionToken $SessionInfo.session_token -ProductLineId $productLineId
 
-if ($hardwareData) {
-    # Submit hardware info to the new v2 endpoint
-    Submit-HardwareInfo-v2 -SessionToken $SessionInfo.session_token -OrderNumber $OrderNumber -HardwareData $hardwareData | Out-Null
+if ($pipeline -and $pipeline.Count -gt 0) {
+    Write-Host "`n🔄 Running task pipeline ($($pipeline.Count) tasks)..." -ForegroundColor Cyan
+    $pipelineContext = @{
+        SessionToken  = $SessionInfo.session_token
+        TechnicianId  = $SessionInfo.technician_id
+        OrderNumber   = $OrderNumber
+        ProductLineId = $productLineId
+        HardwareData  = $null
+    }
+    $pipelineResults = Invoke-TaskPipeline -Pipeline $pipeline -Context $pipelineContext
+    # Extract hardware data from pipeline context (if hardware_collection task ran)
+    $hardwareData = $pipelineContext.HardwareData
 } else {
-    Write-Host "⚠️ Hardware collection incomplete, but continuing with activation process..." -ForegroundColor Yellow
+    # Fallback: hardcoded flow when no pipeline is configured
+    Write-Host "`n🔧 Starting hardware collection..." -ForegroundColor Cyan
+    $hardwareData = Collect-HardwareInfo
+
+    if ($hardwareData) {
+        Submit-HardwareInfo-v2 -SessionToken $SessionInfo.session_token -OrderNumber $OrderNumber -HardwareData $hardwareData | Out-Null
+    } else {
+        Write-Host "⚠️ Hardware collection incomplete, but continuing with activation process..." -ForegroundColor Yellow
+    }
 }
 
 # If already activated, exit here
