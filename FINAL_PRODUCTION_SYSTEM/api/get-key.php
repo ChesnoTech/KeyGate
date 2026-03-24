@@ -118,6 +118,26 @@ try {
         'key_id'        => $key['id'],
     ]);
 
+    // Check key pool levels and send alerts if needed
+    try {
+        $edition = $key['product_type'] ?? 'Unknown';
+        $poolStmt = $pdo->prepare("SELECT COUNT(*) as remaining FROM oem_keys WHERE key_status IN ('unused', 'retry') AND product_type = ?");
+        $poolStmt->execute([$edition]);
+        $remaining = (int)$poolStmt->fetch()['remaining'];
+
+        $lowThreshold = (int)(getConfig('key_pool_low_threshold') ?: 10);
+        $critThreshold = (int)(getConfig('key_pool_critical_threshold') ?: 3);
+        $autoNotify = getConfig('key_pool_auto_notify') ?: '1';
+
+        if ($autoNotify === '1' && ($remaining <= $critThreshold || $remaining <= $lowThreshold)) {
+            require_once __DIR__ . '/../functions/email-helpers.php';
+            $level = $remaining <= $critThreshold ? 'critical' : 'low';
+            sendKeyPoolAlert($edition, $remaining, $level);
+        }
+    } catch (Exception $e) {
+        error_log("Key pool alert check failed: " . $e->getMessage());
+    }
+
     // Dispatch integration event (non-blocking — errors are logged, not thrown)
     try {
         require_once __DIR__ . '/../functions/integration-helpers.php';
