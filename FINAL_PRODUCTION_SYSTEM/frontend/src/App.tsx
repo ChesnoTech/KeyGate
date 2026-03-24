@@ -33,6 +33,9 @@ const TaskPipelinePage = lazy(() => import('@/pages/task-pipeline').then(m => ({
 const WorkOrdersPage = lazy(() => import('@/pages/work-orders').then(m => ({ default: m.WorkOrdersPage })))
 const KeyPoolPage = lazy(() => import('@/pages/key-pool').then(m => ({ default: m.KeyPoolPage })))
 const LicensePage = lazy(() => import('@/pages/license').then(m => ({ default: m.LicensePage })))
+const CbrReportsPage = lazy(() => import('@/pages/cbr-reports').then(m => ({ default: m.CbrReportsPage })))
+const HardwareBindingsPage = lazy(() => import('@/pages/hardware-bindings').then(m => ({ default: m.HardwareBindingsPage })))
+const DpkImportPage = lazy(() => import('@/pages/dpk-import').then(m => ({ default: m.DpkImportPage })))
 
 function PageLoader() {
   return (
@@ -84,6 +87,9 @@ export default function App() {
                   <Route path="task-pipeline" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="system_settings"><TaskPipelinePage /></RequirePermission></Suspense>} />
                   <Route path="work-orders" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="view_activations"><WorkOrdersPage /></RequirePermission></Suspense>} />
                   <Route path="key-pool" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="view_keys"><KeyPoolPage /></RequirePermission></Suspense>} />
+                  <Route path="cbr-reports" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="view_activations"><CbrReportsPage /></RequirePermission></Suspense>} />
+                  <Route path="hardware-bindings" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="view_keys"><HardwareBindingsPage /></RequirePermission></Suspense>} />
+                  <Route path="dpk-import" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="view_keys"><DpkImportPage /></RequirePermission></Suspense>} />
                   <Route path="subscription" element={<Suspense fallback={<PageLoader />}><RequirePermission permission="system_settings"><LicensePage /></RequirePermission></Suspense>} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />

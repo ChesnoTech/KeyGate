@@ -28,6 +28,9 @@ import {
   Play,
   ClipboardList,
   Layers,
+  FileText,
+  Fingerprint,
+  PackagePlus,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -70,7 +73,10 @@ const navGroups = [
       { path: '/history', labelKey: 'nav.history', icon: History },
       { path: '/devices', labelKey: 'nav.usb_devices', icon: Usb },
       { path: '/work-orders', labelKey: 'nav.work_orders', icon: ClipboardList, minRole: 'admin' as const },
+      { path: '/cbr-reports', labelKey: 'nav.cbr_reports', icon: FileText, minRole: 'admin' as const },
       { path: '/key-pool', labelKey: 'nav.key_pool', icon: Layers, minRole: 'admin' as const },
+      { path: '/hardware-bindings', labelKey: 'nav.hardware_bindings', icon: Fingerprint, minRole: 'admin' as const },
+      { path: '/dpk-import', labelKey: 'nav.dpk_import', icon: PackagePlus, minRole: 'admin' as const },
     ],
   },
   {
