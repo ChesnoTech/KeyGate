@@ -2248,12 +2248,316 @@ function Invoke-TaskPipeline {
 }
 
 # ============================================================================
+# ============================================================================
+# === RESILIENCE: State Machine, Mutex, Connection Monitor, Boot Recovery ===
+# ============================================================================
+
+$script:StateDir = "$env:ProgramData\KeyGate"
+$script:StateFile = "$script:StateDir\activation-state.json"
+
+# ── Single Instance Mutex ────────────────────────────────────
+$script:InstanceMutex = $null
+function Acquire-SingleInstanceLock {
+    $script:InstanceMutex = [System.Threading.Mutex]::new($false, "Global\KeyGate_Activation_Lock")
+    if (-not $script:InstanceMutex.WaitOne(0)) {
+        Write-Host "`n❌ KeyGate is already running on this PC." -ForegroundColor Red
+        Write-Host "Only one activation instance can run at a time." -ForegroundColor Yellow
+        Write-Host "If the previous instance crashed, delete: $script:StateFile" -ForegroundColor DarkGray
+        Start-Sleep -Seconds 3
+        exit 1
+    }
+}
+
+function Release-SingleInstanceLock {
+    if ($script:InstanceMutex) {
+        try { $script:InstanceMutex.ReleaseMutex() } catch {}
+        $script:InstanceMutex.Dispose()
+    }
+}
+
+# ── Persistent State File ────────────────────────────────────
+function Save-ActivationState {
+    param([hashtable]$State)
+    if (-not (Test-Path $script:StateDir)) {
+        New-Item -ItemType Directory -Path $script:StateDir -Force | Out-Null
+    }
+    $State['updated_at'] = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+    $json = $State | ConvertTo-Json -Depth 5
+    # Atomic write: write to temp then move (survives power cut during write)
+    $tempFile = "$script:StateFile.tmp"
+    [IO.File]::WriteAllText($tempFile, $json)
+    [IO.File]::Move($tempFile, $script:StateFile, $true)
+}
+
+function Load-ActivationState {
+    if (Test-Path $script:StateFile) {
+        try {
+            $json = [IO.File]::ReadAllText($script:StateFile)
+            return $json | ConvertFrom-Json -AsHashtable
+        } catch {
+            Write-Host "⚠️ Corrupt state file, starting fresh" -ForegroundColor Yellow
+            Remove-Item $script:StateFile -Force -ErrorAction SilentlyContinue
+        }
+    }
+    return $null
+}
+
+function Remove-ActivationState {
+    Remove-Item $script:StateFile -Force -ErrorAction SilentlyContinue
+    Remove-Item "$script:StateFile.tmp" -Force -ErrorAction SilentlyContinue
+}
+
+# ── Connection Monitor ───────────────────────────────────────
+function Wait-ForConnection {
+    param(
+        [string]$Context = "server",
+        [int]$CheckIntervalSeconds = 2,
+        [int]$MaxWaitSeconds = 300  # 5 minutes max
+    )
+
+    $apiHost = ([uri]$APIBaseURL).Host
+    $elapsed = 0
+    $wasDisconnected = $false
+
+    while ($elapsed -lt $MaxWaitSeconds) {
+        # Quick connectivity check: try API health endpoint first, then ping fallback
+        $connected = $false
+        try {
+            $r = Invoke-WebRequest -Uri "$APIBaseURL/health.php" -Method HEAD -TimeoutSec 3 -UseBasicParsing -ErrorAction Stop
+            if ($r.StatusCode -eq 200) { $connected = $true }
+        } catch {
+            # Fallback: ping
+            $connected = Test-Connection -ComputerName $apiHost -Count 1 -Quiet -ErrorAction SilentlyContinue
+        }
+
+        if ($connected) {
+            if ($wasDisconnected) {
+                Write-Host "`r✅ Connection restored! Resuming...                    " -ForegroundColor Green
+            }
+            return $true
+        }
+
+        $wasDisconnected = $true
+        $remaining = $MaxWaitSeconds - $elapsed
+        Write-Host "`r⏳ Connection lost. Retrying... (${remaining}s remaining)   " -ForegroundColor Yellow -NoNewline
+        Start-Sleep -Seconds $CheckIntervalSeconds
+        $elapsed += $CheckIntervalSeconds
+    }
+
+    Write-Host "`n❌ Connection timeout after ${MaxWaitSeconds}s" -ForegroundColor Red
+    return $false
+}
+
+function Invoke-WithRetry {
+    param(
+        [scriptblock]$Action,
+        [string]$Description = "API call",
+        [int]$MaxRetries = 3,
+        [int]$RetryDelaySeconds = 2
+    )
+
+    for ($i = 1; $i -le $MaxRetries; $i++) {
+        try {
+            $result = & $Action
+            return $result
+        } catch {
+            $isNetworkError = $_.Exception.Message -match 'Unable to connect|timeout|network|connection'
+            if ($isNetworkError -and $i -lt $MaxRetries) {
+                Write-Host "  ⚠️ $Description failed (attempt $i/$MaxRetries): network error" -ForegroundColor Yellow
+                $reconnected = Wait-ForConnection -Context $Description -MaxWaitSeconds 60
+                if (-not $reconnected) {
+                    throw $_
+                }
+            } elseif ($i -lt $MaxRetries) {
+                Write-Host "  ⚠️ $Description failed (attempt $i/$MaxRetries): $($_.Exception.Message)" -ForegroundColor Yellow
+                Start-Sleep -Seconds $RetryDelaySeconds
+            } else {
+                throw $_
+            }
+        }
+    }
+}
+
+# ── Boot Recovery Scheduled Task ─────────────────────────────
+function Register-BootRecoveryTask {
+    $taskName = "KeyGate_ActivationRecovery"
+    $stateFile = $script:StateFile
+    $apiBase = $APIBaseURL
+
+    # PowerShell script that runs on boot to complete pending operations
+    $recoveryScript = @"
+# KeyGate Boot Recovery — completes pending activation reporting
+`$stateFile = '$stateFile'
+if (-not (Test-Path `$stateFile)) { Unregister-ScheduledTask -TaskName '$taskName' -Confirm:`$false -EA SilentlyContinue; exit 0 }
+`$state = Get-Content `$stateFile -Raw | ConvertFrom-Json
+if (`$state.phase -eq 'activated' -or `$state.phase -eq 'key_installed') {
+    # Check actual Windows activation status
+    try {
+        `$status = (Get-CimInstance -Query "SELECT LicenseStatus FROM SoftwareLicensingProduct WHERE Name LIKE 'Windows%' AND PartialProductKey IS NOT NULL").LicenseStatus
+        `$result = if (`$status -eq 1) { 'success' } else { 'failed' }
+        `$body = @{ session_token = `$state.session_token; result = `$result; attempt_number = [int]`$state.attempt_number; activation_server = 'oem'; activation_unique_id = `$state.activation_id; notes = 'Boot recovery: reported after unexpected shutdown' } | ConvertTo-Json
+        Invoke-RestMethod -Uri '$apiBase/report-result.php' -Method POST -Body `$body -ContentType 'application/json' -TimeoutSec 15 -EA Stop
+    } catch { Start-Sleep -Seconds 60; exit 1 }
+    Remove-Item `$stateFile -Force -EA SilentlyContinue
+}
+Unregister-ScheduledTask -TaskName '$taskName' -Confirm:`$false -EA SilentlyContinue
+"@
+
+    $encodedCmd = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($recoveryScript))
+
+    try {
+        # Remove existing task if any
+        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+
+        $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $encodedCmd"
+        $trigger = New-ScheduledTaskTrigger -AtStartup
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+        $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -RunLevel Highest
+
+        Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
+        Write-Host "  🔒 Boot recovery task registered" -ForegroundColor DarkGray
+    } catch {
+        Write-Host "  ⚠️ Could not register boot recovery task: $_" -ForegroundColor Yellow
+    }
+}
+
+function Unregister-BootRecoveryTask {
+    try {
+        Unregister-ScheduledTask -TaskName "KeyGate_ActivationRecovery" -Confirm:$false -ErrorAction SilentlyContinue
+    } catch {}
+}
+
+# ── Resume from Previous State ───────────────────────────────
+function Resume-FromState {
+    param([hashtable]$State)
+
+    $phase = $State['phase']
+    Write-Host "`n🔄 Resuming from previous session (phase: $phase)" -ForegroundColor Cyan
+    Write-Host "   Previous run: $($State['updated_at'])" -ForegroundColor DarkGray
+
+    switch ($phase) {
+        'authenticated' {
+            Write-Host "   Re-authentication needed (token likely expired)" -ForegroundColor Yellow
+            return $null  # Force re-auth
+        }
+        'hw_submitted' {
+            Write-Host "   Hardware already submitted. Proceeding to key request." -ForegroundColor Green
+            return @{
+                resume_phase = 'get_key'
+                session_token = $State['session_token']
+                order_number = $State['order_number']
+                activation_id = $State['activation_id']
+            }
+        }
+        'key_installed' {
+            Write-Host "   Key was installed. Checking activation status..." -ForegroundColor Green
+            # Check if Windows is already activated
+            try {
+                $licStatus = (Get-CimInstance -Query "SELECT LicenseStatus FROM SoftwareLicensingProduct WHERE Name LIKE 'Windows%' AND PartialProductKey IS NOT NULL").LicenseStatus
+                if ($licStatus -eq 1) {
+                    Write-Host "   ✅ Windows is activated! Just need to report to server." -ForegroundColor Green
+                    return @{
+                        resume_phase = 'report_success'
+                        session_token = $State['session_token']
+                        order_number = $State['order_number']
+                        activation_id = $State['activation_id']
+                        product_key = $State['product_key']
+                    }
+                } else {
+                    Write-Host "   Key installed but not activated. Retrying activation..." -ForegroundColor Yellow
+                    return @{
+                        resume_phase = 'activate'
+                        session_token = $State['session_token']
+                        order_number = $State['order_number']
+                        activation_id = $State['activation_id']
+                        product_key = $State['product_key']
+                    }
+                }
+            } catch {
+                Write-Host "   Cannot check status. Will retry activation." -ForegroundColor Yellow
+                return @{
+                    resume_phase = 'activate'
+                    session_token = $State['session_token']
+                    order_number = $State['order_number']
+                    activation_id = $State['activation_id']
+                    product_key = $State['product_key']
+                }
+            }
+        }
+        'activated' {
+            Write-Host "   Activation succeeded! Reporting to server..." -ForegroundColor Green
+            return @{
+                resume_phase = 'report_success'
+                session_token = $State['session_token']
+                order_number = $State['order_number']
+                activation_id = $State['activation_id']
+                product_key = $State['product_key']
+            }
+        }
+        default {
+            Write-Host "   Unknown phase '$phase'. Starting fresh." -ForegroundColor Yellow
+            Remove-ActivationState
+            return $null
+        }
+    }
+}
+
+# ============================================================================
 # === MAIN EXECUTION ===
 # ============================================================================
 
-# Generate unique activation ID
-$script:ActivationUniqueID = New-ActivationUniqueID
+# Acquire single-instance lock FIRST
+Acquire-SingleInstanceLock
+
+# Ensure cleanup on exit (normal or Ctrl+C)
+$null = Register-EngineEvent PowerShell.Exiting -Action {
+    Release-SingleInstanceLock
+}
+trap {
+    Release-SingleInstanceLock
+    break
+}
+
+# Check for pending state from a previous interrupted session
+$previousState = Load-ActivationState
+$resumeInfo = $null
+if ($previousState) {
+    $resumeInfo = Resume-FromState -State $previousState
+}
+
+# Generate unique activation ID (or reuse from previous state)
+if ($resumeInfo -and $resumeInfo.activation_id) {
+    $script:ActivationUniqueID = $resumeInfo.activation_id
+} else {
+    $script:ActivationUniqueID = New-ActivationUniqueID
+}
 Write-Host "📋 Activation ID: $ActivationUniqueID" -ForegroundColor Cyan
+
+# Handle resume: report success from previous session
+if ($resumeInfo -and $resumeInfo.resume_phase -eq 'report_success') {
+    Write-Host "`n📤 Reporting previous activation result to server..." -ForegroundColor Cyan
+    try {
+        $reportBody = @{
+            session_token = $resumeInfo.session_token
+            result = 'success'
+            attempt_number = 1
+            activation_server = 'oem'
+            activation_unique_id = $resumeInfo.activation_id
+            notes = "Recovered after interruption. Key: $($resumeInfo.product_key.Substring(0,5))..."
+        }
+        Invoke-WithRetry -Description "Report result" -Action {
+            Invoke-APICall -Endpoint "report-result.php" -Body $reportBody
+        }
+        Write-Host "✅ Previous activation reported successfully!" -ForegroundColor Green
+        Remove-ActivationState
+        Unregister-BootRecoveryTask
+        Release-SingleInstanceLock
+        Start-Sleep -Seconds 3
+        exit 0
+    } catch {
+        Write-Host "⚠️ Could not report. Will retry on next run." -ForegroundColor Yellow
+    }
+}
 
 # Check activation status FIRST
 $alreadyActivated = $false
@@ -2551,6 +2855,17 @@ while (-not $activationComplete -and $keyAttempts -lt $MaxKeysToTry) {
     }
 
     Write-Host "✅ Key retrieved: $($keyResponse.oem_identifier)" -ForegroundColor Green
+
+    # Save state: key received (survives power loss)
+    Save-ActivationState @{
+        phase = 'key_installed'
+        session_token = $keyResponse.session_token
+        order_number = $OrderNumber
+        activation_id = $script:ActivationUniqueID
+        product_key = $keyResponse.product_key
+        attempt_number = $keyAttempts
+    }
+    Register-BootRecoveryTask
     if ($keyResponse.key_status -eq 'retry' -and $keyResponse.fail_counter) {
         Write-Host "ℹ️ This key has $($keyResponse.fail_counter) previous failure(s)" -ForegroundColor Yellow
     }
@@ -2562,6 +2877,12 @@ while (-not $activationComplete -and $keyAttempts -lt $MaxKeysToTry) {
         -OrderNumber $OrderNumber `
         -ActivationUniqueID $script:ActivationUniqueID
 
+    if ($activationComplete) {
+        # Activation succeeded — clean up state and boot recovery
+        Remove-ActivationState
+        Unregister-BootRecoveryTask
+    }
+
     if (-not $activationComplete) {
         # Clean up failed key before requesting a new one
         Write-Host "`n🔑 Cleaning up failed key..." -ForegroundColor Yellow
@@ -2570,6 +2891,12 @@ while (-not $activationComplete -and $keyAttempts -lt $MaxKeysToTry) {
         Write-Host "🔄 Trying next available key..." -ForegroundColor Yellow
         Start-Sleep -Seconds (Get-AdaptiveDelay -BaseSeconds 4 -MinSeconds 2)
     }
+}
+
+if ($activationComplete) {
+    Remove-ActivationState
+    Unregister-BootRecoveryTask
+    Release-SingleInstanceLock
 }
 
 if (-not $activationComplete) {
