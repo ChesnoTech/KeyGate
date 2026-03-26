@@ -104,7 +104,7 @@ npm test                      # 14 tests across 3 suites
 
 ## Adding a New Feature
 
-See the full guide in [CLAUDE.md](CLAUDE.md#contributing-guide).
+See the full guide in the [Development Guide](CLAUDE.md#contributing-guide).
 
 ## License
 
