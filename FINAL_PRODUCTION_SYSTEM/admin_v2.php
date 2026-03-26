@@ -295,6 +295,8 @@ $action_registry = [
     'qc_list_compliance_results' => ['ComplianceController.php', 'handle_qc_list_compliance_results', false, true],
     'qc_list_compliance_grouped' => ['ComplianceController.php', 'handle_qc_list_compliance_grouped', false, true],
     'qc_get_stats'             => ['ComplianceController.php', 'handle_qc_get_stats',             false, true],
+    'qc_recheck_count'         => ['ComplianceController.php', 'handle_qc_recheck_count',         false, true],
+    'qc_recheck_historical'    => ['ComplianceController.php', 'handle_qc_recheck_historical',    true,  true],
 
     // product lines & variants (partition QC)
     'get_product_lines'        => ['ProductVariantsController.php', 'handle_get_product_lines',        false, true],
