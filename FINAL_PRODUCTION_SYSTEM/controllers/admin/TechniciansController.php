@@ -182,10 +182,9 @@ function handle_update_tech(PDO $pdo, array $admin_session, ?array $json_input =
         return;
     }
 
-    $techId = intval($input['tech_id'] ?? 0);
+    $techId = intval($input['tech_id'] ?? $input['id'] ?? 0);
     $fullName = trim($input['full_name'] ?? '');
     $email = trim($input['email'] ?? '');
-    $preferredServer = $input['preferred_server'] ?? 'oem';
     $preferredLang = preg_replace('/[^a-z]/', '', strtolower($input['preferred_language'] ?? 'en'));
     if (empty($preferredLang)) $preferredLang = 'en';
     $isActive = intval($input['is_active'] ?? 0);
@@ -200,17 +199,12 @@ function handle_update_tech(PDO $pdo, array $admin_session, ?array $json_input =
         return;
     }
 
-    if (!in_array($preferredServer, ['oem', 'alternative'], true)) {
-        jsonResponse(['success' => false, 'error' => 'Invalid preferred server']);
-        return;
-    }
-
     $stmt = $pdo->prepare("
         UPDATE technicians
-        SET full_name = ?, email = ?, preferred_server = ?, preferred_language = ?, is_active = ?
+        SET full_name = ?, email = ?, preferred_language = ?, is_active = ?
         WHERE id = ?
     ");
-    $stmt->execute([$fullName, $email, $preferredServer, $preferredLang, $isActive, $techId]);
+    $stmt->execute([$fullName, $email, $preferredLang, $isActive, $techId]);
 
     logAdminActivity(
         $admin_session['admin_id'],
