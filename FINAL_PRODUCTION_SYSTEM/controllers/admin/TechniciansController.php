@@ -73,7 +73,6 @@ function handle_add_tech(PDO $pdo, array $admin_session): void {
     $full_name = trim($_POST['full_name'] ?? '');
     $email = trim($_POST['email'] ?? '');
     $is_active = isset($_POST['is_active']) ? 1 : 0;
-    $preferred_server = $_POST['preferred_server'] ?? 'oem';
     $preferred_language = preg_replace('/[^a-z]/', '', strtolower($_POST['preferred_language'] ?? 'en'));
     if (empty($preferred_language)) $preferred_language = 'en';
 
@@ -102,10 +101,10 @@ function handle_add_tech(PDO $pdo, array $admin_session): void {
         }
 
         $stmt = $pdo->prepare("
-            INSERT INTO technicians (technician_id, password_hash, full_name, email, is_active, preferred_server, preferred_language)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO technicians (technician_id, password_hash, full_name, email, is_active, preferred_language)
+            VALUES (?, ?, ?, ?, ?, ?)
         ");
-        $stmt->execute([$tech_id, $password_hash, $full_name, $email, $is_active, $preferred_server, $preferred_language]);
+        $stmt->execute([$tech_id, $password_hash, $full_name, $email, $is_active, $preferred_language]);
 
         $pdo->commit();
     } catch (PDOException $e) {
@@ -183,10 +182,9 @@ function handle_update_tech(PDO $pdo, array $admin_session, ?array $json_input =
         return;
     }
 
-    $techId = intval($input['tech_id'] ?? 0);
+    $techId = intval($input['tech_id'] ?? $input['id'] ?? 0);
     $fullName = trim($input['full_name'] ?? '');
     $email = trim($input['email'] ?? '');
-    $preferredServer = $input['preferred_server'] ?? 'oem';
     $preferredLang = preg_replace('/[^a-z]/', '', strtolower($input['preferred_language'] ?? 'en'));
     if (empty($preferredLang)) $preferredLang = 'en';
     $isActive = intval($input['is_active'] ?? 0);
@@ -201,17 +199,12 @@ function handle_update_tech(PDO $pdo, array $admin_session, ?array $json_input =
         return;
     }
 
-    if (!in_array($preferredServer, ['oem', 'alternative'], true)) {
-        jsonResponse(['success' => false, 'error' => 'Invalid preferred server']);
-        return;
-    }
-
     $stmt = $pdo->prepare("
         UPDATE technicians
-        SET full_name = ?, email = ?, preferred_server = ?, preferred_language = ?, is_active = ?
+        SET full_name = ?, email = ?, preferred_language = ?, is_active = ?
         WHERE id = ?
     ");
-    $stmt->execute([$fullName, $email, $preferredServer, $preferredLang, $isActive, $techId]);
+    $stmt->execute([$fullName, $email, $preferredLang, $isActive, $techId]);
 
     logAdminActivity(
         $admin_session['admin_id'],
