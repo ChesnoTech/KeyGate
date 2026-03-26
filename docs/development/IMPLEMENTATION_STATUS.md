@@ -406,4 +406,4 @@ docker exec oem-activation-web bash /var/www/html/activate/scripts/backup-databa
 
 **Document Version**: 1.0
 **Last Updated**: 2026-01-31
-**Author**: Claude (Security Hardening Implementation)
+**Author**: ChesnoTech Security Team

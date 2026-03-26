@@ -1,6 +1,6 @@
-# CLAUDE.md
+# Development Guide
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Internal development reference for the KeyGate codebase.
 
 ## System Overview
 
@@ -223,17 +223,17 @@ CLOUDFLARE WORKER (License Server)
 |------|----------|--------|
 | en | English | Full (primary) |
 | ru | Russian | Full (secondary) |
-| ar | Arabic | AI-generated + RTL support |
-| tr | Turkish | AI-generated |
-| zh | Chinese (Simplified) | AI-generated |
-| es | Spanish | AI-generated |
-| pt | Portuguese (Brazilian) | AI-generated |
-| de | German | AI-generated |
-| fr | French | AI-generated |
-| ja | Japanese | AI-generated |
-| ko | Korean | AI-generated |
-| it | Italian | AI-generated |
-| pl | Polish | AI-generated |
+| ar | Arabic | Translated + RTL support |
+| tr | Turkish | Translated |
+| zh | Chinese (Simplified) | Translated |
+| es | Spanish | Translated |
+| pt | Portuguese (Brazilian) | Translated |
+| de | German | Translated |
+| fr | French | Translated |
+| ja | Japanese | Translated |
+| ko | Korean | Translated |
+| it | Italian | Translated |
+| pl | Polish | Translated |
 | nl | Dutch | Stub (EN fallback) |
 | uk | Ukrainian | Stub (EN fallback) |
 | hi | Hindi | Stub (EN fallback) |
@@ -395,7 +395,7 @@ cd license-server && npx wrangler login && npx wrangler deploy
 - Deep branding with integrity checks
 
 ### Internationalization
-- 18 languages (EN + RU fully translated, others AI-generated)
+- 18 languages (EN + RU primary, 16 additional translations)
 - RTL support for Arabic (automatic via `dir="rtl"`)
 - Admin-configurable language toggle (enable/disable per language)
 - Dynamic lazy-loading of language bundles
