@@ -189,18 +189,11 @@ if (\$stmt->fetch()) {
 \$hash = password_hash('Admin2024!', PASSWORD_BCRYPT, ['cost' => 10]);
 
 // Get or create super_admin role
-\$stmt = \$pdo->prepare('SELECT id FROM acl_roles WHERE role_key = ?');
-\$stmt->execute(['super_admin']);
-\$role = \$stmt->fetch();
-\$roleId = \$role ? \$role['id'] : null;
+\$pdo->exec(\"INSERT INTO acl_roles (role_name, display_name, description, role_type, is_system_role) VALUES ('super_admin', 'Super Admin', 'Full system access', 'admin', 1) ON DUPLICATE KEY UPDATE id=id\");
+\$roleId = \$pdo->query(\"SELECT id FROM acl_roles WHERE role_name = 'super_admin'\")->fetchColumn();
 
-if (!\$roleId) {
-    \$pdo->exec(\"INSERT INTO acl_roles (role_key, display_name, description) VALUES ('super_admin', 'Super Admin', 'Full system access')\");
-    \$roleId = \$pdo->lastInsertId();
-}
-
-\$stmt = \$pdo->prepare('INSERT INTO admin_users (username, password_hash, full_name, role, custom_role_id) VALUES (?, ?, ?, ?, ?)');
-\$stmt->execute(['admin', \$hash, 'System Administrator', 'super_admin', \$roleId]);
+\$stmt = \$pdo->prepare('INSERT INTO admin_users (username, password_hash, full_name, email, role, custom_role_id, must_change_password) VALUES (?, ?, ?, ?, ?, ?, 0)');
+\$stmt->execute(['admin', \$hash, 'System Administrator', 'admin@keygate.local', 'super_admin', \$roleId]);
 echo \"Admin user created: admin / Admin2024!\n\";
 echo \"CHANGE THIS PASSWORD IMMEDIATELY!\n\";
 " 2>/dev/null

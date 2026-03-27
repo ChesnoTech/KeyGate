@@ -37,7 +37,7 @@ services:
     networks:
       - oem-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/activate/"]
+      test: ["CMD", "curl", "-f", "http://localhost/api/health.php"]
       interval: 30s
       timeout: 10s
       retries: 3
