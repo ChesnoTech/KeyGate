@@ -19,6 +19,10 @@ ssl/*.pem
 logs/
 *.log
 
+# ── graphify output (auto-rebuilt by post-commit hook, AST-only, no LLM) ─
+# Don't commit 12MB+ artifacts — every dev rebuilds locally on first commit.
+**/graphify-out/
+
 # ── PHP Dependencies (managed by Composer) ────────────────
 FINAL_PRODUCTION_SYSTEM/vendor/
 
