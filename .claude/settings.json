@@ -1,5 +1,16 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"KeyGate enforces 3 personal skills:\\n1. caveman (full mode) — terse responses, no filler. Code/commits stay normal.\\n2. superpowers — invoke matching skill before acting (brainstorming, writing-plans, executing-plans, test-driven-development, systematic-debugging, verification-before-completion).\\n3. graphify — read FINAL_PRODUCTION_SYSTEM/graphify-out/GRAPH_REPORT.md before architecture questions. Use graphify query/path/explain instead of grep for cross-module questions.\"}}'"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Bash",
