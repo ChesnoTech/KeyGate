@@ -435,9 +435,35 @@ DocumentRoot is `/var/www/html/activate` — API URLs are `/api/...` from inside
 | `app-sidebar.tsx` | Navigation with 5 groups, 30 items |
 | `api-contracts.test.ts` | Backend action registry validation |
 
-## graphify
+## Personal Skills (Enforced)
 
-KeyGate has a graphify knowledge graph at `FINAL_PRODUCTION_SYSTEM/graphify-out/` (13,138 nodes, 19,511 edges, 1,260 communities — AST-only).
+This project uses the user's global personal skill stack. All three are MANDATORY for the workflow.
+
+### 1. caveman (token efficiency)
+- **Mode**: caveman `full` is active by default. Status line shows `[CAVEMAN]`.
+- **Rules**: drop articles, filler, pleasantries, hedging. Fragments OK. Code/commits/PRs/security warnings stay normal English.
+- **Triggers**: auto on every response. Off only by user typing `stop caveman` or `normal mode`.
+- **Other caveman skills**: `caveman:caveman-commit` (commit messages), `caveman:caveman-review` (PR review), `caveman:compress` (compress memory files).
+
+### 2. superpowers (workflow enforcement)
+Always invoke the matching superpowers skill via the Skill tool BEFORE acting:
+
+| Task | Skill |
+|------|-------|
+| Any creative work / new feature / behavior change | `superpowers:brainstorming` |
+| Multi-step task with spec | `superpowers:writing-plans` then `superpowers:executing-plans` |
+| Implementing feature/bugfix code | `superpowers:test-driven-development` |
+| Encountering bug / test failure | `superpowers:systematic-debugging` |
+| About to claim "done", "fixed", "passing" | `superpowers:verification-before-completion` |
+| Multiple independent tasks | `superpowers:dispatching-parallel-agents` |
+| Receiving code review feedback | `superpowers:receiving-code-review` |
+| Completing branch / merge time | `superpowers:finishing-a-development-branch` |
+| Creating/editing skills | `superpowers:writing-skills` |
+| Starting any conversation | `superpowers:using-superpowers` |
+
+### 3. graphify (codebase knowledge)
+
+Knowledge graph at `FINAL_PRODUCTION_SYSTEM/graphify-out/` — 13,138 nodes, 19,511 edges, 1,260 communities, AST-only. PreToolUse hook reminds when grep/find/rg used. Stop hook auto-rebuilds graph if code edited this session. Git post-commit + post-checkout hooks rebuild on commits / branch switches.
 
 Rules:
 - Before answering architecture or codebase questions, read `FINAL_PRODUCTION_SYSTEM/graphify-out/GRAPH_REPORT.md` for god nodes and community structure
