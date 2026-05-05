@@ -434,3 +434,14 @@ DocumentRoot is `/var/www/html/activate` — API URLs are `/api/...` from inside
 | `App.tsx` | React router with 24 routes |
 | `app-sidebar.tsx` | Navigation with 5 groups, 30 items |
 | `api-contracts.test.ts` | Backend action registry validation |
+
+## graphify
+
+KeyGate has a graphify knowledge graph at `FINAL_PRODUCTION_SYSTEM/graphify-out/` (13,138 nodes, 19,511 edges, 1,260 communities — AST-only).
+
+Rules:
+- Before answering architecture or codebase questions, read `FINAL_PRODUCTION_SYSTEM/graphify-out/GRAPH_REPORT.md` for god nodes and community structure
+- If `FINAL_PRODUCTION_SYSTEM/graphify-out/wiki/index.md` exists, navigate it instead of reading raw files
+- For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
+- After modifying code files in this session, run `graphify update FINAL_PRODUCTION_SYSTEM` to keep the graph current (AST-only, no API cost)
+- Git post-commit + post-checkout hooks auto-rebuild graph on commits / branch switches

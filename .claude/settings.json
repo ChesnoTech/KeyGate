@@ -11,6 +11,39 @@
             "statusMessage": "Checking branding consistency..."
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FP=$(jq -r '.tool_input.file_path // \"\"' 2>/dev/null); case \"$FP\" in *FINAL_PRODUCTION_SYSTEM*) echo \"$FP\" >> /tmp/keygate_graph_dirty 2>/dev/null ;; esac; true",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -s /tmp/keygate_graph_dirty ]; then COUNT=$(wc -l < /tmp/keygate_graph_dirty); rm -f /tmp/keygate_graph_dirty; (cd \"$PWD\" && command -v graphify >/dev/null 2>&1 && graphify update FINAL_PRODUCTION_SYSTEM > /tmp/keygate_graph.log 2>&1 &) ; echo \"{\\\"systemMessage\\\":\\\"\\ud83d\\udd04 graphify: $COUNT code file(s) changed \\u2014 graph rebuild started in background.\\\"}\"; fi; true",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CMD=$(python3 -c \"import json,sys; d=json.load(sys.stdin); print(d.get('tool_input',d).get('command',''))\" 2>/dev/null || true); case \"$CMD\" in *grep*|*rg\\ *|*ripgrep*|*find\\ *|*fd\\ *|*ack\\ *|*ag\\ *)   [ -f FINAL_PRODUCTION_SYSTEM/graphify-out/graph.json ] &&   echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"graphify: Knowledge graph exists at FINAL_PRODUCTION_SYSTEM/graphify-out/. Read GRAPH_REPORT.md for god nodes and community structure before searching raw files. Or run: graphify query \\\"<question>\\\" / graphify explain \\\"<symbol>\\\" / graphify path \\\"<A>\\\" \\\"<B>\\\".\"}}'   || true ;; esac"
+          }
+        ]
       }
     ]
   }
