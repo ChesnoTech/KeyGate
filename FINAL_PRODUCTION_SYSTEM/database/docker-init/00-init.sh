@@ -149,6 +149,9 @@ run_sql "task_pipeline_migration.sql"         25
 # Phase 14: Production tracking & enterprise key management
 run_sql "production_tracking_migration.sql"   26
 
+# Phase 15: License row integrity HMAC (P0 anti-piracy)
+run_sql "license_p0_hmac_migration.sql"       27
+
 echo ""
 echo "=== Database initialization complete ==="
 echo ""

@@ -1,9 +1,16 @@
 <?php
 /**
- * KeyGate — License Validation & Enforcement
+ * KeyGate — License Validation & Enforcement (P0: RS256 + DB row HMAC)
  *
  * Provides JWT-based license validation, tier checking, and feature gating.
- * The license system uses a simple JWT format signed with HMAC-SHA256.
+ * As of v2.3.0 the license system uses **RS256 (asymmetric)** signing:
+ *   - Private key lives ONLY on the Cloudflare Worker (LICENSE_PRIVATE_KEY).
+ *   - Public key is embedded in this source file. Verification is local;
+ *     forging a license requires the private key, which never ships.
+ *
+ * Backward-compatibility: a legacy HS256 secret is accepted for 90 days
+ * after a v2.2.x → v2.3.x upgrade so existing customers can re-issue via
+ * the Worker /api/migrate endpoint without losing access.
  *
  * License tiers:
  *   community  — 1 technician, 50 keys, basic features (free)
@@ -14,6 +21,27 @@
 // ── License Server Configuration ────────────────────────────
 define('KEYGATE_LICENSE_SERVER', 'https://keygate-license-server.msamirvip.workers.dev');
 define('KEYGATE_SPONSORS_URL', 'https://github.com/sponsors/ChesnoTech');
+
+// ── License Verification Public Key (RS256, PKCS#8 SPKI) ─────
+// Generated 2026-05-08 alongside Worker secret LICENSE_PRIVATE_KEY.
+// Safe to commit — public key is only useful for verification.
+define('KEYGATE_LICENSE_PUBLIC_KEY', "-----BEGIN PUBLIC KEY-----\n"
+    . "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA108D/sn25MJwnRtSpl56\n"
+    . "Vr/z8X8dzywMueB7gwDr1gcsgjYSFsqiPQLwxwptap8dl2iifkTVv0wGlSf6/1Sc\n"
+    . "GHQbzISZWO8W4SsADiOZhlV3KLdlLp0A4ttY5OHYQVa52BnANJdBKHqPH1s7/D2k\n"
+    . "t+aaMWYEzaAEjkZzwuxgtyhdDa9Mkk2J7y0TCbo+uGP1cLPwfHcSCuO9LRY14R2f\n"
+    . "OAK3rwrOSoUIw0/xAPaSkx7tW6aOzRAbRMcE++Ppq+GpYg6ZOaROVyrKX2zuNjh8\n"
+    . "8NGYB0IDggRDspi0MAjELUZ/XBm20oXzWLE5T3O+8hBjaeQJ1q5Xk2Rbe080SjxU\n"
+    . "LwIDAQAB\n"
+    . "-----END PUBLIC KEY-----\n");
+
+// ── Legacy HS256 secret (90-day migration window) ────────────
+// REMOVE on 2026-08-08. After that date, only RS256 JWTs verify.
+// Customers with a pre-v2.3 JWT must visit /license and click
+// "Re-register license" — the UI calls /api/migrate which re-issues
+// an RS256 token bound to the same email + new instance_id.
+define('KEYGATE_LEGACY_HS256_SECRET', 'keygate-community-verification-key-2026');
+define('KEYGATE_LEGACY_HS256_DEADLINE', '2026-08-08');
 
 // ── Tier Definitions ────────────────────────────────────────
 
@@ -109,58 +137,145 @@ function getInstanceId(PDO $pdo): string {
     return $instanceId;
 }
 
-// ── JWT Helpers (HMAC-SHA256, no external deps) ─────────────
+// ── JWT Helpers (RS256 verify-only) ─────────────────────────
 
 function base64UrlEncode(string $data): string {
     return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
 }
 
 function base64UrlDecode(string $data): string {
+    $remainder = strlen($data) % 4;
+    if ($remainder) {
+        $data .= str_repeat('=', 4 - $remainder);
+    }
     return base64_decode(strtr($data, '-_', '+/'));
 }
 
 /**
  * Decode and verify a KeyGate license JWT.
- * Returns the payload array on success, or null on failure.
  *
- * @param string $jwt    The license JWT string
- * @param string $secret The HMAC secret (KeyGate public verification key)
- * @return array|null    Decoded payload or null
+ * Verification path:
+ *   1. RS256 with KEYGATE_LICENSE_PUBLIC_KEY (production tokens)
+ *   2. HS256 with KEYGATE_LEGACY_HS256_SECRET (legacy tokens, 90-day window)
+ *      — only attempted if today's date is on/before KEYGATE_LEGACY_HS256_DEADLINE.
+ *
+ * Returns the payload array on success, or null on failure.
+ * The `_alg` key in the returned payload tells the caller which path verified.
+ *
+ * Note: production code never signs JWTs locally. The Worker is the only
+ * issuer. createLicenseJwt() was removed in v2.3.0.
  */
-function decodeLicenseJwt(string $jwt, string $secret = 'keygate-community-verification-key-2026'): ?array {
+function decodeLicenseJwt(string $jwt): ?array {
     $parts = explode('.', $jwt);
     if (count($parts) !== 3) {
         return null;
     }
 
     [$headerB64, $payloadB64, $signatureB64] = $parts;
-
-    // Verify signature
-    $signatureCheck = base64UrlEncode(
-        hash_hmac('sha256', "$headerB64.$payloadB64", $secret, true)
-    );
-
-    if (!hash_equals($signatureCheck, $signatureB64)) {
+    $headerJson = base64UrlDecode($headerB64);
+    $header = json_decode($headerJson, true);
+    if (!is_array($header) || empty($header['alg'])) {
         return null;
     }
 
-    $payload = json_decode(base64UrlDecode($payloadB64), true);
-    if (!is_array($payload)) {
-        return null;
+    $signingInput = "$headerB64.$payloadB64";
+    $signature    = base64UrlDecode($signatureB64);
+
+    // ── 1. RS256 (production) ────────────────────────────────
+    if ($header['alg'] === 'RS256') {
+        $verified = openssl_verify(
+            $signingInput,
+            $signature,
+            KEYGATE_LICENSE_PUBLIC_KEY,
+            OPENSSL_ALGO_SHA256
+        );
+        if ($verified !== 1) {
+            return null;
+        }
+        $payload = json_decode(base64UrlDecode($payloadB64), true);
+        if (!is_array($payload)) return null;
+        $payload['_alg'] = 'RS256';
+        return $payload;
     }
 
-    return $payload;
+    // ── 2. HS256 legacy (migration window only) ──────────────
+    if ($header['alg'] === 'HS256') {
+        if (!defined('KEYGATE_LEGACY_HS256_DEADLINE') || date('Y-m-d') > KEYGATE_LEGACY_HS256_DEADLINE) {
+            return null;
+        }
+        $expected = hash_hmac(
+            'sha256',
+            $signingInput,
+            KEYGATE_LEGACY_HS256_SECRET,
+            true
+        );
+        if (!hash_equals($expected, $signature)) {
+            return null;
+        }
+        $payload = json_decode(base64UrlDecode($payloadB64), true);
+        if (!is_array($payload)) return null;
+        $payload['_alg'] = 'HS256-legacy';
+        return $payload;
+    }
+
+    // Unknown alg
+    return null;
+}
+
+// ── DB Row Integrity HMAC (P0.2) ────────────────────────────
+
+/**
+ * Get or generate the per-instance secret used to HMAC license_info rows.
+ * Stored in system_config('license_row_secret'). Rotated on every successful
+ * license registration and (in P2) every successful phone-home validate.
+ */
+function getLicenseRowSecret(PDO $pdo): string {
+    $cached = getConfig('license_row_secret');
+    if (!empty($cached)) return $cached;
+    $secret = bin2hex(random_bytes(32));
+    saveConfigBatch($pdo, ['license_row_secret' => $secret]);
+    return $secret;
 }
 
 /**
- * Create a license JWT (for testing/development only — production keys
- * are generated by the KeyGate license server).
+ * Force-rotate the per-instance row secret. Returns the new value.
+ * Caller is responsible for re-stamping any active license_info row.
  */
-function createLicenseJwt(array $payload, string $secret = 'keygate-community-verification-key-2026'): string {
-    $header = base64UrlEncode(json_encode(['alg' => 'HS256', 'typ' => 'JWT']));
-    $body = base64UrlEncode(json_encode($payload));
-    $signature = base64UrlEncode(hash_hmac('sha256', "$header.$body", $secret, true));
-    return "$header.$body.$signature";
+function rotateLicenseRowSecret(PDO $pdo): string {
+    $secret = bin2hex(random_bytes(32));
+    saveConfigBatch($pdo, ['license_row_secret' => $secret]);
+    return $secret;
+}
+
+/**
+ * Compute the integrity HMAC for a license_info row.
+ *
+ *   HMAC_SHA256( license_key | tier | max_techs | max_keys | exp_unix | instance_id, row_secret )
+ *
+ * Anything else in the row (timestamps, JSON features blob, etc.) is not
+ * covered — those fields are derivative or non-security-critical.
+ */
+function computeLicenseRowHmac(string $secret, array $row): string {
+    $material = implode('|', [
+        (string)($row['license_key']     ?? ''),
+        (string)($row['tier']            ?? ''),
+        (string)((int)($row['max_technicians'] ?? 0)),
+        (string)((int)($row['max_keys']        ?? 0)),
+        // expires_at is stored as DATETIME — convert to unix epoch for stable hashing.
+        (string)(empty($row['expires_at']) ? 0 : strtotime($row['expires_at'])),
+        (string)($row['instance_id']     ?? ''),
+    ]);
+    return hash_hmac('sha256', $material, $secret);
+}
+
+/**
+ * Verify a license_info row's integrity HMAC. Returns true if valid.
+ * Rows missing integrity_hmac (legacy or directly-INSERTed) fail.
+ */
+function verifyLicenseRow(PDO $pdo, array $row): bool {
+    if (empty($row['integrity_hmac'])) return false;
+    $expected = computeLicenseRowHmac(getLicenseRowSecret($pdo), $row);
+    return hash_equals($expected, $row['integrity_hmac']);
 }
 
 // ── License Validation ──────────────────────────────────────
@@ -181,12 +296,16 @@ function getCurrentLicense(PDO $pdo): ?array {
 
 /**
  * Get the effective license tier and limits.
- * Falls back to community tier if no valid license.
+ * Falls back to community tier if no valid license OR row HMAC fails
+ * (defeats direct INSERT/UPDATE bypass against license_info).
  */
 function getEffectiveLicense(PDO $pdo): array {
     $license = getCurrentLicense($pdo);
 
-    if ($license && $license['validation_status'] === 'valid') {
+    if ($license
+        && $license['validation_status'] === 'valid'
+        && verifyLicenseRow($pdo, $license)
+    ) {
         $tier = $license['tier'] ?? 'community';
         $tierDef = LICENSE_TIERS[$tier] ?? LICENSE_TIERS['community'];
 
@@ -201,6 +320,19 @@ function getEffectiveLicense(PDO $pdo): array {
             'is_registered'    => true,
             'instance_id'      => $license['instance_id'],
         ];
+    }
+
+    // Row HMAC failed → mark the row invalid so admin sees the issue.
+    // Best-effort; ignore failures (e.g. integrity_hmac column missing
+    // pre-migration; legacy installs land here on first boot).
+    if ($license && $license['validation_status'] === 'valid') {
+        try {
+            $stmt = $pdo->prepare(
+                "UPDATE `" . t('license_info') . "` SET validation_status = 'invalid' WHERE id = ?"
+            );
+            $stmt->execute([$license['id']]);
+            error_log("KeyGate: license row HMAC mismatch on id=" . $license['id'] . ", forced to community");
+        } catch (Exception $e) { /* legacy installs */ }
     }
 
     // Default community tier
@@ -236,12 +368,22 @@ function registerLicense(PDO $pdo, string $licenseKey): array {
         }
     }
 
-    // Validate instance ID matches
-    $instanceId = getInstanceId($pdo);
-    if ($payload['instance_id'] !== $instanceId && $payload['instance_id'] !== '*') {
+    // Reject wildcard binding — every license MUST be bound to a specific instance.
+    // Customers paste their instance ID into the checkout form (LemonSqueezy custom
+    // field, T-Bank OrderId encoding, GitHub Sponsors /api/claim flow).
+    if ($payload['instance_id'] === '*') {
         return [
             'success' => false,
-            'error' => 'License is for a different installation. Your instance ID: ' . substr($instanceId, 0, 12) . '...',
+            'error' => 'This license uses a deprecated wildcard binding. Re-issue from your purchase email or run /api/claim.',
+        ];
+    }
+
+    // Validate instance ID matches this install
+    $instanceId = getInstanceId($pdo);
+    if ($payload['instance_id'] !== $instanceId) {
+        return [
+            'success' => false,
+            'error' => 'License is bound to a different installation. Your instance ID: ' . substr($instanceId, 0, 12) . '...',
         ];
     }
 
@@ -257,6 +399,25 @@ function registerLicense(PDO $pdo, string $licenseKey): array {
 
     $tierDef = LICENSE_TIERS[$tier];
 
+    // Build the row payload up-front so we can HMAC it.
+    $maxTechs = (int)($payload['max_technicians'] ?? $tierDef['max_technicians']);
+    $maxKeys  = (int)($payload['max_keys']        ?? $tierDef['max_keys']);
+    $expIso   = date('Y-m-d H:i:s', (int)$payload['exp']);
+
+    // ── P0.3: rotate per-instance row secret on every register ──
+    $rowSecret = rotateLicenseRowSecret($pdo);
+
+    // Compute integrity HMAC for the row.
+    $rowForHmac = [
+        'license_key'     => $licenseKey,
+        'tier'            => $tier,
+        'max_technicians' => $maxTechs,
+        'max_keys'        => $maxKeys,
+        'expires_at'      => $expIso,
+        'instance_id'     => $instanceId,
+    ];
+    $integrityHmac = computeLicenseRowHmac($rowSecret, $rowForHmac);
+
     // Deactivate any existing license
     $pdo->exec("UPDATE `" . t('license_info') . "` SET is_active = 0");
 
@@ -265,8 +426,10 @@ function registerLicense(PDO $pdo, string $licenseKey): array {
         INSERT INTO `" . t('license_info') . "`
             (license_key, instance_id, tier, licensed_to_email, licensed_to_name,
              max_technicians, max_keys, features,
-             issued_at, expires_at, last_validated_at, validation_status, is_active)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), FROM_UNIXTIME(?), NOW(), 'valid', 1)
+             issued_at, expires_at, last_validated_at, validation_status, is_active,
+             integrity_hmac)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), FROM_UNIXTIME(?), NOW(), 'valid', 1,
+                ?)
     ");
     $stmt->execute([
         $licenseKey,
@@ -274,11 +437,12 @@ function registerLicense(PDO $pdo, string $licenseKey): array {
         $tier,
         $payload['email'] ?? null,
         $payload['name'] ?? null,
-        $payload['max_technicians'] ?? $tierDef['max_technicians'],
-        $payload['max_keys'] ?? $tierDef['max_keys'],
+        $maxTechs,
+        $maxKeys,
         json_encode($tierDef['features']),
         $payload['iat'],
         $payload['exp'],
+        $integrityHmac,
     ]);
 
     // Update system_config
@@ -288,7 +452,11 @@ function registerLicense(PDO $pdo, string $licenseKey): array {
         'success' => true,
         'tier'    => $tier,
         'label'   => $tierDef['label'],
-        'message' => "License registered successfully — {$tierDef['label']} tier activated",
+        'algorithm'=> $payload['_alg'] ?? 'unknown',
+        'message' => "License registered successfully — {$tierDef['label']} tier activated"
+            . (($payload['_alg'] ?? '') === 'HS256-legacy'
+                ? ' (legacy algorithm; please re-issue via Re-register button before ' . KEYGATE_LEGACY_HS256_DEADLINE . ')'
+                : ''),
     ];
 }
 

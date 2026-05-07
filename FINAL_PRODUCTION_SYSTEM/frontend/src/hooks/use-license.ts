@@ -6,6 +6,8 @@ import {
   registerLicense,
   deactivateLicense,
   generateDevLicense,
+  claimLicense,
+  migrateLegacyLicense,
 } from '@/api/license'
 
 export function useLicenseStatus() {
@@ -47,10 +49,42 @@ export function useDeactivateLicense() {
 export function useGenerateDevLicense() {
   const { t } = useTranslation()
   return useMutation({
-    mutationFn: (tier: string) => generateDevLicense(tier),
+    mutationFn: ({ tier, devToken }: { tier: string; devToken: string }) =>
+      generateDevLicense(tier, devToken),
     onSuccess: (data) => {
       if (data.success) {
         toast.success(data.message || t('license.dev_generated', 'Dev license generated'))
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+export function useClaimLicense() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: ({ email, sponsorLogin }: { email: string; sponsorLogin?: string }) =>
+      claimLicense(email, sponsorLogin),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['license-status'] })
+      if (data.success) {
+        toast.success(data.message || t('license.claimed', 'License claimed and activated'))
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+export function useMigrateLegacyLicense() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: (key: string) => migrateLegacyLicense(key),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['license-status'] })
+      if (data.success) {
+        toast.success(data.message || t('license.migrated', 'License migrated to RS256'))
       }
     },
     onError: (e: Error) => toast.error(e.message),

@@ -30,20 +30,70 @@ function base64UrlEncodeString(str) {
   return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
-async function createJwt(payload, secret) {
-  const header = base64UrlEncodeString(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
+// ── PEM PKCS#8 → CryptoKey (cached for the lifetime of an isolate) ──
+let cachedSigningKey = null
+async function importLicensePrivateKey(pemPkcs8) {
+  if (cachedSigningKey) return cachedSigningKey
+  // Strip header/footer + whitespace; decode base64.
+  const b64 = pemPkcs8
+    .replace(/-----BEGIN PRIVATE KEY-----/, '')
+    .replace(/-----END PRIVATE KEY-----/, '')
+    .replace(/\s+/g, '')
+  const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0))
+  cachedSigningKey = await crypto.subtle.importKey(
+    'pkcs8',
+    bin.buffer,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign']
+  )
+  return cachedSigningKey
+}
+
+// ── createJwt (RS256, P0 hardening) ──
+// Switched from HS256 → RS256 in v2.3.0. Private key lives ONLY in the
+// Worker secret store (env.LICENSE_PRIVATE_KEY, PEM PKCS#8). KeyGate PHP
+// instances verify with the matching public key embedded in source.
+async function createJwt(payload, env) {
+  const header = base64UrlEncodeString(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
   const body = base64UrlEncodeString(JSON.stringify(payload))
   const data = `${header}.${body}`
 
+  const key = await importLicensePrivateKey(env.LICENSE_PRIVATE_KEY)
+  const signature = await crypto.subtle.sign(
+    { name: 'RSASSA-PKCS1-v1_5' },
+    key,
+    new TextEncoder().encode(data)
+  )
+  return `${data}.${base64UrlEncode(signature)}`
+}
+
+// ── Legacy HS256 verify (used only by /api/migrate during transition) ──
+async function verifyLegacyHs256(jwt, secret) {
+  const parts = jwt.split('.')
+  if (parts.length !== 3) return null
+  const [headerB64, payloadB64, sigB64] = parts
+  const header = JSON.parse(atob(headerB64.replace(/-/g, '+').replace(/_/g, '/')))
+  if (header.alg !== 'HS256') return null
   const key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(secret),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
-    ['sign']
+    ['verify']
   )
-  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data))
-  return `${data}.${base64UrlEncode(signature)}`
+  const sig = Uint8Array.from(
+    atob(sigB64.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(sigB64.length / 4) * 4, '=')),
+    c => c.charCodeAt(0)
+  )
+  const ok = await crypto.subtle.verify(
+    'HMAC',
+    key,
+    sig,
+    new TextEncoder().encode(`${headerB64}.${payloadB64}`)
+  )
+  if (!ok) return null
+  return JSON.parse(atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/')))
 }
 
 // ── GitHub Webhook Verification ─────────────────────────────
@@ -123,34 +173,21 @@ async function handleGitHubWebhook(request, env) {
     const tier = getTierFromAmount(amountCents)
     const limits = TIER_LIMITS[tier]
 
-    // Generate license JWT
-    const licensePayload = {
-      iss: 'keygate-license-server',
-      tier: tier,
-      instance_id: '*', // Wildcard — will bind on first use
-      email: email,
-      name: name,
-      github_sponsor: sponsor,
-      max_technicians: limits.max_technicians,
-      max_keys: limits.max_keys,
-      iat: Math.floor(Date.now() / 1000),
-      exp: isOneTime
-        ? Math.floor(Date.now() / 1000) + (10 * 365 * 86400) // 10 years for one-time
-        : Math.floor(Date.now() / 1000) + (400 * 86400),      // ~13 months for monthly
-    }
-
-    const jwt = await createJwt(licensePayload, env.JWT_SECRET)
-
-    // Store in KV
+    // P0: GitHub Sponsors webhooks don't carry an instance_id. We store
+    // the sponsorship with `pending_claim:true` and the customer must call
+    // POST /api/claim to bind their KeyGate instance and receive a JWT.
+    // No wildcard JWT issued at this stage.
     await env.LICENSES.put(`license:${email}`, JSON.stringify({
-      jwt,
       tier,
       sponsor,
       email,
       name,
+      pending_claim: true,
       created_at: new Date().toISOString(),
       amount_cents: amountCents,
       is_one_time: isOneTime,
+      max_technicians: limits.max_technicians,
+      max_keys: limits.max_keys,
     }), { expirationTtl: isOneTime ? 10 * 365 * 86400 : 400 * 86400 })
 
     // TODO: Send email with license key via SendGrid
@@ -158,8 +195,9 @@ async function handleGitHubWebhook(request, env) {
 
     return new Response(JSON.stringify({
       ok: true,
-      message: `License generated for ${email} (${tier} tier)`,
+      message: `Sponsorship recorded for ${email} (${tier} tier). Customer must call POST /api/claim to bind their installation.`,
       tier,
+      pending_claim: true,
     }), { status: 200 })
   }
 
@@ -212,7 +250,7 @@ async function handleRegister(request, env) {
     exp: Math.floor(Date.now() / 1000) + (365 * 86400), // 1 year
   }
 
-  const jwt = await createJwt(payload, env.JWT_SECRET)
+  const jwt = await createJwt(payload, env)
 
   await env.LICENSES.put(`license:${email}`, JSON.stringify({
     jwt,
@@ -319,36 +357,52 @@ async function handleLemonSqueezyWebhook(request, env) {
     const limits = TIER_LIMITS[tier]
     const isLifetime = variantName.includes('lifetime')
 
-    const licensePayload = {
-      iss: 'keygate-license-server',
-      tier: tier,
-      instance_id: '*',
-      email: email,
-      name: name,
-      payment_provider: 'lemonsqueezy',
-      max_technicians: limits.max_technicians,
-      max_keys: limits.max_keys,
-      iat: Math.floor(Date.now() / 1000),
-      exp: isLifetime
-        ? Math.floor(Date.now() / 1000) + (10 * 365 * 86400)
-        : Math.floor(Date.now() / 1000) + (400 * 86400),
-    }
+    // P0: LemonSqueezy may carry instance_id as custom_data; if absent, mark pending.
+    const lsInstanceId = payload.meta?.custom_data?.instance_id || null
 
-    const jwt = await createJwt(licensePayload, env.JWT_SECRET)
-
-    await env.LICENSES.put(`license:${email}`, JSON.stringify({
-      jwt,
+    const baseRecord = {
       tier,
       email,
       name,
       payment_provider: 'lemonsqueezy',
       created_at: new Date().toISOString(),
       is_lifetime: isLifetime,
-    }), { expirationTtl: isLifetime ? 10 * 365 * 86400 : 400 * 86400 })
+      max_technicians: limits.max_technicians,
+      max_keys: limits.max_keys,
+    }
+
+    let jwt = null
+    if (lsInstanceId) {
+      const licensePayload = {
+        iss: 'keygate-license-server',
+        tier,
+        instance_id: lsInstanceId,
+        email,
+        name,
+        payment_provider: 'lemonsqueezy',
+        max_technicians: limits.max_technicians,
+        max_keys: limits.max_keys,
+        iat: Math.floor(Date.now() / 1000),
+        exp: isLifetime
+          ? Math.floor(Date.now() / 1000) + (10 * 365 * 86400)
+          : Math.floor(Date.now() / 1000) + (400 * 86400),
+      }
+      jwt = await createJwt(licensePayload, env)
+      baseRecord.jwt = jwt
+      baseRecord.instance_id = lsInstanceId
+    } else {
+      baseRecord.pending_claim = true
+    }
+
+    await env.LICENSES.put(`license:${email}`, JSON.stringify(baseRecord),
+      { expirationTtl: isLifetime ? 10 * 365 * 86400 : 400 * 86400 })
 
     return new Response(JSON.stringify({
       ok: true,
-      message: `License generated for ${email} (${tier} tier via LemonSqueezy)`,
+      message: jwt
+        ? `License generated for ${email} (${tier} tier via LemonSqueezy)`
+        : `Sponsorship recorded for ${email} — customer must call /api/claim with instance_id`,
+      pending_claim: !jwt,
     }), { status: 200 })
   }
 
@@ -388,48 +442,62 @@ async function handleTBankWebhook(request, env) {
   // For now, we trust the payload (T-Bank sends from known IPs)
 
   if (success && status === 'CONFIRMED') {
-    // Order ID format: "keygate_{email_base64}_{tier}"
+    // Order ID format: "keygate_{email_base64}_{tier}_{instance_id_base64}"
+    // Old 3-part format also accepted but produces a pending_claim record.
     const parts = orderId.split('_')
     if (parts.length < 3 || parts[0] !== 'keygate') {
       return new Response(JSON.stringify({ ok: true, message: 'Not a KeyGate order' }), { status: 200 })
     }
 
-    let email, tier
+    let email, tier, instanceId
     try {
       email = atob(parts[1])
       tier = parts[2] || 'pro'
+      instanceId = parts.length >= 4 ? atob(parts[3]) : null
     } catch {
       return new Response(JSON.stringify({ error: 'Invalid order ID format' }), { status: 400 })
     }
 
     const limits = TIER_LIMITS[tier] || TIER_LIMITS.pro
-
-    const licensePayload = {
-      iss: 'keygate-license-server',
-      tier: tier,
-      instance_id: '*',
-      email: email,
-      payment_provider: 'tbank',
-      max_technicians: limits.max_technicians,
-      max_keys: limits.max_keys,
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + (400 * 86400),
-    }
-
-    const jwt = await createJwt(licensePayload, env.JWT_SECRET)
-
-    await env.LICENSES.put(`license:${email}`, JSON.stringify({
-      jwt,
+    const baseRecord = {
       tier,
       email,
       payment_provider: 'tbank',
       amount_kopecks: amount,
       created_at: new Date().toISOString(),
-    }), { expirationTtl: 400 * 86400 })
+      max_technicians: limits.max_technicians,
+      max_keys: limits.max_keys,
+    }
+
+    let jwt = null
+    if (instanceId) {
+      const licensePayload = {
+        iss: 'keygate-license-server',
+        tier,
+        instance_id: instanceId,
+        email,
+        payment_provider: 'tbank',
+        max_technicians: limits.max_technicians,
+        max_keys: limits.max_keys,
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + (400 * 86400),
+      }
+      jwt = await createJwt(licensePayload, env)
+      baseRecord.jwt = jwt
+      baseRecord.instance_id = instanceId
+    } else {
+      baseRecord.pending_claim = true
+    }
+
+    await env.LICENSES.put(`license:${email}`, JSON.stringify(baseRecord),
+      { expirationTtl: 400 * 86400 })
 
     return new Response(JSON.stringify({
       ok: true,
-      message: `License generated for ${email} (${tier} tier via T-Bank)`,
+      message: jwt
+        ? `License generated for ${email} (${tier} tier via T-Bank)`
+        : `Payment recorded for ${email} — customer must call /api/claim with instance_id`,
+      pending_claim: !jwt,
     }), { status: 200 })
   }
 
@@ -451,6 +519,165 @@ async function handleTBankWebhook(request, env) {
   }
 
   return new Response(JSON.stringify({ ok: true }), { status: 200 })
+}
+
+// ── /api/claim — bind a pending_claim sponsorship to instance_id (P0.5) ──
+//
+// Body: { email, instance_id, sponsor_login? }
+// Looks up KV record. Requires pending_claim:true. Once claimed, mints an
+// RS256 JWT bound to the supplied instance_id. Subsequent claim attempts
+// are rejected (one-shot binding) unless the founder manually clears
+// pending_claim via the future P4 admin dashboard.
+async function handleClaim(request, env) {
+  const { email, instance_id, sponsor_login } = await request.json()
+  if (!email || !instance_id) {
+    return new Response(JSON.stringify({ error: 'email and instance_id required' }), { status: 400 })
+  }
+
+  const stored = await env.LICENSES.get(`license:${email}`, 'json')
+  if (!stored) {
+    return new Response(JSON.stringify({ error: 'No sponsorship found for this email' }), { status: 404 })
+  }
+  if (stored.revoked) {
+    return new Response(JSON.stringify({ error: 'License revoked' }), { status: 403 })
+  }
+  if (!stored.pending_claim) {
+    return new Response(JSON.stringify({ error: 'License already claimed; contact support to rebind' }), { status: 409 })
+  }
+  // Optional sanity check — sponsor_login matches stored sponsor, if provided.
+  if (sponsor_login && stored.sponsor && stored.sponsor !== sponsor_login) {
+    return new Response(JSON.stringify({ error: 'Sponsor login mismatch' }), { status: 403 })
+  }
+
+  const tier = stored.tier
+  const limits = TIER_LIMITS[tier] || TIER_LIMITS.community
+  const isLifetime = !!stored.is_one_time || !!stored.is_lifetime
+  const exp = isLifetime
+    ? Math.floor(Date.now() / 1000) + (10 * 365 * 86400)
+    : Math.floor(Date.now() / 1000) + (400 * 86400)
+
+  const licensePayload = {
+    iss: 'keygate-license-server',
+    tier,
+    instance_id,
+    email,
+    name: stored.name || email.split('@')[0],
+    payment_provider: stored.payment_provider || 'github_sponsors',
+    max_technicians: limits.max_technicians,
+    max_keys: limits.max_keys,
+    iat: Math.floor(Date.now() / 1000),
+    exp,
+  }
+  const jwt = await createJwt(licensePayload, env)
+
+  // Update KV record — pending_claim cleared, jwt + instance_id stored.
+  delete stored.pending_claim
+  stored.jwt = jwt
+  stored.instance_id = instance_id
+  stored.claimed_at = new Date().toISOString()
+  await env.LICENSES.put(`license:${email}`, JSON.stringify(stored),
+    { expirationTtl: isLifetime ? 10 * 365 * 86400 : 400 * 86400 })
+
+  return new Response(JSON.stringify({
+    success: true,
+    license_key: jwt,
+    tier,
+    expires_at: new Date(exp * 1000).toISOString(),
+  }), { status: 200 })
+}
+
+// ── /api/migrate — re-issue legacy HS256 token as RS256 (P0 transition) ──
+//
+// Body: { license_key (legacy HS256), instance_id }
+// Verifies the legacy token with LEGACY_HS256_SECRET, then mints a fresh
+// RS256 JWT bound to the supplied instance_id. Does NOT change the email
+// binding or tier. Available for 90 days post-deploy; remove the secret
+// from Worker after that.
+async function handleMigrate(request, env) {
+  const { license_key, instance_id } = await request.json()
+  if (!license_key || !instance_id) {
+    return new Response(JSON.stringify({ error: 'license_key and instance_id required' }), { status: 400 })
+  }
+  if (!env.LEGACY_HS256_SECRET) {
+    return new Response(JSON.stringify({ error: 'Legacy migration window has closed' }), { status: 410 })
+  }
+
+  const payload = await verifyLegacyHs256(license_key, env.LEGACY_HS256_SECRET)
+  if (!payload) {
+    return new Response(JSON.stringify({ error: 'Legacy JWT signature invalid' }), { status: 400 })
+  }
+  if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+    return new Response(JSON.stringify({ error: 'Legacy JWT expired; purchase a new license' }), { status: 403 })
+  }
+
+  // Mint RS256 with same tier/email/exp but bind to caller's instance_id.
+  const newPayload = {
+    ...payload,
+    instance_id,
+    iss: 'keygate-license-server',
+    iat: Math.floor(Date.now() / 1000),
+    _migrated_from: 'HS256',
+  }
+  delete newPayload._alg
+  const jwt = await createJwt(newPayload, env)
+
+  // Refresh KV if we have an email anchor.
+  if (payload.email) {
+    const stored = await env.LICENSES.get(`license:${payload.email}`, 'json') || {}
+    stored.jwt = jwt
+    stored.instance_id = instance_id
+    stored.tier = payload.tier
+    stored.email = payload.email
+    delete stored.pending_claim
+    stored.migrated_at = new Date().toISOString()
+    await env.LICENSES.put(`license:${payload.email}`, JSON.stringify(stored),
+      { expirationTtl: Math.max(86400, payload.exp - Math.floor(Date.now() / 1000)) })
+  }
+
+  return new Response(JSON.stringify({
+    success: true,
+    license_key: jwt,
+    tier: payload.tier,
+    expires_at: new Date(payload.exp * 1000).toISOString(),
+  }), { status: 200 })
+}
+
+// ── /api/dev-issue — local dev license (gated by DEV_TOKEN) ────────────
+//
+// Body: { tier, email, instance_id, dev_token }
+// Replaces the old "PHP signs locally with hardcoded secret" path. Now
+// the founder hits the Worker directly; no signing capability ever lives
+// on the customer's PHP host.
+async function handleDevIssue(request, env) {
+  const { tier, email, instance_id, dev_token } = await request.json()
+  if (!env.DEV_TOKEN) {
+    return new Response(JSON.stringify({ error: 'Dev issuance disabled on this Worker' }), { status: 403 })
+  }
+  if (dev_token !== env.DEV_TOKEN) {
+    return new Response(JSON.stringify({ error: 'Invalid dev token' }), { status: 401 })
+  }
+  if (!tier || !instance_id) {
+    return new Response(JSON.stringify({ error: 'tier and instance_id required' }), { status: 400 })
+  }
+  const limits = TIER_LIMITS[tier] || TIER_LIMITS.community
+  const payload = {
+    iss: 'keygate-license-server',
+    tier,
+    instance_id,
+    email: email || 'dev@keygate.local',
+    payment_provider: 'dev',
+    max_technicians: limits.max_technicians,
+    max_keys: limits.max_keys,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + (90 * 86400),  // 90-day dev license
+  }
+  const jwt = await createJwt(payload, env)
+  return new Response(JSON.stringify({
+    success: true,
+    license_key: jwt,
+    tier,
+    expires_at: new Date(payload.exp * 1000).toISOString(),
+  }), { status: 200 })
 }
 
 // ── License Retrieval (for manual invoice flow) ─────────────
@@ -510,6 +737,12 @@ export default {
         response = await handleValidate(request, env)
       } else if (path === '/api/retrieve' && request.method === 'GET') {
         response = await handleRetrieveLicense(request, env)
+      } else if (path === '/api/claim' && request.method === 'POST') {
+        response = await handleClaim(request, env)
+      } else if (path === '/api/migrate' && request.method === 'POST') {
+        response = await handleMigrate(request, env)
+      } else if (path === '/api/dev-issue' && request.method === 'POST') {
+        response = await handleDevIssue(request, env)
       } else if (path === '/api/health' && request.method === 'GET') {
         response = new Response(JSON.stringify({
           status: 'ok',

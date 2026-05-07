@@ -463,6 +463,7 @@ function installerMigrationList(): array {
         ['product_variants_migration.sql',   17],
         ['missing_drivers_migration.sql',    18],
         ['unallocated_space_migration.sql',  19],
+        ['license_p0_hmac_migration.sql',    20],
     ];
 }
 

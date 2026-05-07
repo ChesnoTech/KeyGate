@@ -40,6 +40,8 @@ import {
   useRegisterLicense,
   useDeactivateLicense,
   useGenerateDevLicense,
+  useClaimLicense,
+  useMigrateLegacyLicense,
 } from '@/hooks/use-license'
 
 const TIER_COLORS: Record<string, string> = {
@@ -61,11 +63,17 @@ export function LicensePage() {
   const [activeTab, setActiveTab] = useState<Tab>('plan')
   const [licenseKey, setLicenseKey] = useState('')
   const [devLicenseKey, setDevLicenseKey] = useState('')
+  const [devToken, setDevToken] = useState('')
+  const [claimEmail, setClaimEmail] = useState('')
+  const [claimSponsor, setClaimSponsor] = useState('')
+  const [legacyKey, setLegacyKey] = useState('')
 
   const statusQuery = useLicenseStatus()
   const registerMut = useRegisterLicense()
   const deactivateMut = useDeactivateLicense()
   const devGenMut = useGenerateDevLicense()
+  const claimMut = useClaimLicense()
+  const migrateMut = useMigrateLegacyLicense()
 
   const license = statusQuery.data?.license
   const usage = statusQuery.data?.usage
@@ -77,9 +85,33 @@ export function LicensePage() {
   }
 
   const handleGenerateDev = async (tier: string) => {
-    const result = await devGenMut.mutateAsync(tier)
+    if (!devToken.trim()) {
+      alert('DEV_TOKEN required. Set it via `wrangler secret put DEV_TOKEN` on the Worker, then paste here.')
+      return
+    }
+    const result = await devGenMut.mutateAsync({ tier, devToken: devToken.trim() })
     if (result.license_key) {
       setDevLicenseKey(result.license_key)
+    }
+  }
+
+  const handleClaim = async () => {
+    if (!claimEmail.trim()) return
+    const result = await claimMut.mutateAsync({
+      email: claimEmail.trim(),
+      sponsorLogin: claimSponsor.trim() || undefined,
+    })
+    if (result.license_key) {
+      setClaimEmail('')
+      setClaimSponsor('')
+    }
+  }
+
+  const handleMigrateLegacy = async () => {
+    if (!legacyKey.trim()) return
+    const result = await migrateMut.mutateAsync(legacyKey.trim())
+    if (result.success) {
+      setLegacyKey('')
     }
   }
 
@@ -479,13 +511,65 @@ export function LicensePage() {
             <CardContent className="space-y-3">
               <textarea
                 className="w-full h-24 p-3 text-xs font-mono bg-muted/50 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="eyJhbGciOiJIUzI1NiIs..."
+                placeholder="eyJhbGciOiJSUzI1NiIs..."
                 value={licenseKey}
                 onChange={(e) => setLicenseKey(e.target.value)}
               />
               <Button onClick={handleRegister} disabled={!licenseKey.trim() || registerMut.isPending}>
                 {registerMut.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {t('sub.activate_key', 'Activate License')}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* P0: Claim purchase (GitHub Sponsors / pending payments) */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('sub.claim_title', 'Claim a GitHub Sponsors / pending purchase')}</CardTitle>
+              <CardDescription>
+                {t('sub.claim_desc', 'If you sponsored ChesnoTech on GitHub or your LemonSqueezy/T-Bank checkout did not include your instance ID, claim your license here. The server binds it to this installation and issues your key.')}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <input
+                type="email"
+                className="w-full p-2 text-sm bg-muted/50 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder={t('sub.claim_email', 'Email used at checkout / GitHub sponsor email')}
+                value={claimEmail}
+                onChange={(e) => setClaimEmail(e.target.value)}
+              />
+              <input
+                type="text"
+                className="w-full p-2 text-sm bg-muted/50 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder={t('sub.claim_sponsor', 'GitHub sponsor login (optional)')}
+                value={claimSponsor}
+                onChange={(e) => setClaimSponsor(e.target.value)}
+              />
+              <Button onClick={handleClaim} disabled={!claimEmail.trim() || claimMut.isPending} variant="outline">
+                {claimMut.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {t('sub.claim_button', 'Claim & bind to this install')}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* P0: Migrate legacy HS256 license */}
+          <Card className="border-dashed">
+            <CardHeader>
+              <CardTitle className="text-base">{t('sub.migrate_title', 'Migrate legacy license (pre-v2.3)')}</CardTitle>
+              <CardDescription>
+                {t('sub.migrate_desc', 'If you have a license key issued before May 2026 (HS256 algorithm), use this to upgrade it to the new RS256 format. Available until 2026-08-08.')}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <textarea
+                className="w-full h-20 p-3 text-xs font-mono bg-muted/50 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder={t('sub.migrate_placeholder', 'Paste the legacy HS256 license key...')}
+                value={legacyKey}
+                onChange={(e) => setLegacyKey(e.target.value)}
+              />
+              <Button onClick={handleMigrateLegacy} disabled={!legacyKey.trim() || migrateMut.isPending} variant="outline">
+                {migrateMut.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {t('sub.migrate_button', 'Migrate to RS256 & activate')}
               </Button>
             </CardContent>
           </Card>
@@ -502,11 +586,18 @@ export function LicensePage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
+                <input
+                  type="password"
+                  className="w-full p-2 text-sm bg-muted/50 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder={t('sub.dev_token_placeholder', 'DEV_TOKEN (matches Worker secret)')}
+                  value={devToken}
+                  onChange={(e) => setDevToken(e.target.value)}
+                />
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handleGenerateDev('pro')} disabled={devGenMut.isPending}>
+                  <Button variant="outline" size="sm" onClick={() => handleGenerateDev('pro')} disabled={devGenMut.isPending || !devToken.trim()}>
                     {t('sub.gen_pro', 'Generate Pro')}
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleGenerateDev('enterprise')} disabled={devGenMut.isPending}>
+                  <Button variant="outline" size="sm" onClick={() => handleGenerateDev('enterprise')} disabled={devGenMut.isPending || !devToken.trim()}>
                     {t('sub.gen_enterprise', 'Generate Enterprise')}
                   </Button>
                 </div>

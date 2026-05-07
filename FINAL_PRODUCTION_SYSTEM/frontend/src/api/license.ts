@@ -56,7 +56,7 @@ export function deactivateLicense() {
   return apiPostJson<{ success: boolean; message: string }>('license_deactivate')
 }
 
-export function generateDevLicense(tier: string) {
+export function generateDevLicense(tier: string, devToken: string) {
   return apiPostJson<{
     success: boolean
     license_key?: string
@@ -64,5 +64,30 @@ export function generateDevLicense(tier: string) {
     instance_id?: string
     message?: string
     error?: string
-  }>('license_generate_dev', { tier })
+  }>('license_generate_dev', { tier, dev_token: devToken })
+}
+
+// P0: claim a pending GitHub Sponsors / LemonSqueezy / T-Bank purchase by
+// binding it to this install's instance_id. Worker mints an RS256 JWT.
+export function claimLicense(email: string, sponsorLogin?: string) {
+  return apiPostJson<{
+    success: boolean
+    license_key?: string
+    tier?: string
+    expires_at?: string
+    message?: string
+    error?: string
+  }>('license_claim', { email, sponsor_login: sponsorLogin || '' })
+}
+
+// P0: migrate a legacy HS256 license to RS256 (90-day window post v2.3.0).
+export function migrateLegacyLicense(licenseKey: string) {
+  return apiPostJson<{
+    success: boolean
+    license_key?: string
+    tier?: string
+    expires_at?: string
+    message?: string
+    error?: string
+  }>('license_migrate', { license_key: licenseKey })
 }
