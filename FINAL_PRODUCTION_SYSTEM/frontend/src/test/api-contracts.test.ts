@@ -135,6 +135,8 @@ const BACKEND_ACTIONS: Record<string, { method: 'GET' | 'POST'; csrf: boolean }>
   qc_list_compliance_results:  { method: 'GET',  csrf: false },
   qc_list_compliance_grouped:  { method: 'GET',  csrf: false },
   qc_get_stats:                { method: 'GET',  csrf: false },
+  qc_recheck_count:            { method: 'GET',  csrf: false },
+  qc_recheck_historical:       { method: 'POST', csrf: true },
 
   // product lines & variants (partition QC)
   get_product_lines:           { method: 'GET',  csrf: false },

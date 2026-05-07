@@ -71,10 +71,10 @@ function handle_get_hardware(PDO $pdo, array $admin_session): void {
     $stmt = $pdo->prepare("
         SELECT h.*, aa.order_number, aa.attempted_at, aa.technician_id,
                t.full_name as technician_name, k.product_key
-        FROM hardware_info h
-        INNER JOIN activation_attempts aa ON h.activation_id = aa.id
-        LEFT JOIN technicians t ON aa.technician_id = t.technician_id
-        LEFT JOIN oem_keys k ON aa.key_id = k.id
+        FROM `" . t('hardware_info') . "` h
+        INNER JOIN `" . t('activation_attempts') . "` aa ON h.activation_id = aa.id
+        LEFT JOIN `" . t('technicians') . "` t ON aa.technician_id = t.technician_id
+        LEFT JOIN `" . t('oem_keys') . "` k ON aa.key_id = k.id
         WHERE h.activation_id = ?
     ");
     $stmt->execute([$activationId]);
@@ -101,10 +101,10 @@ function handle_get_hardware_by_order(PDO $pdo, array $admin_session): void {
                aa.attempt_result as activation_result,
                aa.attempted_at as activation_time,
                k.product_key
-        FROM hardware_info h
-        LEFT JOIN technicians t ON h.technician_id = t.technician_id
-        LEFT JOIN activation_attempts aa ON h.activation_id = aa.id
-        LEFT JOIN oem_keys k ON aa.key_id = k.id
+        FROM `" . t('hardware_info') . "` h
+        LEFT JOIN `" . t('technicians') . "` t ON h.technician_id = t.technician_id
+        LEFT JOIN `" . t('activation_attempts') . "` aa ON h.activation_id = aa.id
+        LEFT JOIN `" . t('oem_keys') . "` k ON aa.key_id = k.id
         WHERE h.order_number = ?
         ORDER BY h.collection_timestamp DESC
         LIMIT 1

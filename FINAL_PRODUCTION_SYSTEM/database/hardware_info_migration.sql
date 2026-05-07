@@ -3,12 +3,12 @@
 -- Purpose: Make OEM ID and Roll Serial optional, add hardware tracking
 
 -- Step 1: Make OEM ID and Roll Serial optional in oem_keys table
-ALTER TABLE oem_keys
+ALTER TABLE `#__oem_keys`
 MODIFY COLUMN oem_identifier VARCHAR(20) NULL DEFAULT NULL,
 MODIFY COLUMN roll_serial VARCHAR(20) NULL DEFAULT NULL;
 
 -- Step 2: Create hardware_info table for tracking PC hardware details
-CREATE TABLE IF NOT EXISTS hardware_info (
+CREATE TABLE IF NOT EXISTS `#__hardware_info` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     activation_id INT NOT NULL COMMENT 'Links to activation_attempts.id',
     order_number VARCHAR(10) NOT NULL COMMENT 'Order number for easy reference',
@@ -60,11 +60,11 @@ CREATE TABLE IF NOT EXISTS hardware_info (
     INDEX idx_order_number (order_number),
     INDEX idx_collected_at (collected_at),
 
-    FOREIGN KEY (activation_id) REFERENCES activation_attempts(id) ON DELETE CASCADE
+    FOREIGN KEY (activation_id) REFERENCES `#__activation_attempts`(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Hardware information collected during activation';
 
 -- Step 3: Add hardware_collected flag to activation_attempts
-ALTER TABLE activation_attempts
+ALTER TABLE `#__activation_attempts`
 ADD COLUMN hardware_collected TINYINT(1) DEFAULT 0 COMMENT 'Whether hardware info was collected for this activation';
 
 -- Step 4: Create view for easy hardware lookup by order number
@@ -86,12 +86,12 @@ SELECT
     h.ram_total_capacity_gb,
     h.secure_boot_enabled,
     h.collected_at AS hardware_collected_at
-FROM activation_attempts a
-LEFT JOIN technicians t ON a.technician_id = t.technician_id
-LEFT JOIN oem_keys k ON a.key_id = k.id
-LEFT JOIN hardware_info h ON h.activation_id = a.id
+FROM `#__activation_attempts` a
+LEFT JOIN `#__technicians` t ON a.technician_id = t.technician_id
+LEFT JOIN `#__oem_keys` k ON a.key_id = k.id
+LEFT JOIN `#__hardware_info` h ON h.activation_id = a.id
 ORDER BY a.attempted_at DESC;
 
 -- Step 5: (Optional) Add secure_boot_enabled column if table already exists without it
 -- Run this only if you applied the migration before this column was added:
--- ALTER TABLE hardware_info ADD COLUMN secure_boot_enabled TINYINT(1) NULL COMMENT 'Whether Secure Boot is enabled (1=yes, 0=no, NULL=unknown)' AFTER os_architecture;
+-- ALTER TABLE `#__hardware_info` ADD COLUMN secure_boot_enabled TINYINT(1) NULL COMMENT 'Whether Secure Boot is enabled (1=yes, 0=no, NULL=unknown)' AFTER os_architecture;

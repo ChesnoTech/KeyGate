@@ -8,7 +8,7 @@
  * Check if QC compliance system is enabled
  */
 function qcIsEnabled(PDO $pdo): bool {
-    $stmt = $pdo->prepare("SELECT setting_value FROM qc_global_settings WHERE setting_key = 'qc_enabled' LIMIT 1");
+    $stmt = $pdo->prepare("SELECT setting_value FROM `" . t('qc_global_settings') . "` WHERE setting_key = 'qc_enabled' LIMIT 1");
     $stmt->execute();
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     return $row && $row['setting_value'] === '1';
@@ -18,7 +18,7 @@ function qcIsEnabled(PDO $pdo): bool {
  * Return all global QC settings as key-value array
  */
 function qcGetGlobalSettings(PDO $pdo): array {
-    $stmt = $pdo->query("SELECT setting_key, setting_value FROM qc_global_settings");
+    $stmt = $pdo->query("SELECT setting_key, setting_value FROM `" . t('qc_global_settings') . "`");
     $settings = [];
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
         $settings[$row['setting_key']] = $row['setting_value'];
@@ -36,7 +36,7 @@ function qcAutoRegisterMotherboard(PDO $pdo, ?string $manufacturer, ?string $pro
     }
 
     // Check if already exists
-    $stmt = $pdo->prepare("SELECT id, known_bios_versions FROM qc_motherboard_registry WHERE manufacturer = ? AND product = ? LIMIT 1");
+    $stmt = $pdo->prepare("SELECT id, known_bios_versions FROM `" . t('qc_motherboard_registry') . "` WHERE manufacturer = ? AND product = ? LIMIT 1");
     $stmt->execute([$manufacturer, $product]);
     $existing = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -48,7 +48,7 @@ function qcAutoRegisterMotherboard(PDO $pdo, ?string $manufacturer, ?string $pro
         }
 
         $stmt = $pdo->prepare("
-            UPDATE qc_motherboard_registry
+            UPDATE `" . t('qc_motherboard_registry') . "`
             SET times_seen = times_seen + 1,
                 last_seen_at = NOW(),
                 known_bios_versions = ?
@@ -61,7 +61,7 @@ function qcAutoRegisterMotherboard(PDO $pdo, ?string $manufacturer, ?string $pro
     // Insert new motherboard
     $knownVersions = !empty($biosVersion) ? json_encode([$biosVersion]) : '[]';
     $stmt = $pdo->prepare("
-        INSERT INTO qc_motherboard_registry (manufacturer, product, known_bios_versions, first_seen_at, last_seen_at, times_seen)
+        INSERT INTO `" . t('qc_motherboard_registry') . "` (manufacturer, product, known_bios_versions, first_seen_at, last_seen_at, times_seen)
         VALUES (?, ?, ?, NOW(), NOW(), 1)
     ");
     $stmt->execute([$manufacturer, $product, $knownVersions]);
@@ -89,7 +89,7 @@ function qcGetEffectiveRules(PDO $pdo, ?string $manufacturer, ?string $product, 
 
     // Overlay product line enforcement (matched by order number pattern)
     if (!empty($orderNumber) && mb_strlen($orderNumber) <= 50) {
-        $stmt = $pdo->query("SELECT id, name, order_pattern, secure_boot_enforcement, bios_enforcement, hackbgrt_enforcement, partition_enforcement, missing_drivers_enforcement FROM product_lines WHERE is_active = 1 ORDER BY LENGTH(order_pattern) DESC");
+        $stmt = $pdo->query("SELECT id, name, order_pattern, secure_boot_enforcement, bios_enforcement, hackbgrt_enforcement, partition_enforcement, missing_drivers_enforcement FROM `" . t('product_lines') . "` WHERE is_active = 1 ORDER BY LENGTH(order_pattern) DESC");
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $line) {
             $pattern = $line['order_pattern'] ?? '';
             if (!preg_match('/^[\p{L}\p{N}#*\-\s]+$/u', $pattern) || mb_strlen($pattern) > 50) continue;
@@ -114,7 +114,7 @@ function qcGetEffectiveRules(PDO $pdo, ?string $manufacturer, ?string $product, 
 
     // Overlay manufacturer defaults
     if (!empty($manufacturer)) {
-        $stmt = $pdo->prepare("SELECT * FROM qc_manufacturer_defaults WHERE manufacturer = ? LIMIT 1");
+        $stmt = $pdo->prepare("SELECT * FROM `" . t('qc_manufacturer_defaults') . "` WHERE manufacturer = ? LIMIT 1");
         $stmt->execute([$manufacturer]);
         $mfr = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($mfr) {
@@ -129,7 +129,7 @@ function qcGetEffectiveRules(PDO $pdo, ?string $manufacturer, ?string $product, 
 
     // Overlay model-specific overrides (non-NULL only)
     if (!empty($manufacturer) && !empty($product)) {
-        $stmt = $pdo->prepare("SELECT * FROM qc_motherboard_registry WHERE manufacturer = ? AND product = ? LIMIT 1");
+        $stmt = $pdo->prepare("SELECT * FROM `" . t('qc_motherboard_registry') . "` WHERE manufacturer = ? AND product = ? LIMIT 1");
         $stmt->execute([$manufacturer, $product]);
         $model = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($model) {
@@ -444,7 +444,7 @@ function qcCheckPartitionLayout(PDO $pdo, int $hardwareInfoId, string $orderNumb
     if (mb_strlen($orderNumber) > 50) {
         return null;
     }
-    $stmt = $pdo->query("SELECT id, name, order_pattern, enforcement_level FROM product_lines WHERE is_active = 1 ORDER BY LENGTH(order_pattern) DESC");
+    $stmt = $pdo->query("SELECT id, name, order_pattern, enforcement_level FROM `" . t('product_lines') . "` WHERE is_active = 1 ORDER BY LENGTH(order_pattern) DESC");
     $matchedLine = null;
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $line) {
         $pattern = $line['order_pattern'] ?? '';
@@ -537,7 +537,7 @@ function qcCheckPartitionLayout(PDO $pdo, int $hardwareInfoId, string $orderNumb
     }
     $stmt = $pdo->prepare("
         SELECT id, name, disk_size_min_mb, disk_size_max_mb
-        FROM product_variants
+        FROM `" . t('product_variants') . "`
         WHERE line_id = ? AND is_active = 1
           AND disk_size_min_mb <= ? AND disk_size_max_mb >= ?
         ORDER BY disk_size_min_mb DESC
@@ -562,7 +562,7 @@ function qcCheckPartitionLayout(PDO $pdo, int $hardwareInfoId, string $orderNumb
 
     // 6. Store detected variant in hardware_info
     $stmt = $pdo->prepare("
-        UPDATE hardware_info
+        UPDATE `" . t('hardware_info') . "`
         SET detected_variant_id = ?, detected_variant_name = ?, detected_line_name = ?
         WHERE id = ?
     ");
@@ -570,7 +570,7 @@ function qcCheckPartitionLayout(PDO $pdo, int $hardwareInfoId, string $orderNumb
 
     // 7. Load expected partitions
     $stmt = $pdo->prepare("
-        SELECT * FROM product_variant_partitions
+        SELECT * FROM `" . t('product_variant_partitions') . "`
         WHERE variant_id = ?
         ORDER BY partition_order
     ");
@@ -659,7 +659,7 @@ function qcCheckPartitionLayout(PDO $pdo, int $hardwareInfoId, string $orderNumb
     } else {
         // Check global setting
         try {
-            $gStmt = $pdo->prepare("SELECT setting_value FROM qc_global_settings WHERE setting_key = 'max_unallocated_mb'");
+            $gStmt = $pdo->prepare("SELECT setting_value FROM `" . t('qc_global_settings') . "` WHERE setting_key = 'max_unallocated_mb'");
             $gStmt->execute();
             $gVal = $gStmt->fetchColumn();
             if ($gVal !== false && $gVal !== null && $gVal !== '') {
@@ -714,7 +714,7 @@ function qcCheckPartitionLayout(PDO $pdo, int $hardwareInfoId, string $orderNumb
  */
 function qcInsertResult(PDO $pdo, int $hardwareInfoId, string $orderNumber, array $check, ?int $registryId, bool $retroactive = false): void {
     $stmt = $pdo->prepare("
-        INSERT INTO qc_compliance_results (
+        INSERT INTO `" . t('qc_compliance_results') . "` (
             hardware_info_id, order_number, check_type, check_result,
             enforcement_level, expected_value, actual_value, message,
             rule_source, motherboard_registry_id, is_retroactive, checked_at
@@ -741,7 +741,7 @@ function qcInsertResult(PDO $pdo, int $hardwareInfoId, string $orderNumber, arra
 function qcHasBlockingIssues(PDO $pdo, int $hardwareInfoId): bool {
     $stmt = $pdo->prepare("
         SELECT COUNT(*) as cnt
-        FROM qc_compliance_results
+        FROM `" . t('qc_compliance_results') . "`
         WHERE hardware_info_id = ?
           AND enforcement_level = 3
           AND check_result = 'fail'
@@ -809,7 +809,7 @@ function qcRecheckHistorical(PDO $pdo, ?string $manufacturer = null, ?string $pr
         $lastId = $hwId;
 
         // Delete existing compliance results for this record
-        $stmt2 = $pdo->prepare("DELETE FROM qc_compliance_results WHERE hardware_info_id = ?");
+        $stmt2 = $pdo->prepare("DELETE FROM `" . t('qc_compliance_results') . "` WHERE hardware_info_id = ?");
         $stmt2->execute([$hwId]);
 
         // Re-run checks
@@ -853,7 +853,7 @@ function qcRunChecksRetroactive(PDO $pdo, int $hardwareInfoId, array $hw): array
     $orderNumber  = $hw['order_number'] ?? '';
 
     // Get registry ID (don't auto-register for retroactive)
-    $stmt = $pdo->prepare("SELECT id FROM qc_motherboard_registry WHERE manufacturer = ? AND product = ? LIMIT 1");
+    $stmt = $pdo->prepare("SELECT id FROM `" . t('qc_motherboard_registry') . "` WHERE manufacturer = ? AND product = ? LIMIT 1");
     $stmt->execute([$manufacturer, $product]);
     $reg = $stmt->fetch(PDO::FETCH_ASSOC);
     $registryId = $reg ? (int) $reg['id'] : null;

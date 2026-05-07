@@ -12,8 +12,53 @@
  *   6. Complete            — write config, show success
  */
 
-// Prevent running if already installed
+// Auto-unlock recovery (P0): if install.lock exists but install never
+// completed (admin_users empty/missing), clear the lock so user can resume.
+// Inlined to avoid dragging ajax.php's JSON header + dispatch into HTML output.
 $lockFile = __DIR__ . '/../install.lock';
+$configFile = __DIR__ . '/../config.php';
+if (file_exists($lockFile) && file_exists($configFile)) {
+    $configSrc = @file_get_contents($configFile);
+    if ($configSrc !== false
+        && preg_match("/'host'\s*=>\s*'([^']+)'/", $configSrc, $hM)
+        && preg_match("/'dbname'\s*=>\s*'([^']+)'/", $configSrc, $nM)
+        && preg_match("/'username'\s*=>\s*'([^']+)'/", $configSrc, $uM)
+        && preg_match("/'password'\s*=>\s*'([^']*)'/", $configSrc, $pM)
+        && preg_match("/'port'\s*=>\s*(\d+)/", $configSrc, $portM)) {
+        $autoHost = strtolower($hM[1]) === 'localhost' ? '127.0.0.1' : $hM[1];
+        // Read DB_PREFIX from config (empty for legacy installs).
+        $autoPrefix = '';
+        if (preg_match("/define\(\s*'DB_PREFIX'\s*,\s*'([^']*)'\s*\)/", $configSrc, $pxM)) {
+            $autoPrefix = $pxM[1];
+        }
+        $autoAdminTable = $autoPrefix . 'admin_users';
+        try {
+            $autoPdo = new PDO(
+                "mysql:host={$autoHost};port={$portM[1]};dbname={$nM[1]};charset=utf8mb4",
+                $uM[1], $pM[1],
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 5]
+            );
+            $hasAdminTable = (bool) $autoPdo->query("SHOW TABLES LIKE " . $autoPdo->quote($autoAdminTable))->fetch();
+            $adminCount = $hasAdminTable ? (int) $autoPdo->query("SELECT COUNT(*) FROM `{$autoAdminTable}`")->fetchColumn() : 0;
+            if (!$hasAdminTable || $adminCount === 0) {
+                @unlink($lockFile);
+                @file_put_contents(
+                    __DIR__ . '/install.log',
+                    '[' . date('Y-m-d H:i:s') . "] auto-unlock from index.php — admin_users empty/missing\n",
+                    FILE_APPEND
+                );
+            }
+        } catch (PDOException $autoE) {
+            @file_put_contents(
+                __DIR__ . '/install.log',
+                '[' . date('Y-m-d H:i:s') . '] auto-unlock skipped: ' . $autoE->getMessage() . "\n",
+                FILE_APPEND
+            );
+        }
+    }
+}
+
+// Prevent running if already installed
 if (file_exists($lockFile)) {
     $installed = json_decode(file_get_contents($lockFile), true);
     ?>
@@ -372,7 +417,8 @@ $serverUrl = $protocol . '://' . $host . $baseUrl;
             <div class="form-row">
                 <div class="form-group">
                     <label>Database Host</label>
-                    <input type="text" id="dbHost" value="localhost" />
+                    <input type="text" id="dbHost" value="127.0.0.1" />
+                    <div class="form-hint">Use <code>127.0.0.1</code> on aaPanel/cPanel (avoids Unix-socket lookup). Use <code>localhost</code> only if you also set Socket Path below.</div>
                 </div>
                 <div class="form-group">
                     <label>Port</label>
@@ -392,8 +438,40 @@ $serverUrl = $protocol . '://' . $host . $baseUrl;
             <div class="form-group">
                 <label>Database Name</label>
                 <input type="text" id="dbName" value="oem_activation" />
-                <div class="form-hint">Will be created if it doesn't exist</div>
+                <div class="form-hint">Will be created if it doesn't exist (requires CREATE privilege).</div>
             </div>
+            <div class="form-group" style="margin-top:6px;">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500;">
+                    <input type="checkbox" id="dbSkipCreate" style="width:auto;" />
+                    <span>Database already exists — skip CREATE DATABASE</span>
+                </label>
+                <div class="form-hint">Tick this if your control panel does not grant CREATE privilege (Plesk, CyberPanel, ISPConfig). Pre-create the database in your panel first.</div>
+            </div>
+            <details class="form-group" style="margin-top:8px;">
+                <summary style="cursor:pointer;color:var(--primary);font-weight:600;">Advanced (optional)</summary>
+                <div style="margin-top:10px;">
+                    <label>Socket Path</label>
+                    <div style="display:flex;gap:8px;">
+                        <input type="text" id="dbSocket" placeholder="/tmp/mysql.sock" style="flex:1;" />
+                        <button type="button" class="btn btn-outline" style="white-space:nowrap;" onclick="detectSocket()">Detect</button>
+                    </div>
+                    <div class="form-hint">If set, host/port are ignored. Click <strong>Detect</strong> to auto-find. Common paths: <code>/tmp/mysql.sock</code>, <code>/var/run/mysqld/mysqld.sock</code>, <code>/www/server/mysql/mysql.sock</code>.</div>
+                </div>
+                <div style="margin-top:14px;">
+                    <label>Charset</label>
+                    <select id="dbCharset" style="width:100%;">
+                        <option value="">Auto-detect (recommended)</option>
+                        <option value="utf8mb4">utf8mb4 (MySQL ≥5.7 / MariaDB ≥10.2)</option>
+                        <option value="utf8">utf8 / utf8mb3 (legacy)</option>
+                    </select>
+                    <div class="form-hint">Auto-detect downgrades to <code>utf8</code> for very old servers (MySQL &lt; 5.7).</div>
+                </div>
+                <div style="margin-top:14px;">
+                    <label>Table Prefix (optional)</label>
+                    <input type="text" id="dbPrefix" placeholder="e.g. kg_" maxlength="10" pattern="^([a-z][a-z0-9_]{0,9})?$" />
+                    <div class="form-hint">Lowercase letters, digits, underscore. Lets you run KeyGate alongside other apps in the same database. Leave empty for default.</div>
+                </div>
+            </details>
             <div id="dbTestResult" class="hidden"></div>
             <div class="btn-row">
                 <button class="btn btn-secondary" onclick="goStep(1)">&larr; Back</button>
@@ -538,9 +616,13 @@ $serverUrl = $protocol . '://' . $host . $baseUrl;
                 </ul>
             </div>
 
-            <a class="btn btn-primary" id="goToAdmin" href="../secure-admin.php" style="text-decoration:none;margin-top:16px;">
-                Open Admin Panel &rarr;
-            </a>
+            <div style="display:flex;gap:8px;justify-content:center;margin-top:16px;flex-wrap:wrap;">
+                <a class="btn btn-primary" id="goToAdmin" href="../secure-admin.php" style="text-decoration:none;">
+                    Open Admin Panel &rarr;
+                </a>
+                <button type="button" class="btn btn-outline" onclick="runHealthCheck(this)">Run health check</button>
+            </div>
+            <div id="healthResult" class="hidden" style="margin-top:14px;text-align:left;"></div>
         </div>
     </div>
 
@@ -567,7 +649,32 @@ function goStep(n) {
     });
 
     currentStep = n;
+    // Persist breadcrumb so reload picks up where the user left off (P2).
+    if (n > 1) post('progress_set', { step: n - 1 }).catch(() => {});
     window.scrollTo(0, 0);
+}
+
+// ── Resume on boot (P2): if .progress.json exists, jump to last+1 step ──
+async function maybeResumeFromProgress() {
+    try {
+        const r = await post('progress_get', {});
+        if (r.success && r.progress && r.progress.last_step) {
+            const last = parseInt(r.progress.last_step, 10);
+            if (last >= 1 && last < 6) {
+                const ok = confirm(
+                    'Previous installation in progress (step ' + last + ' completed at ' +
+                    (r.progress.steps[last] || 'unknown') + ').\n\nResume from step ' +
+                    (last + 1) + '?  (Cancel = start over)'
+                );
+                if (ok) {
+                    goStep(last + 1);
+                    return true;
+                }
+                await post('progress_clear', {});
+            }
+        }
+    } catch (e) { /* progress endpoint optional */ }
+    return false;
 }
 
 // ── AJAX Helper ──────────────────────────────────────
@@ -648,76 +755,205 @@ async function runEnvCheck() {
 }
 
 // ── Step 2: Database Test ────────────────────────────
+async function detectSocket() {
+    const data = await post('detect_socket', {});
+    const input = document.getElementById('dbSocket');
+    if (data.success && data.suggested) {
+        input.value = data.suggested;
+        alert('Found ' + data.sockets.length + ' socket(s). Picked: ' + data.suggested);
+    } else {
+        alert('No Unix socket found in common paths. Stick with TCP (host=127.0.0.1).');
+    }
+}
+
 async function testDb() {
     const btn = document.getElementById('dbTestBtn');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner" style="border-color:var(--primary-light);border-top-color:var(--primary);"></span> Testing...';
 
+    const $ = id => document.getElementById(id);
     dbCredentials = {
-        db_host: document.getElementById('dbHost').value,
-        db_port: document.getElementById('dbPort').value,
-        db_user: document.getElementById('dbUser').value,
-        db_pass: document.getElementById('dbPass').value,
-        db_name: document.getElementById('dbName').value,
+        db_host:        $('dbHost').value.trim() || '127.0.0.1',
+        db_port:        $('dbPort').value,
+        db_user:        $('dbUser').value,
+        db_pass:        $('dbPass').value,
+        db_name:        $('dbName').value,
+        db_socket:      $('dbSocket') ? $('dbSocket').value.trim() : '',
+        db_prefix:      $('dbPrefix') ? $('dbPrefix').value.trim() : '',
+        db_charset:     $('dbCharset') ? $('dbCharset').value : '',
+        skip_create_db: $('dbSkipCreate') && $('dbSkipCreate').checked ? '1' : '',
     };
 
     const data = await post('test_db', dbCredentials);
-    const div = document.getElementById('dbTestResult');
+    const div = $('dbTestResult');
     div.classList.remove('hidden');
 
     if (data.success) {
         div.className = 'alert alert-success';
         div.innerHTML = `<strong>&#10003; Connected!</strong> ${data.message}`;
-        document.getElementById('dbNext').disabled = false;
+        // Persist server-resolved charset back into the dropdown so steps 3+ use it.
+        if (data.charset && $('dbCharset')) $('dbCharset').value = data.charset;
+        $('dbNext').disabled = false;
     } else {
         div.className = 'alert alert-danger';
-        div.innerHTML = `<strong>&#10007; Failed:</strong> ${data.message}`;
-        document.getElementById('dbNext').disabled = true;
+        let html = `<strong>&#10007; Failed:</strong> ${data.message}`;
+        if (data.suggest_skip_create) {
+            html += ` <button class="btn btn-outline" style="margin-left:8px;font-size:12px;padding:4px 10px;" onclick="document.getElementById('dbSkipCreate').checked=true;testDb();return false;">Tick &amp; retry</button>`;
+        }
+        div.innerHTML = html;
+        $('dbNext').disabled = true;
     }
 
     btn.disabled = false;
     btn.innerHTML = 'Test Connection';
 }
 
-// ── Step 3: Migrations ──────────────────────────────
+// ── Step 3: Migrations (async per-file, survives short max_execution_time) ──
 async function runMigrations() {
-    document.getElementById('migrationPre').classList.add('hidden');
-    document.getElementById('migrationProgress').classList.remove('hidden');
-    document.getElementById('migBack').disabled = true;
-    document.getElementById('migNext').classList.add('hidden');
+    const $ = id => document.getElementById(id);
+    $('migrationPre').classList.add('hidden');
+    $('migrationProgress').classList.remove('hidden');
+    $('migBack').disabled = true;
+    $('migNext').classList.add('hidden');
 
-    const log = document.getElementById('migLog');
+    const log = $('migLog');
     log.innerHTML = '';
 
-    const data = await post('install_db', dbCredentials);
+    // ── 1. Init: get migration list + applied flags ──
+    const init = await post('install_db_init', dbCredentials);
+    if (!init.success) {
+        $('migStatus').textContent = 'Initialization failed';
+        $('migStatus').style.color = 'var(--danger)';
+        log.innerHTML += `<div class="err">ERROR: ${init.message || 'Unknown error'}</div>`;
+        $('migBack').disabled = false;
+        return;
+    }
 
-    const total = data.results ? data.results.length : 0;
+    const list = init.migrations || [];
+    const total = list.length;
     let done = 0;
+    let hadError = false;
 
-    if (data.results) {
-        data.results.forEach(r => {
+    const updateProgress = () => {
+        const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+        $('migBar').style.width = pct + '%';
+        $('migCount').textContent = done + ' / ' + total;
+    };
+
+    // ── 2. Step through each migration ──
+    for (const m of list) {
+        if (!m.exists) {
             done++;
-            const pct = Math.round((done / total) * 100);
-            document.getElementById('migBar').style.width = pct + '%';
-            document.getElementById('migCount').textContent = done + ' / ' + total;
+            log.innerHTML += `<div class="skip">→ ${m.file}: not found (skipped)</div>`;
+            updateProgress();
+            continue;
+        }
+        if (m.applied) {
+            done++;
+            log.innerHTML += `<div class="skip">→ ${m.file}: already applied</div>`;
+            updateProgress();
+            continue;
+        }
 
-            const cls = r.status === 'ok' ? 'ok' : r.status === 'skipped' ? 'skip' : 'err';
-            const icon = r.status === 'ok' ? '✓' : r.status === 'skipped' ? '→' : '✗';
-            log.innerHTML += `<div class="${cls}">${icon} ${r.file}: ${r.message}</div>`;
-            log.scrollTop = log.scrollHeight;
-        });
+        const pendingRow = document.createElement('div');
+        pendingRow.className = 'pending';
+        pendingRow.innerHTML = `<span class="spinner" style="display:inline-block;width:12px;height:12px;border-width:2px;"></span> ${m.file}…`;
+        log.appendChild(pendingRow);
+        log.scrollTop = log.scrollHeight;
+
+        const r = await post('install_db_step', { ...dbCredentials, file: m.file, version: m.version });
+        log.removeChild(pendingRow);
+
+        const cls = r.status === 'ok' ? 'ok' : r.status === 'skipped' ? 'skip' : 'err';
+        const icon = r.status === 'ok' ? '✓' : r.status === 'skipped' ? '→' : '✗';
+        log.innerHTML += `<div class="${cls}">${icon} ${m.file}: ${r.message || ''}</div>`;
+        log.scrollTop = log.scrollHeight;
+
+        done++;
+        updateProgress();
+
+        if (!r.success && r.status === 'error') {
+            hadError = true;
+            // Append inline Retry / Skip buttons next to the error row
+            const errRow = log.lastChild;
+            const btnBar = document.createElement('div');
+            btnBar.style.cssText = 'margin:6px 0 12px 22px;display:flex;gap:8px;';
+            btnBar.innerHTML =
+                `<button class="btn btn-outline" style="padding:4px 12px;font-size:12px;" onclick="retryMigration('${m.file}', ${m.version}, this)">Retry</button>` +
+                `<button class="btn btn-outline" style="padding:4px 12px;font-size:12px;color:var(--warning);" onclick="skipMigration('${m.file}', ${m.version}, ${JSON.stringify(r.message || '').replace(/'/g, "\\'")}, this)">Skip</button>`;
+            errRow.appendChild(btnBar);
+            // Stop loop on first hard error so user can read it.
+            break;
+        }
     }
 
-    if (data.success) {
-        document.getElementById('migStatus').textContent = 'All migrations complete!';
-        document.getElementById('migStatus').style.color = 'var(--success)';
-        document.getElementById('migNext').classList.remove('hidden');
+    if (!hadError) {
+        $('migStatus').textContent = 'All migrations complete!';
+        $('migStatus').style.color = 'var(--success)';
+        $('migNext').classList.remove('hidden');
     } else {
-        document.getElementById('migStatus').textContent = 'Installation failed';
-        document.getElementById('migStatus').style.color = 'var(--danger)';
-        log.innerHTML += `<div class="err">ERROR: ${data.message || 'Unknown error'}</div>`;
-        document.getElementById('migBack').disabled = false;
+        $('migStatus').textContent = 'Installation failed — click Retry or Skip on the failed step';
+        $('migStatus').style.color = 'var(--danger)';
+        $('migBack').disabled = false;
     }
+}
+
+// ── P2: Per-migration retry/skip ─────────────────────
+async function retryMigration(file, version, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Retrying...';
+    const r = await post('install_db_step', { ...dbCredentials, file, version });
+    btn.disabled = false;
+    btn.textContent = 'Retry';
+    const log = document.getElementById('migLog');
+    const cls = r.status === 'ok' ? 'ok' : r.status === 'skipped' ? 'skip' : 'err';
+    const icon = r.status === 'ok' ? '✓' : r.status === 'skipped' ? '→' : '✗';
+    log.innerHTML += `<div class="${cls}">${icon} ${file} (retry): ${r.message || ''}</div>`;
+    log.scrollTop = log.scrollHeight;
+    if (r.success && r.status !== 'error') {
+        // Resume forward by reloading the migration list and continuing.
+        runMigrations();
+    }
+}
+
+async function skipMigration(file, version, errorMsg, btn) {
+    if (!confirm(`Skip migration "${file}"?\n\nThe failed step will be marked applied so the rest can run, but you may end up in a broken state. Only do this if you know the failure is benign (e.g. the table already exists from a prior install).`)) {
+        return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Skipping...';
+    const r = await post('migration_skip', { ...dbCredentials, file, version, error: errorMsg });
+    btn.disabled = false;
+    btn.textContent = 'Skip';
+    const log = document.getElementById('migLog');
+    if (r.success) {
+        log.innerHTML += `<div class="skip">→ ${file}: marked SKIPPED by user</div>`;
+        runMigrations();
+    } else {
+        log.innerHTML += `<div class="err">✗ ${file}: skip failed: ${r.message}</div>`;
+    }
+    log.scrollTop = log.scrollHeight;
+}
+
+// ── P2: Step 6 health probe ──────────────────────────
+async function runHealthCheck(btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner" style="border-color:var(--primary-light);border-top-color:var(--primary);"></span> Probing...';
+    const r = await post('health', { ...dbCredentials });
+    btn.disabled = false;
+    btn.textContent = 'Run health check';
+
+    const out = document.getElementById('healthResult');
+    if (!out) return;
+    out.classList.remove('hidden');
+    let html = `<div class="alert ${r.success ? 'alert-success' : 'alert-warning'}"><strong>Health:</strong>`;
+    html += '<ul style="margin:6px 0 0 18px;font-size:13px;">';
+    for (const c of (r.checks || [])) {
+        const icon = c.status === 'pass' ? '✓' : '✗';
+        html += `<li>${icon} ${c.label}${c.value !== undefined ? ' (' + c.value + ')' : ''}${c.message ? ' — ' + c.message : ''}</li>`;
+    }
+    html += '</ul></div>';
+    out.innerHTML = html;
 }
 
 // ── Step 4: Create Admin ────────────────────────────
@@ -787,7 +1023,10 @@ async function finalize() {
 }
 
 // ── Auto-run env check on load ──────────────────────
-document.addEventListener('DOMContentLoaded', runEnvCheck);
+document.addEventListener('DOMContentLoaded', async () => {
+    const resumed = await maybeResumeFromProgress();
+    if (!resumed) runEnvCheck();
+});
 </script>
 
 </body>

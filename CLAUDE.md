@@ -280,7 +280,48 @@ powershell -ExecutionPolicy Bypass -File "FINAL_PRODUCTION_SYSTEM/activation/mai
 
 # Deploy license server
 cd license-server && npx wrangler login && npx wrangler deploy
+
+# Run prefix codemod (only when adding NEW tables — output already in repo)
+docker cp tools/prefix-codemod.php oem-activation-web:/tmp/codemod.php
+docker compose exec web php /tmp/codemod.php --root /var/www/html/activate          # dry-run
+docker compose exec web php /tmp/codemod.php --root /var/www/html/activate --apply  # write
+docker compose exec web php /tmp/codemod.php --root /var/www/html/activate --verify # second-run must be 0/0
 ```
+
+## Multi-Panel Web Installer (P0 + P1 + P2)
+
+The web installer at `FINAL_PRODUCTION_SYSTEM/install/` works on aaPanel,
+cPanel, Plesk, DirectAdmin, CyberPanel, ISPConfig, Vesta. Highlights:
+
+| Feature | What it does |
+|---------|--------------|
+| Async per-migration runner | `install_db_init` + `install_db_step` survives 30–60s `max_execution_time` caps |
+| Per-statement SQL splitter | Respects backticks, quotes, line + block comments |
+| Charset auto-fallback | MySQL <5.7 / MariaDB <5.5.3 → utf8mb3 instead of utf8mb4 |
+| CREATE DATABASE skip-toggle | Step-2 checkbox for Plesk/CyberPanel users |
+| Reverse-proxy IP hardening | Trust X-Forwarded-For only when REMOTE_ADDR is RFC1918/loopback |
+| Auto-unlock recovery | `install.lock` + `admin_users` empty/missing → silent unlock |
+| Unix-socket auto-detect | Probes 8 common paths, populates step-2 input |
+| Joomla `#__` table prefix | Optional prefix in step-2 advanced section; empty default |
+| Resumable `.progress.json` | Reload prompts "Resume from step N?" |
+| Per-migration retry/skip | Inline buttons appear next to a failed migration |
+| Structured `install.log` | Audit trail of every preflight/step/error |
+| Step-6 health probe | `Run health check` button calls `?action=health` |
+
+### DB_PREFIX (Joomla-style)
+
+- **Sentinel**: SQL files use `#__tablename`. Substituted at install time
+  (`installerRunSqlFile` in `install/ajax.php`) or Docker init time
+  (`KEYGATE_DB_PREFIX` env var in `00-init.sh`).
+- **Runtime helper**: `t('admin_users')` returns `DB_PREFIX . 'admin_users'`.
+  Defined in `functions/db-helpers.php`, loaded from `constants.php`
+  before any controller runs.
+- **Backward compat**: legacy installs without `define('DB_PREFIX', ...)`
+  in `config.php` get an empty default → identical behavior to pre-prefix
+  release.
+- **When adding a new table**: write SQL with `#__yourtable` placeholder;
+  reference from PHP via `t('yourtable')` (or run `tools/prefix-codemod.php`
+  `--apply` to convert all references mechanically).
 
 ## Contributing Guide
 
@@ -434,3 +475,40 @@ DocumentRoot is `/var/www/html/activate` — API URLs are `/api/...` from inside
 | `App.tsx` | React router with 24 routes |
 | `app-sidebar.tsx` | Navigation with 5 groups, 30 items |
 | `api-contracts.test.ts` | Backend action registry validation |
+
+## Personal Skills (Enforced)
+
+This project uses the user's global personal skill stack. All three are MANDATORY for the workflow.
+
+### 1. caveman (token efficiency)
+- **Mode**: caveman `full` is active by default. Status line shows `[CAVEMAN]`.
+- **Rules**: drop articles, filler, pleasantries, hedging. Fragments OK. Code/commits/PRs/security warnings stay normal English.
+- **Triggers**: auto on every response. Off only by user typing `stop caveman` or `normal mode`.
+- **Other caveman skills**: `caveman:caveman-commit` (commit messages), `caveman:caveman-review` (PR review), `caveman:compress` (compress memory files).
+
+### 2. superpowers (workflow enforcement)
+Always invoke the matching superpowers skill via the Skill tool BEFORE acting:
+
+| Task | Skill |
+|------|-------|
+| Any creative work / new feature / behavior change | `superpowers:brainstorming` |
+| Multi-step task with spec | `superpowers:writing-plans` then `superpowers:executing-plans` |
+| Implementing feature/bugfix code | `superpowers:test-driven-development` |
+| Encountering bug / test failure | `superpowers:systematic-debugging` |
+| About to claim "done", "fixed", "passing" | `superpowers:verification-before-completion` |
+| Multiple independent tasks | `superpowers:dispatching-parallel-agents` |
+| Receiving code review feedback | `superpowers:receiving-code-review` |
+| Completing branch / merge time | `superpowers:finishing-a-development-branch` |
+| Creating/editing skills | `superpowers:writing-skills` |
+| Starting any conversation | `superpowers:using-superpowers` |
+
+### 3. graphify (codebase knowledge)
+
+Knowledge graph at `FINAL_PRODUCTION_SYSTEM/graphify-out/` — 13,138 nodes, 19,511 edges, 1,260 communities, AST-only. PreToolUse hook reminds when grep/find/rg used. Stop hook auto-rebuilds graph if code edited this session. Git post-commit + post-checkout hooks rebuild on commits / branch switches.
+
+Rules:
+- Before answering architecture or codebase questions, read `FINAL_PRODUCTION_SYSTEM/graphify-out/GRAPH_REPORT.md` for god nodes and community structure
+- If `FINAL_PRODUCTION_SYSTEM/graphify-out/wiki/index.md` exists, navigate it instead of reading raw files
+- For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
+- After modifying code files in this session, run `graphify update FINAL_PRODUCTION_SYSTEM` to keep the graph current (AST-only, no API cost)
+- Git post-commit + post-checkout hooks auto-rebuild graph on commits / branch switches

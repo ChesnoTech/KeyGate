@@ -162,3 +162,102 @@ jobs:
       - name: Cleanup
         if: always()
         run: docker compose down -v
+
+  # ─── Prefix Codemod Idempotency ─────────────────────────────
+  # Re-runs tools/prefix-codemod.php in --verify mode against the committed
+  # tree. Any unprefixed table reference in SQL or any unrewritten bare-name
+  # SQL ref in PHP would be picked up here.
+  codemod-verify:
+    name: Prefix Codemod Idempotency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, json, mbstring
+
+      - name: Run codemod in dry-run mode (must produce zero changes)
+        run: |
+          OUT=$(php tools/prefix-codemod.php --root FINAL_PRODUCTION_SYSTEM --quiet 2>&1 || true)
+          # Re-run normally to capture stats
+          STATS=$(php tools/prefix-codemod.php --root FINAL_PRODUCTION_SYSTEM)
+          echo "$STATS"
+          # Both pass numbers must be zero
+          SQL_CHANGED=$(echo "$STATS" | grep -oE "SQL: ([0-9]+) files changed" | grep -oE "[0-9]+" | head -1)
+          PHP_CHANGED=$(echo "$STATS" | grep -oE "PHP: ([0-9]+) files changed" | grep -oE "[0-9]+" | head -1)
+          if [ "$SQL_CHANGED" != "0" ] || [ "$PHP_CHANGED" != "0" ]; then
+            echo "❌ Codemod is not idempotent: SQL=$SQL_CHANGED files, PHP=$PHP_CHANGED files would change."
+            echo "Run: php tools/prefix-codemod.php --root FINAL_PRODUCTION_SYSTEM --apply"
+            exit 1
+          fi
+          echo "✅ Codemod idempotent: 0 SQL + 0 PHP changes on second run."
+
+      - name: Run codemod in --verify mode (zero unprefixed SQL refs)
+        run: |
+          php tools/prefix-codemod.php --root FINAL_PRODUCTION_SYSTEM --verify
+          echo "✅ Verify mode pass: zero unprefixed table references."
+
+  # ─── Restricted-PHP Smoke Test (panel-style env) ────────────
+  # Simulates aaPanel-style restrictive PHP settings: low max_execution_time
+  # (forces async per-migration runner) and no allow_url_fopen.
+  installer-restricted-php:
+    name: Installer (restricted PHP env)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP with restrictive settings
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, curl, openssl, json, mbstring, zip
+          ini-values: |
+            max_execution_time=15
+            memory_limit=128M
+            allow_url_fopen=Off
+
+      - name: Verify install/ajax.php parses under restrictive settings
+        run: |
+          # Lint pass with the restrictive INI loaded.
+          php -l FINAL_PRODUCTION_SYSTEM/install/ajax.php
+          php -l FINAL_PRODUCTION_SYSTEM/install/index.php
+          # Smoke import: load ajax.php's helpers and confirm no fatals at load time.
+          php -r '
+            $_POST = ["action" => ""];
+            $_GET  = [];
+            ob_start();
+            include "FINAL_PRODUCTION_SYSTEM/install/ajax.php";
+            $out = ob_get_clean();
+            echo "Loaded successfully. Output: " . substr($out, 0, 200) . "\n";
+            if (!function_exists("installerBuildDsn")) { echo "FAIL: installerBuildDsn missing\n"; exit(1); }
+            if (!function_exists("installerRunSqlFile")) { echo "FAIL: installerRunSqlFile missing\n"; exit(1); }
+            if (!function_exists("installerSplitSql")) { echo "FAIL: installerSplitSql missing\n"; exit(1); }
+            if (!function_exists("installerProbeSockets")) { echo "FAIL: installerProbeSockets missing\n"; exit(1); }
+            if (!function_exists("installerCheckIncompleteState")) { echo "FAIL: installerCheckIncompleteState missing\n"; exit(1); }
+            if (!function_exists("installerT")) { echo "FAIL: installerT missing\n"; exit(1); }
+            echo "✅ All installer helpers loaded under restricted PHP.\n";
+          '
+
+      - name: Verify SQL splitter handles every existing migration
+        run: |
+          php -r '
+            include "FINAL_PRODUCTION_SYSTEM/install/ajax.php";
+            $files = glob("FINAL_PRODUCTION_SYSTEM/database/*.sql");
+            $totalStmts = 0;
+            foreach ($files as $f) {
+              $sql = file_get_contents($f);
+              $sql = preg_replace("/DELIMITER\s+[^\n]+/i", "", $sql);
+              $sql = preg_replace("/^\s*(START\s+TRANSACTION|BEGIN)\s*;\s*\$/im", "", $sql);
+              $sql = preg_replace("/^\s*COMMIT\s*;\s*\$/im", "", $sql);
+              $stmts = installerSplitSql($sql);
+              $count = count(array_filter($stmts, fn($s) => trim($s) !== ""));
+              $totalStmts += $count;
+              if ($count === 0) {
+                echo "WARN: " . basename($f) . " produced 0 statements\n";
+              }
+            }
+            echo "✅ Splitter handled " . count($files) . " files, " . $totalStmts . " total statements.\n";
+          '

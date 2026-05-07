@@ -110,7 +110,7 @@ function aclLogDenial($userId, $userType, $permissionKey, $session) {
 
     try {
         $stmt = $pdo->prepare("
-            INSERT INTO rbac_permission_denials (
+            INSERT INTO `" . t('rbac_permission_denials') . "` (
                 admin_id, session_id, admin_role, requested_action,
                 endpoint, ip_address, user_agent
             ) VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -150,7 +150,7 @@ function aclGetEffectivePermissions($userType, $userId) {
         // Check if super_admin
         $isSuperAdmin = false;
         if ($roleId) {
-            $stmt = $pdo->prepare("SELECT role_name FROM acl_roles WHERE id = ?");
+            $stmt = $pdo->prepare("SELECT role_name FROM `" . t('acl_roles') . "` WHERE id = ?");
             $stmt->execute([$roleId]);
             $role = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($role && $role['role_name'] === 'super_admin') {
@@ -159,7 +159,7 @@ function aclGetEffectivePermissions($userType, $userId) {
         }
 
         // Get all permissions
-        $stmt = $pdo->query("SELECT id, permission_key, display_name, category_id, is_dangerous FROM acl_permissions ORDER BY id");
+        $stmt = $pdo->query("SELECT id, permission_key, display_name, category_id, is_dangerous FROM `" . t('acl_permissions') . "` ORDER BY id");
         $allPerms = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         // Get role permissions
@@ -167,8 +167,8 @@ function aclGetEffectivePermissions($userType, $userId) {
         if ($roleId) {
             $stmt = $pdo->prepare("
                 SELECT p.permission_key
-                FROM acl_role_permissions rp
-                INNER JOIN acl_permissions p ON rp.permission_id = p.id
+                FROM `" . t('acl_role_permissions') . "` rp
+                INNER JOIN `" . t('acl_permissions') . "` p ON rp.permission_id = p.id
                 WHERE rp.role_id = ?
             ");
             $stmt->execute([$roleId]);
@@ -179,8 +179,8 @@ function aclGetEffectivePermissions($userType, $userId) {
         $overrides = [];
         $stmt = $pdo->prepare("
             SELECT p.permission_key, uo.is_granted, uo.reason, uo.expires_at
-            FROM acl_user_overrides uo
-            INNER JOIN acl_permissions p ON uo.permission_id = p.id
+            FROM `" . t('acl_user_overrides') . "` uo
+            INNER JOIN `" . t('acl_permissions') . "` p ON uo.permission_id = p.id
             WHERE uo.user_type = ? AND uo.user_id = ?
               AND (uo.expires_at IS NULL OR uo.expires_at > NOW())
         ");
@@ -232,12 +232,12 @@ function aclGetEffectivePermissions($userType, $userId) {
 function aclGetRoleById($roleId) {
     global $pdo;
     try {
-        $stmt = $pdo->prepare("SELECT * FROM acl_roles WHERE id = ?");
+        $stmt = $pdo->prepare("SELECT * FROM `" . t('acl_roles') . "` WHERE id = ?");
         $stmt->execute([$roleId]);
         $role = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$role) return null;
 
-        $stmt = $pdo->prepare("SELECT permission_id FROM acl_role_permissions WHERE role_id = ?");
+        $stmt = $pdo->prepare("SELECT permission_id FROM `" . t('acl_role_permissions') . "` WHERE role_id = ?");
         $stmt->execute([$roleId]);
         $role['permission_ids'] = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
@@ -255,8 +255,8 @@ function aclListRoles($roleType = null) {
     global $pdo;
     try {
         $sql = "SELECT r.*,
-                (SELECT COUNT(*) FROM acl_role_permissions WHERE role_id = r.id) as permission_count
-                FROM acl_roles r WHERE 1=1";
+                (SELECT COUNT(*) FROM `" . t('acl_role_permissions') . "` WHERE role_id = r.id) as permission_count
+                FROM `" . t('acl_roles') . "` r WHERE 1=1";
         $params = [];
         if ($roleType) {
             $sql .= " AND r.role_type = ?";
@@ -291,7 +291,7 @@ function aclCreateRole($name, $displayName, $description, $roleType, $color, $pe
         $pdo->beginTransaction();
 
         $stmt = $pdo->prepare("
-            INSERT INTO acl_roles (role_name, display_name, description, role_type, color, is_system_role, priority, created_by)
+            INSERT INTO `" . t('acl_roles') . "` (role_name, display_name, description, role_type, color, is_system_role, priority, created_by)
             VALUES (?, ?, ?, ?, ?, 0, 0, ?)
         ");
         $stmt->execute([$name, $displayName, $description, $roleType, $color, $actorId]);
@@ -299,7 +299,7 @@ function aclCreateRole($name, $displayName, $description, $roleType, $color, $pe
 
         // Assign permissions
         if (!empty($permissionIds)) {
-            $stmt = $pdo->prepare("INSERT INTO acl_role_permissions (role_id, permission_id, granted_by) VALUES (?, ?, ?)");
+            $stmt = $pdo->prepare("INSERT INTO `" . t('acl_role_permissions') . "` (role_id, permission_id, granted_by) VALUES (?, ?, ?)");
             foreach ($permissionIds as $permId) {
                 $stmt->execute([$roleId, $permId, $actorId]);
             }
@@ -329,7 +329,7 @@ function aclUpdateRole($roleId, $data, $actorId) {
 
         // Optimistic locking: reject if role was modified since the client loaded it
         if (!empty($data['expected_updated_at'])) {
-            $stmt = $pdo->prepare("SELECT updated_at FROM acl_roles WHERE id = ?");
+            $stmt = $pdo->prepare("SELECT updated_at FROM `" . t('acl_roles') . "` WHERE id = ?");
             $stmt->execute([$roleId]);
             $currentUpdatedAt = $stmt->fetchColumn();
             if ($currentUpdatedAt && $currentUpdatedAt !== $data['expected_updated_at']) {
@@ -372,7 +372,7 @@ function aclUpdateRole($roleId, $data, $actorId) {
 
         if (!empty($fields)) {
             $params[] = $roleId;
-            $stmt = $pdo->prepare("UPDATE acl_roles SET " . implode(', ', $fields) . " WHERE id = ?");
+            $stmt = $pdo->prepare("UPDATE `" . t('acl_roles') . "` SET " . implode(', ', $fields) . " WHERE id = ?");
             $stmt->execute($params);
         }
 
@@ -381,11 +381,11 @@ function aclUpdateRole($roleId, $data, $actorId) {
             $oldPermIds = $role['permission_ids'];
 
             // Clear existing
-            $stmt = $pdo->prepare("DELETE FROM acl_role_permissions WHERE role_id = ?");
+            $stmt = $pdo->prepare("DELETE FROM `" . t('acl_role_permissions') . "` WHERE role_id = ?");
             $stmt->execute([$roleId]);
 
             // Insert new
-            $stmt = $pdo->prepare("INSERT INTO acl_role_permissions (role_id, permission_id, granted_by) VALUES (?, ?, ?)");
+            $stmt = $pdo->prepare("INSERT INTO `" . t('acl_role_permissions') . "` (role_id, permission_id, granted_by) VALUES (?, ?, ?)");
             foreach ($data['permission_ids'] as $permId) {
                 $stmt->execute([$roleId, $permId, $actorId]);
             }
@@ -428,7 +428,7 @@ function aclDeleteRole($roleId, $actorId) {
         $pdo->beginTransaction();
 
         // role_permissions will cascade delete
-        $stmt = $pdo->prepare("DELETE FROM acl_roles WHERE id = ? AND is_system_role = 0");
+        $stmt = $pdo->prepare("DELETE FROM `" . t('acl_roles') . "` WHERE id = ? AND is_system_role = 0");
         $stmt->execute([$roleId]);
 
         aclLogChange($actorId, 'delete_role', 'role', $roleId, $role['display_name'],
@@ -480,10 +480,10 @@ function aclAssignPermissions($roleId, $permissionIds, $actorId) {
 
         $oldPermIds = $role['permission_ids'];
 
-        $stmt = $pdo->prepare("DELETE FROM acl_role_permissions WHERE role_id = ?");
+        $stmt = $pdo->prepare("DELETE FROM `" . t('acl_role_permissions') . "` WHERE role_id = ?");
         $stmt->execute([$roleId]);
 
-        $stmt = $pdo->prepare("INSERT INTO acl_role_permissions (role_id, permission_id, granted_by) VALUES (?, ?, ?)");
+        $stmt = $pdo->prepare("INSERT INTO `" . t('acl_role_permissions') . "` (role_id, permission_id, granted_by) VALUES (?, ?, ?)");
         foreach ($permissionIds as $permId) {
             $stmt->execute([$roleId, $permId, $actorId]);
         }
@@ -511,7 +511,7 @@ function aclSetUserOverride($userType, $userId, $permissionId, $isGranted, $reas
     global $pdo;
     try {
         $stmt = $pdo->prepare("
-            INSERT INTO acl_user_overrides (user_type, user_id, permission_id, is_granted, reason, expires_at, created_by)
+            INSERT INTO `" . t('acl_user_overrides') . "` (user_type, user_id, permission_id, is_granted, reason, expires_at, created_by)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE is_granted = VALUES(is_granted), reason = VALUES(reason),
                                     expires_at = VALUES(expires_at), created_by = VALUES(created_by),
@@ -520,7 +520,7 @@ function aclSetUserOverride($userType, $userId, $permissionId, $isGranted, $reas
         $stmt->execute([$userType, $userId, $permissionId, $isGranted ? 1 : 0, $reason, $expiresAt, $actorId]);
 
         // Get permission key for logging
-        $stmt2 = $pdo->prepare("SELECT permission_key FROM acl_permissions WHERE id = ?");
+        $stmt2 = $pdo->prepare("SELECT permission_key FROM `" . t('acl_permissions') . "` WHERE id = ?");
         $stmt2->execute([$permissionId]);
         $permKey = $stmt2->fetchColumn();
 
@@ -544,14 +544,14 @@ function aclRemoveUserOverride($userType, $userId, $permissionId, $actorId) {
         // Get current override for logging
         $stmt = $pdo->prepare("
             SELECT uo.*, p.permission_key
-            FROM acl_user_overrides uo
-            INNER JOIN acl_permissions p ON uo.permission_id = p.id
+            FROM `" . t('acl_user_overrides') . "` uo
+            INNER JOIN `" . t('acl_permissions') . "` p ON uo.permission_id = p.id
             WHERE uo.user_type = ? AND uo.user_id = ? AND uo.permission_id = ?
         ");
         $stmt->execute([$userType, $userId, $permissionId]);
         $old = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        $stmt = $pdo->prepare("DELETE FROM acl_user_overrides WHERE user_type = ? AND user_id = ? AND permission_id = ?");
+        $stmt = $pdo->prepare("DELETE FROM `" . t('acl_user_overrides') . "` WHERE user_type = ? AND user_id = ? AND permission_id = ?");
         $stmt->execute([$userType, $userId, $permissionId]);
 
         if ($old) {
@@ -575,8 +575,8 @@ function aclGetUserOverrides($userType, $userId) {
     try {
         $stmt = $pdo->prepare("
             SELECT uo.*, p.permission_key, p.display_name as permission_name, p.category_id
-            FROM acl_user_overrides uo
-            INNER JOIN acl_permissions p ON uo.permission_id = p.id
+            FROM `" . t('acl_user_overrides') . "` uo
+            INNER JOIN `" . t('acl_permissions') . "` p ON uo.permission_id = p.id
             WHERE uo.user_type = ? AND uo.user_id = ?
             ORDER BY p.id
         ");
@@ -599,11 +599,11 @@ function aclListPermissions($categoryId = null) {
     global $pdo;
     try {
         // Get categories
-        $stmt = $pdo->query("SELECT * FROM acl_permission_categories ORDER BY sort_order");
+        $stmt = $pdo->query("SELECT * FROM `" . t('acl_permission_categories') . "` ORDER BY sort_order");
         $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         // Get permissions
-        $sql = "SELECT * FROM acl_permissions";
+        $sql = "SELECT * FROM `" . t('acl_permissions') . "`";
         $params = [];
         if ($categoryId) {
             $sql .= " WHERE category_id = ?";
@@ -646,11 +646,11 @@ function aclGetUserRoleId($userType, $userId) {
     global $pdo;
     try {
         if ($userType === 'admin') {
-            $stmt = $pdo->prepare("SELECT custom_role_id FROM admin_users WHERE id = ?");
+            $stmt = $pdo->prepare("SELECT custom_role_id FROM `" . t('admin_users') . "` WHERE id = ?");
             $stmt->execute([$userId]);
             return $stmt->fetchColumn() ?: null;
         } elseif ($userType === 'technician') {
-            $stmt = $pdo->prepare("SELECT role_id FROM technicians WHERE id = ?");
+            $stmt = $pdo->prepare("SELECT role_id FROM `" . t('technicians') . "` WHERE id = ?");
             $stmt->execute([$userId]);
             return $stmt->fetchColumn() ?: null;
         }
@@ -668,8 +668,8 @@ function aclGetRoleUserCount($roleId) {
     try {
         $stmt = $pdo->prepare("
             SELECT
-                (SELECT COUNT(*) FROM admin_users WHERE custom_role_id = ?) +
-                (SELECT COUNT(*) FROM technicians WHERE role_id = ?) as total
+                (SELECT COUNT(*) FROM `" . t('admin_users') . "` WHERE custom_role_id = ?) +
+                (SELECT COUNT(*) FROM `" . t('technicians') . "` WHERE role_id = ?) as total
         ");
         $stmt->execute([$roleId, $roleId]);
         return (int)$stmt->fetchColumn();
@@ -686,7 +686,7 @@ function aclLogChange($actorId, $action, $targetType, $targetId, $targetName, $o
     global $pdo;
     try {
         $stmt = $pdo->prepare("
-            INSERT INTO acl_change_log (actor_id, action, target_type, target_id, target_name, old_value, new_value, ip_address)
+            INSERT INTO `" . t('acl_change_log') . "` (actor_id, action, target_type, target_id, target_name, old_value, new_value, ip_address)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([

@@ -2,7 +2,7 @@
 -- Adds configurable max unallocated space limit for partition QC
 
 -- 1. Add per-variant unallocated space limit
-ALTER TABLE product_variants
+ALTER TABLE `#__product_variants`
     ADD COLUMN IF NOT EXISTS max_unallocated_mb INT DEFAULT NULL
     COMMENT 'Max allowed unallocated disk space in MB (NULL = use global setting)';
 

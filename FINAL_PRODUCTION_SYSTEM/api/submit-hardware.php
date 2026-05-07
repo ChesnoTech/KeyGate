@@ -47,8 +47,8 @@ try {
     // Validate session token and get activation_id
     $stmt = $pdo->prepare("
         SELECT aa.id as activation_id, aa.technician_id, aa.key_id
-        FROM activation_attempts aa
-        INNER JOIN active_sessions s ON s.technician_id = aa.technician_id
+        FROM `" . t('activation_attempts') . "` aa
+        INNER JOIN `" . t('active_sessions') . "` s ON s.technician_id = aa.technician_id
         WHERE s.session_token = ?
           AND aa.order_number = ?
           AND aa.attempt_result = 'success'
@@ -66,7 +66,7 @@ try {
     $activationId = $activation['activation_id'];
 
     // Check if hardware info already exists for this activation
-    $stmt = $pdo->prepare("SELECT id FROM hardware_info WHERE activation_id = ?");
+    $stmt = $pdo->prepare("SELECT id FROM `" . t('hardware_info') . "` WHERE activation_id = ?");
     $stmt->execute([$activationId]);
     if ($stmt->fetch()) {
         jsonResponse(['success' => true, 'message' => 'Hardware information already recorded', 'duplicate' => true]);
@@ -77,7 +77,7 @@ try {
 
     // Insert hardware information
     $stmt = $pdo->prepare("
-        INSERT INTO hardware_info (
+        INSERT INTO `" . t('hardware_info') . "` (
             activation_id,
             order_number,
             motherboard_manufacturer,
@@ -188,7 +188,7 @@ try {
     ]);
 
     // Update activation_attempts to mark hardware as collected
-    $stmt = $pdo->prepare("UPDATE activation_attempts SET hardware_collected = 1 WHERE id = ?");
+    $stmt = $pdo->prepare("UPDATE `" . t('activation_attempts') . "` SET hardware_collected = 1 WHERE id = ?");
     $stmt->execute([$activationId]);
 
     $hardwareId = $pdo->lastInsertId();

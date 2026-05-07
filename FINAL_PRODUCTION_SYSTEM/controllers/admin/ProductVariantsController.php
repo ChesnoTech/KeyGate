@@ -14,8 +14,8 @@ function handle_get_product_lines(PDO $pdo, array $admin_session, ?array $json_i
     $stmt = $pdo->query("
         SELECT pl.*,
                COUNT(DISTINCT pv.id) AS variant_count
-        FROM product_lines pl
-        LEFT JOIN product_variants pv ON pv.line_id = pl.id AND pv.is_active = 1
+        FROM `" . t('product_lines') . "` pl
+        LEFT JOIN `" . t('product_variants') . "` pv ON pv.line_id = pl.id AND pv.is_active = 1
         GROUP BY pl.id
         ORDER BY pl.name
     ");
@@ -32,7 +32,7 @@ function handle_get_product_line(PDO $pdo, array $admin_session, ?array $json_in
         jsonResponse(['success' => false, 'error' => 'Invalid line ID'], 400);
     }
 
-    $stmt = $pdo->prepare("SELECT * FROM product_lines WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT * FROM `" . t('product_lines') . "` WHERE id = ?");
     $stmt->execute([$id]);
     $line = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$line) {
@@ -42,7 +42,7 @@ function handle_get_product_line(PDO $pdo, array $admin_session, ?array $json_in
     // Fetch variants
     $stmt = $pdo->prepare("
         SELECT pv.*
-        FROM product_variants pv
+        FROM `" . t('product_variants') . "` pv
         WHERE pv.line_id = ? AND pv.is_active = 1
         ORDER BY pv.disk_size_min_mb
     ");
@@ -104,7 +104,7 @@ function handle_save_product_line(PDO $pdo, array $admin_session, ?array $json_i
         if ($id > 0) {
             // Update
             $stmt = $pdo->prepare("
-                UPDATE product_lines
+                UPDATE `" . t('product_lines') . "`
                 SET name = ?, order_pattern = ?, description = ?, enforcement_level = ?, is_active = ?,
                     secure_boot_enforcement = ?, bios_enforcement = ?, hackbgrt_enforcement = ?,
                     partition_enforcement = ?, missing_drivers_enforcement = ?
@@ -116,7 +116,7 @@ function handle_save_product_line(PDO $pdo, array $admin_session, ?array $json_i
         } else {
             // Insert
             $stmt = $pdo->prepare("
-                INSERT INTO product_lines (name, order_pattern, description, enforcement_level, is_active,
+                INSERT INTO `" . t('product_lines') . "` (name, order_pattern, description, enforcement_level, is_active,
                     secure_boot_enforcement, bios_enforcement, hackbgrt_enforcement,
                     partition_enforcement, missing_drivers_enforcement)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -146,7 +146,7 @@ function handle_delete_product_line(PDO $pdo, array $admin_session, ?array $json
         jsonResponse(['success' => false, 'error' => 'Invalid line ID'], 400);
     }
 
-    $stmt = $pdo->prepare("UPDATE product_lines SET is_active = 0 WHERE id = ?");
+    $stmt = $pdo->prepare("UPDATE `" . t('product_lines') . "` SET is_active = 0 WHERE id = ?");
     $stmt->execute([$id]);
 
     logAdminActivity($admin_session['admin_id'], $admin_session['id'], 'PRODUCT_LINE_DELETE', "Deactivated product line ID: $id");
@@ -177,14 +177,14 @@ function handle_save_product_variant(PDO $pdo, array $admin_session, ?array $jso
     try {
         if ($id > 0) {
             $stmt = $pdo->prepare("
-                UPDATE product_variants
+                UPDATE `" . t('product_variants') . "`
                 SET line_id = ?, name = ?, disk_size_min_mb = ?, disk_size_max_mb = ?, is_active = ?
                 WHERE id = ?
             ");
             $stmt->execute([$lineId, $name, $diskSizeMin, $diskSizeMax, $isActive, $id]);
         } else {
             $stmt = $pdo->prepare("
-                INSERT INTO product_variants (line_id, name, disk_size_min_mb, disk_size_max_mb, is_active)
+                INSERT INTO `" . t('product_variants') . "` (line_id, name, disk_size_min_mb, disk_size_max_mb, is_active)
                 VALUES (?, ?, ?, ?, ?)
             ");
             $stmt->execute([$lineId, $name, $diskSizeMin, $diskSizeMax, $isActive]);
@@ -192,12 +192,12 @@ function handle_save_product_variant(PDO $pdo, array $admin_session, ?array $jso
         }
 
         // Replace partitions: delete existing, insert new
-        $stmt = $pdo->prepare("DELETE FROM product_variant_partitions WHERE variant_id = ?");
+        $stmt = $pdo->prepare("DELETE FROM `" . t('product_variant_partitions') . "` WHERE variant_id = ?");
         $stmt->execute([$id]);
 
         if (!empty($partitions)) {
             $stmt = $pdo->prepare("
-                INSERT INTO product_variant_partitions
+                INSERT INTO `" . t('product_variant_partitions') . "`
                     (variant_id, partition_order, partition_name, partition_type, expected_size_mb, tolerance_percent, is_flexible)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             ");
@@ -257,7 +257,7 @@ function handle_delete_product_variant(PDO $pdo, array $admin_session, ?array $j
         jsonResponse(['success' => false, 'error' => 'Invalid variant ID'], 400);
     }
 
-    $stmt = $pdo->prepare("UPDATE product_variants SET is_active = 0 WHERE id = ?");
+    $stmt = $pdo->prepare("UPDATE `" . t('product_variants') . "` SET is_active = 0 WHERE id = ?");
     $stmt->execute([$id]);
 
     logAdminActivity($admin_session['admin_id'], $admin_session['id'], 'PRODUCT_VARIANT_DELETE', "Deactivated variant ID: $id");

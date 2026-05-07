@@ -7,6 +7,11 @@
  * Import this file wherever constants are needed.
  */
 
+// ── DB table prefix helper (must load before any PDO query) ────────
+// Empty default for backward-compat with installs that pre-date the
+// prefix release. The web installer overwrites DB_PREFIX in config.php.
+require_once __DIR__ . '/functions/db-helpers.php';
+
 // ── Authentication ─────────────────────────────────────────────────
 define('BCRYPT_COST', 12);
 define('PASSWORD_MIN_LENGTH', 8);

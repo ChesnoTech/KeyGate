@@ -1,7 +1,7 @@
 -- Schema Version Tracking
 -- Tracks which migration files have been applied to prevent re-running.
 
-CREATE TABLE IF NOT EXISTS schema_versions (
+CREATE TABLE IF NOT EXISTS `#__schema_versions` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     version INT NOT NULL,
     filename VARCHAR(255) NOT NULL,

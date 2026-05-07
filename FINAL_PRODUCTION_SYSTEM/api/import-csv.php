@@ -66,7 +66,7 @@ try {
         // Try to insert key
         try {
             $stmt = $pdo->prepare("
-                INSERT INTO oem_keys (product_key, oem_identifier, barcode, key_status, roll_serial)
+                INSERT INTO `" . t('oem_keys') . "` (product_key, oem_identifier, barcode, key_status, roll_serial)
                 VALUES (?, ?, ?, ?, 'imported')
             ");
             $stmt->execute([$product_key, $oem_identifier, $barcode, $key_status]);

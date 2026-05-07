@@ -69,7 +69,7 @@ try {
     // If this is initial setup verification, enable 2FA
     if ($isSetup && $totpData['totp_enabled'] == 0) {
         $stmt = $pdo->prepare("
-            UPDATE admin_totp_secrets
+            UPDATE `" . t('admin_totp_secrets') . "`
             SET totp_enabled = 1, verified_at = NOW()
             WHERE admin_id = ?
         ");
@@ -77,7 +77,7 @@ try {
 
         // Log activity
         $stmt = $pdo->prepare("
-            INSERT INTO admin_activity_log (admin_id, session_id, action, description, ip_address, user_agent)
+            INSERT INTO `" . t('admin_activity_log') . "` (admin_id, session_id, action, description, ip_address, user_agent)
             VALUES (?, NULL, 'TOTP_ENABLED', '2FA successfully enabled', ?, ?)
         ");
         $stmt->execute([
@@ -89,7 +89,7 @@ try {
 
     // Log successful verification
     $stmt = $pdo->prepare("
-        INSERT INTO admin_activity_log (admin_id, session_id, action, description, ip_address, user_agent, totp_verified)
+        INSERT INTO `" . t('admin_activity_log') . "` (admin_id, session_id, action, description, ip_address, user_agent, totp_verified)
         VALUES (?, NULL, 'TOTP_VERIFIED', ?, ?, ?, 1)
     ");
     $stmt->execute([

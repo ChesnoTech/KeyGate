@@ -105,7 +105,7 @@ function handle_recycle_key(PDO $pdo, array $admin_session): void {
     $id = intval($_POST['id'] ?? 0);
 
     $stmt = $pdo->prepare("
-        UPDATE oem_keys
+        UPDATE `" . t('oem_keys') . "`
         SET key_status = 'unused', last_use_date = NULL, last_use_time = NULL
         WHERE id = ?
     ");
@@ -126,7 +126,7 @@ function handle_delete_key(PDO $pdo, array $admin_session): void {
 
     $id = intval($_POST['id'] ?? 0);
 
-    $stmt = $pdo->prepare("DELETE FROM oem_keys WHERE id = ?");
+    $stmt = $pdo->prepare("DELETE FROM `" . t('oem_keys') . "` WHERE id = ?");
     $stmt->execute([$id]);
 
     logAdminActivity(
@@ -265,9 +265,9 @@ function handle_add_keys(PDO $pdo, array $admin_session, ?array $json_input = nu
 
     $pdo->beginTransaction();
     try {
-        $checkStmt = $pdo->prepare("SELECT id FROM oem_keys WHERE product_key = ?");
+        $checkStmt = $pdo->prepare("SELECT id FROM `" . t('oem_keys') . "` WHERE product_key = ?");
         $insertStmt = $pdo->prepare("
-            INSERT INTO oem_keys (product_key, oem_identifier, roll_serial, key_status, created_at)
+            INSERT INTO `" . t('oem_keys') . "` (product_key, oem_identifier, roll_serial, key_status, created_at)
             VALUES (?, ?, ?, 'unused', NOW())
         ");
 

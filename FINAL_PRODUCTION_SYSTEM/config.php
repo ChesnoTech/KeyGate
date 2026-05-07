@@ -108,7 +108,7 @@ function getConfig($key, $useCache = true) {
     }
 
     try {
-        $stmt = $pdo->prepare("SELECT config_value FROM system_config WHERE config_key = ?");
+        $stmt = $pdo->prepare("SELECT config_value FROM `" . t('system_config') . "` WHERE config_key = ?");
         $stmt->execute([$key]);
         $result = $stmt->fetch();
         $value  = $result ? $result['config_value'] : null;

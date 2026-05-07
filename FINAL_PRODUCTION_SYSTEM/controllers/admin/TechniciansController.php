@@ -54,7 +54,7 @@ function handle_list_technicians(PDO $pdo, array $admin_session): void {
 
     $stmt = $pdo->query("
         SELECT id, technician_id, full_name, email, is_active
-        FROM technicians
+        FROM `" . t('technicians') . "`
         ORDER BY full_name ASC
     ");
     $technicians = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -92,7 +92,7 @@ function handle_add_tech(PDO $pdo, array $admin_session): void {
         $pdo->beginTransaction();
 
         // Check + insert inside transaction to prevent TOCTOU race condition
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM technicians WHERE technician_id = ?");
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM `" . t('technicians') . "` WHERE technician_id = ?");
         $stmt->execute([$tech_id]);
         if ($stmt->fetchColumn() > 0) {
             $pdo->rollBack();
@@ -101,7 +101,7 @@ function handle_add_tech(PDO $pdo, array $admin_session): void {
         }
 
         $stmt = $pdo->prepare("
-            INSERT INTO technicians (technician_id, password_hash, full_name, email, is_active, preferred_language)
+            INSERT INTO `" . t('technicians') . "` (technician_id, password_hash, full_name, email, is_active, preferred_language)
             VALUES (?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([$tech_id, $password_hash, $full_name, $email, $is_active, $preferred_language]);
@@ -136,7 +136,7 @@ function handle_edit_tech(PDO $pdo, array $admin_session): void {
     $is_active = isset($_POST['is_active']) ? 1 : 0;
 
     $stmt = $pdo->prepare("
-        UPDATE technicians
+        UPDATE `" . t('technicians') . "`
         SET full_name = ?, email = ?, is_active = ?
         WHERE id = ?
     ");
@@ -161,7 +161,7 @@ function handle_get_tech(PDO $pdo, array $admin_session): void {
 
     $stmt = $pdo->prepare("
         SELECT id, technician_id, full_name, email, is_active, preferred_server, preferred_language
-        FROM technicians
+        FROM `" . t('technicians') . "`
         WHERE id = ?
     ");
     $stmt->execute([$techId]);
@@ -200,7 +200,7 @@ function handle_update_tech(PDO $pdo, array $admin_session, ?array $json_input =
     }
 
     $stmt = $pdo->prepare("
-        UPDATE technicians
+        UPDATE `" . t('technicians') . "`
         SET full_name = ?, email = ?, preferred_language = ?, is_active = ?
         WHERE id = ?
     ");
@@ -230,7 +230,7 @@ function handle_reset_password(PDO $pdo, array $admin_session): void {
     $password_hash = password_hash($new_password, PASSWORD_BCRYPT, ['cost' => BCRYPT_COST]);
 
     $stmt = $pdo->prepare("
-        UPDATE technicians
+        UPDATE `" . t('technicians') . "`
         SET password_hash = ?, must_change_password = 1
         WHERE id = ?
     ");
@@ -252,7 +252,7 @@ function handle_toggle_tech(PDO $pdo, array $admin_session): void {
     $id = intval($_POST['id'] ?? 0);
 
     $stmt = $pdo->prepare("
-        UPDATE technicians
+        UPDATE `" . t('technicians') . "`
         SET is_active = NOT is_active
         WHERE id = ?
     ");
@@ -273,7 +273,7 @@ function handle_delete_tech(PDO $pdo, array $admin_session): void {
 
     $id = intval($_POST['id'] ?? 0);
 
-    $stmt = $pdo->prepare("DELETE FROM technicians WHERE id = ?");
+    $stmt = $pdo->prepare("DELETE FROM `" . t('technicians') . "` WHERE id = ?");
     $stmt->execute([$id]);
 
     logAdminActivity(

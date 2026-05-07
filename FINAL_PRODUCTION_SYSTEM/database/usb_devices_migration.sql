@@ -4,7 +4,7 @@
 -- Tracks registered USB devices for passwordless technician auth.
 -- =============================================================
 
-CREATE TABLE IF NOT EXISTS usb_devices (
+CREATE TABLE IF NOT EXISTS `#__usb_devices` (
     device_id INT AUTO_INCREMENT PRIMARY KEY,
     device_serial_number VARCHAR(255) NOT NULL UNIQUE,
     device_name VARCHAR(255) NOT NULL,

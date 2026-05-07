@@ -5,7 +5,7 @@
 -- verify, rollback. Provides full audit trail.
 -- =============================================================
 
-CREATE TABLE IF NOT EXISTS upgrade_history (
+CREATE TABLE IF NOT EXISTS `#__upgrade_history` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     from_version VARCHAR(20) NOT NULL,
     to_version VARCHAR(20) NOT NULL,

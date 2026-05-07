@@ -30,7 +30,7 @@ try {
     // Validate session token
     $stmt = $pdo->prepare("
         SELECT s.technician_id
-        FROM active_sessions s
+        FROM `" . t('active_sessions') . "` s
         WHERE s.session_token = ? AND s.expires_at > NOW()
     ");
     $stmt->execute([$sessionToken]);
@@ -43,7 +43,7 @@ try {
     }
 
     // Look up the resource
-    $stmt = $pdo->prepare("SELECT * FROM client_resources WHERE resource_key = ?");
+    $stmt = $pdo->prepare("SELECT * FROM `" . t('client_resources') . "` WHERE resource_key = ?");
     $stmt->execute([$resourceKey]);
     $resource = $stmt->fetch(PDO::FETCH_ASSOC);
 

@@ -39,7 +39,7 @@ function validateAdminApiSession(): array {
 function fetchTotpData(PDO $pdo, int $adminId): ?array {
     $stmt = $pdo->prepare("
         SELECT id, totp_secret, totp_enabled, backup_codes
-        FROM admin_totp_secrets
+        FROM `" . t('admin_totp_secrets') . "`
         WHERE admin_id = ?
     ");
     $stmt->execute([$adminId]);
@@ -78,7 +78,7 @@ function verifyTotpCode(PDO $pdo, int $adminId, string $code, array $totpData, b
                     $backupCodes = array_values($backupCodes);
 
                     $stmt = $pdo->prepare("
-                        UPDATE admin_totp_secrets
+                        UPDATE `" . t('admin_totp_secrets') . "`
                         SET backup_codes = ?, last_used_at = NOW()
                         WHERE admin_id = ?
                     ");
@@ -92,7 +92,7 @@ function verifyTotpCode(PDO $pdo, int $adminId, string $code, array $totpData, b
     } else {
         $totp = TOTP::createFromSecret($totpData['totp_secret']);
 
-        $stmt = $pdo->query("SELECT config_value FROM system_config WHERE config_key = 'totp_window'");
+        $stmt = $pdo->query("SELECT config_value FROM `" . t('system_config') . "` WHERE config_key = 'totp_window'");
         $windowResult = $stmt->fetch(PDO::FETCH_ASSOC);
         $window = $windowResult ? (int)$windowResult['config_value'] : 1;
 
@@ -100,7 +100,7 @@ function verifyTotpCode(PDO $pdo, int $adminId, string $code, array $totpData, b
 
         if ($result['verified']) {
             $stmt = $pdo->prepare("
-                UPDATE admin_totp_secrets
+                UPDATE `" . t('admin_totp_secrets') . "`
                 SET last_used_at = NOW()
                 WHERE admin_id = ?
             ");
@@ -117,7 +117,7 @@ function verifyTotpCode(PDO $pdo, int $adminId, string $code, array $totpData, b
  * @return array ['plain' => string[], 'hashed' => string[]]
  */
 function generateBackupCodes(PDO $pdo): array {
-    $stmt = $pdo->query("SELECT config_value FROM system_config WHERE config_key = 'totp_backup_codes_count'");
+    $stmt = $pdo->query("SELECT config_value FROM `" . t('system_config') . "` WHERE config_key = 'totp_backup_codes_count'");
     $backupCountResult = $stmt->fetch(PDO::FETCH_ASSOC);
     $backupCodeCount = $backupCountResult ? (int)$backupCountResult['config_value'] : 10;
 

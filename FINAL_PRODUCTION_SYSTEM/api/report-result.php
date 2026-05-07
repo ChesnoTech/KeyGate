@@ -126,7 +126,7 @@ if (!in_array($activationServer, ['oem', 'alternative', 'manual'], true)) {
 }
 
 // NEW: Check if unique ID already exists (prevent duplicates)
-$stmt = $pdo->prepare("SELECT id FROM activation_attempts WHERE activation_unique_id = ?");
+$stmt = $pdo->prepare("SELECT id FROM `" . t('activation_attempts') . "` WHERE activation_unique_id = ?");
 $stmt->execute([$activationUniqueId]);
 if ($stmt->fetch()) {
     jsonResponse([
@@ -156,7 +156,7 @@ try {
 
     // Record activation attempt with all required fields
     $stmt = $pdo->prepare("
-        INSERT INTO activation_attempts (
+        INSERT INTO `" . t('activation_attempts') . "` (
             key_id,
             technician_id,
             order_number,
@@ -203,7 +203,7 @@ try {
     if ($result === 'success') {
         // Success path: Mark key as good and deactivate session
         $stmt = $pdo->prepare("
-            UPDATE oem_keys
+            UPDATE `" . t('oem_keys') . "`
             SET key_status = 'good',
                 updated_at = NOW()
             WHERE id = ?
@@ -212,7 +212,7 @@ try {
 
         // Deactivate session (activation complete)
         $stmt = $pdo->prepare("
-            UPDATE active_sessions
+            UPDATE `" . t('active_sessions') . "`
             SET is_active = 0
             WHERE id = ?
         ");
@@ -226,7 +226,7 @@ try {
     } else {
         // Failure path: Update fail counter and determine key status
         $stmt = $pdo->prepare("
-            UPDATE oem_keys
+            UPDATE `" . t('oem_keys') . "`
             SET fail_counter = fail_counter + 1,
                 updated_at = NOW()
             WHERE id = ?
@@ -236,7 +236,7 @@ try {
         // Get updated fail counter
         $stmt = $pdo->prepare("
             SELECT fail_counter, product_key, oem_identifier
-            FROM oem_keys
+            FROM `" . t('oem_keys') . "`
             WHERE id = ?
         ");
         $stmt->execute([$session['key_id']]);
@@ -253,7 +253,7 @@ try {
         if ($failCounter >= $maxAttempts) {
             // Mark as bad after max failures
             $stmt = $pdo->prepare("
-                UPDATE oem_keys
+                UPDATE `" . t('oem_keys') . "`
                 SET key_status = 'bad'
                 WHERE id = ?
             ");
@@ -264,7 +264,7 @@ try {
 
             // Deactivate session (key is bad)
             $stmt = $pdo->prepare("
-                UPDATE active_sessions
+                UPDATE `" . t('active_sessions') . "`
                 SET is_active = 0
                 WHERE id = ?
             ");
@@ -275,7 +275,7 @@ try {
         } else {
             // Mark for retry
             $stmt = $pdo->prepare("
-                UPDATE oem_keys
+                UPDATE `" . t('oem_keys') . "`
                 SET key_status = 'retry'
                 WHERE id = ?
             ");
@@ -382,7 +382,7 @@ function sendEmailNotification(
         if ($keyData === null) {
             $stmt = $pdo->prepare("
                 SELECT product_key, oem_identifier, fail_counter, key_status
-                FROM oem_keys
+                FROM `" . t('oem_keys') . "`
                 WHERE id = ?
             ");
             $stmt->execute([$session['key_id']]);
@@ -396,7 +396,7 @@ function sendEmailNotification(
         // Get technician full name
         $stmt = $pdo->prepare("
             SELECT full_name, email
-            FROM technicians
+            FROM `" . t('technicians') . "`
             WHERE technician_id = ?
         ");
         $stmt->execute([$session['technician_id']]);

@@ -29,7 +29,7 @@ if (!preg_match(PASSWORD_STRENGTH_PATTERN, $new_password)) {
 try {
     // Get technician details
     $stmt = $pdo->prepare("
-        SELECT * FROM technicians 
+        SELECT * FROM `" . t('technicians') . "` 
         WHERE technician_id = ? AND is_active = 1
     ");
     $stmt->execute([$technician_id]);
@@ -63,7 +63,7 @@ try {
     $new_password_hash = password_hash($new_password, PASSWORD_BCRYPT, ['cost' => BCRYPT_COST]);
     
     $stmt = $pdo->prepare("
-        UPDATE technicians
+        UPDATE `" . t('technicians') . "`
         SET password_hash = ?, temp_password = NULL, must_change_password = FALSE
         WHERE technician_id = ?
     ");

@@ -3,7 +3,7 @@
 -- and must be followed by running the PHP migration script below.
 
 -- Step 1: Widen column to hold bcrypt hashes (60 chars)
-ALTER TABLE technicians MODIFY COLUMN temp_password VARCHAR(255) DEFAULT NULL;
+ALTER TABLE `#__technicians` MODIFY COLUMN temp_password VARCHAR(255) DEFAULT NULL;
 
 -- Step 2: The existing plaintext temp passwords must be hashed via PHP
 -- because SQL cannot generate bcrypt hashes natively.

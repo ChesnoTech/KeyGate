@@ -8,7 +8,7 @@ function handle_list_backups(PDO $pdo, array $admin_session): void {
     requirePermission('view_backups', $admin_session);
 
     $stmt = $pdo->query("
-        SELECT * FROM backup_history
+        SELECT * FROM `" . t('backup_history') . "`
         ORDER BY created_at DESC
         LIMIT 50
     ");

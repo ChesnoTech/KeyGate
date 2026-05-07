@@ -62,7 +62,7 @@ try {
 
     // Code verified - disable 2FA
     $stmt = $pdo->prepare("
-        UPDATE admin_totp_secrets
+        UPDATE `" . t('admin_totp_secrets') . "`
         SET totp_enabled = 0
         WHERE admin_id = ?
     ");
@@ -70,7 +70,7 @@ try {
 
     // Log activity
     $stmt = $pdo->prepare("
-        INSERT INTO admin_activity_log (admin_id, session_id, action, description, ip_address, user_agent)
+        INSERT INTO `" . t('admin_activity_log') . "` (admin_id, session_id, action, description, ip_address, user_agent)
         VALUES (?, ?, 'TOTP_DISABLED', '2FA disabled by user', ?, ?)
     ");
     $stmt->execute([
