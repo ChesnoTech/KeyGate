@@ -30,6 +30,9 @@ FINAL_PRODUCTION_SYSTEM/uploads/client-resources/
 FINAL_PRODUCTION_SYSTEM/install/install.log
 FINAL_PRODUCTION_SYSTEM/install/.progress.json
 
+# ── License-server private keys (never committed; uploaded to CF) ──
+license-server/.keys/
+
 # ── PHP Dependencies (managed by Composer) ────────────────
 FINAL_PRODUCTION_SYSTEM/vendor/
 
