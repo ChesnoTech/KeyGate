@@ -17,7 +17,7 @@ function buildReportHtml(PDO $pdo, string $reportType): string {
 
     switch ($reportType) {
         case 'summary':
-            $stmt = $pdo->query("SELECT key_status, COUNT(*) as count FROM oem_keys GROUP BY key_status");
+            $stmt = $pdo->query("SELECT key_status, COUNT(*) as count FROM `" . t('oem_keys') . "` GROUP BY key_status");
             $keyStats = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
             $totalKeys = array_sum($keyStats);
 
@@ -32,7 +32,7 @@ function buildReportHtml(PDO $pdo, string $reportType): string {
             $html .= '</table>';
 
             // Technician summary
-            $stmt = $pdo->query("SELECT is_active, COUNT(*) as count FROM technicians GROUP BY is_active");
+            $stmt = $pdo->query("SELECT is_active, COUNT(*) as count FROM `" . t('technicians') . "` GROUP BY is_active");
             $techStats = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
             $html .= '<h3>' . __('keys.report_tech_summary') . '</h3>';
             $html .= '<table><tr><th>' . __('keys.status') . '</th><th>' . __('common.count') . '</th></tr>';
@@ -46,7 +46,7 @@ function buildReportHtml(PDO $pdo, string $reportType): string {
                 SELECT DATE(attempted_date) as date, COUNT(*) as count,
                        SUM(CASE WHEN attempt_result = 'success' THEN 1 ELSE 0 END) as successes,
                        SUM(CASE WHEN attempt_result != 'success' THEN 1 ELSE 0 END) as failures
-                FROM activation_attempts
+                FROM `" . t('activation_attempts') . "`
                 WHERE attempted_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
                 GROUP BY DATE(attempted_date)
                 ORDER BY date DESC
@@ -66,8 +66,8 @@ function buildReportHtml(PDO $pdo, string $reportType): string {
             $stmt = $pdo->query("
                 SELECT aa.attempted_date, aa.technician_id, aa.order_number,
                        k.product_key, aa.notes
-                FROM activation_attempts aa
-                LEFT JOIN oem_keys k ON aa.key_id = k.id
+                FROM `" . t('activation_attempts') . "` aa
+                LEFT JOIN `" . t('oem_keys') . "` k ON aa.key_id = k.id
                 WHERE aa.attempt_result != 'success'
                 ORDER BY aa.attempted_date DESC
                 LIMIT 100
@@ -94,7 +94,7 @@ function buildReportHtml(PDO $pdo, string $reportType): string {
                        COUNT(*) as total,
                        SUM(CASE WHEN attempt_result = 'success' THEN 1 ELSE 0 END) as successes,
                        COUNT(DISTINCT technician_id) as unique_techs
-                FROM activation_attempts
+                FROM `" . t('activation_attempts') . "`
                 GROUP BY DATE_FORMAT(attempted_date, '%Y-%m')
                 ORDER BY month DESC
                 LIMIT 12
@@ -120,7 +120,7 @@ function handle_get_stats(PDO $pdo, array $admin_session): void {
     $stats = [];
 
     // Key statistics
-    $stmt = $pdo->query("SELECT key_status, COUNT(*) as count FROM oem_keys GROUP BY key_status");
+    $stmt = $pdo->query("SELECT key_status, COUNT(*) as count FROM `" . t('oem_keys') . "` GROUP BY key_status");
     $key_stats = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
     $stats['keys'] = [
         'unused' => $key_stats['unused'] ?? 0,
@@ -132,7 +132,7 @@ function handle_get_stats(PDO $pdo, array $admin_session): void {
     ];
 
     // Technician statistics
-    $stmt = $pdo->query("SELECT is_active, COUNT(*) as count FROM technicians GROUP BY is_active");
+    $stmt = $pdo->query("SELECT is_active, COUNT(*) as count FROM `" . t('technicians') . "` GROUP BY is_active");
     $tech_stats = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
     $stats['technicians'] = [
         'active' => $tech_stats[1] ?? 0,
@@ -141,13 +141,13 @@ function handle_get_stats(PDO $pdo, array $admin_session): void {
     ];
 
     // Activation statistics
-    $stmt = $pdo->query("SELECT COUNT(*) FROM activation_attempts WHERE DATE(attempted_date) = CURDATE()");
+    $stmt = $pdo->query("SELECT COUNT(*) FROM `" . t('activation_attempts') . "` WHERE DATE(attempted_date) = CURDATE()");
     $stats['activations']['today'] = $stmt->fetchColumn();
 
-    $stmt = $pdo->query("SELECT COUNT(*) FROM activation_attempts WHERE YEARWEEK(attempted_date, 1) = YEARWEEK(CURDATE(), 1)");
+    $stmt = $pdo->query("SELECT COUNT(*) FROM `" . t('activation_attempts') . "` WHERE YEARWEEK(attempted_date, 1) = YEARWEEK(CURDATE(), 1)");
     $stats['activations']['week'] = $stmt->fetchColumn();
 
-    $stmt = $pdo->query("SELECT COUNT(*) FROM activation_attempts WHERE YEAR(attempted_date) = YEAR(CURDATE()) AND MONTH(attempted_date) = MONTH(CURDATE())");
+    $stmt = $pdo->query("SELECT COUNT(*) FROM `" . t('activation_attempts') . "` WHERE YEAR(attempted_date) = YEAR(CURDATE()) AND MONTH(attempted_date) = MONTH(CURDATE())");
     $stats['activations']['month'] = $stmt->fetchColumn();
 
     // Daily activation trend — fetch all history, let frontend slice by range
@@ -156,7 +156,7 @@ function handle_get_stats(PDO $pdo, array $admin_session): void {
                COUNT(*) as total,
                SUM(CASE WHEN attempt_result = 'success' THEN 1 ELSE 0 END) as successes,
                SUM(CASE WHEN attempt_result != 'success' THEN 1 ELSE 0 END) as failures
-        FROM activation_attempts
+        FROM `" . t('activation_attempts') . "`
         GROUP BY DATE(attempted_date)
         ORDER BY date ASC
     ");
@@ -188,8 +188,8 @@ function handle_get_stats(PDO $pdo, array $admin_session): void {
     // Recent activity
     $stmt = $pdo->prepare("
         SELECT aal.created_at, au.username, aal.action, aal.description
-        FROM admin_activity_log aal
-        LEFT JOIN admin_users au ON aal.admin_id = au.id
+        FROM `" . t('admin_activity_log') . "` aal
+        LEFT JOIN `" . t('admin_users') . "` au ON aal.admin_id = au.id
         ORDER BY aal.created_at DESC
         LIMIT 10
     ");

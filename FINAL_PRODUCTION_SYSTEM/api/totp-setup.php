@@ -24,7 +24,7 @@ $sessionId = $session['session_id'];
 
 // Verify session is valid in DB
 $stmt = $pdo->prepare("
-    SELECT admin_id FROM admin_sessions
+    SELECT admin_id FROM `" . t('admin_sessions') . "`
     WHERE id = ? AND admin_id = ? AND is_active = 1
 ");
 $stmt->execute([$sessionId, $adminId]);
@@ -33,7 +33,7 @@ if (!$stmt->fetch()) {
 }
 
 // Get admin info
-$stmt = $pdo->prepare("SELECT username, email FROM admin_users WHERE id = ?");
+$stmt = $pdo->prepare("SELECT username, email FROM `" . t('admin_users') . "` WHERE id = ?");
 $stmt->execute([$adminId]);
 $admin = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -75,7 +75,7 @@ try {
     // Store in database (not yet enabled)
     if ($existing) {
         $stmt = $pdo->prepare("
-            UPDATE admin_totp_secrets
+            UPDATE `" . t('admin_totp_secrets') . "`
             SET totp_secret = ?, backup_codes = ?, totp_enabled = 0, verified_at = NULL, created_at = NOW()
             WHERE admin_id = ?
         ");
@@ -86,7 +86,7 @@ try {
         ]);
     } else {
         $stmt = $pdo->prepare("
-            INSERT INTO admin_totp_secrets (admin_id, totp_secret, backup_codes, totp_enabled)
+            INSERT INTO `" . t('admin_totp_secrets') . "` (admin_id, totp_secret, backup_codes, totp_enabled)
             VALUES (?, ?, ?, 0)
         ");
         $stmt->execute([
@@ -108,7 +108,7 @@ try {
 
     // Log activity
     $stmt = $pdo->prepare("
-        INSERT INTO admin_activity_log (admin_id, session_id, action, description, ip_address, user_agent)
+        INSERT INTO `" . t('admin_activity_log') . "` (admin_id, session_id, action, description, ip_address, user_agent)
         VALUES (?, ?, 'TOTP_SETUP', 'Started 2FA setup', ?, ?)
     ");
     $stmt->execute([

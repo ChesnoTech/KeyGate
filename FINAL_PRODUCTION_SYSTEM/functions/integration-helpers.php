@@ -17,7 +17,7 @@ function getIntegration(string $key): ?array {
     }
 
     try {
-        $stmt = $pdo->prepare("SELECT * FROM integrations WHERE integration_key = ?");
+        $stmt = $pdo->prepare("SELECT * FROM `" . t('integrations') . "` WHERE integration_key = ?");
         $stmt->execute([$key]);
         $row = $stmt->fetch();
 
@@ -51,10 +51,10 @@ function updateIntegrationStatus(int $id, string $status, ?string $error = null)
 
     try {
         if ($error !== null) {
-            $stmt = $pdo->prepare("UPDATE integrations SET status = ?, last_error = ?, updated_at = NOW() WHERE id = ?");
+            $stmt = $pdo->prepare("UPDATE `" . t('integrations') . "` SET status = ?, last_error = ?, updated_at = NOW() WHERE id = ?");
             $stmt->execute([$status, $error, $id]);
         } else {
-            $stmt = $pdo->prepare("UPDATE integrations SET status = ?, updated_at = NOW() WHERE id = ?");
+            $stmt = $pdo->prepare("UPDATE `" . t('integrations') . "` SET status = ?, updated_at = NOW() WHERE id = ?");
             $stmt->execute([$status, $id]);
         }
 
@@ -81,7 +81,7 @@ function dispatchIntegrationEvent(string $integrationKey, string $eventType, arr
 
     try {
         $stmt = $pdo->prepare("
-            INSERT INTO integration_events (integration_id, event_type, payload, status, created_at)
+            INSERT INTO `" . t('integration_events') . "` (integration_id, event_type, payload, status, created_at)
             VALUES (?, ?, ?, 'pending', NOW())
         ");
         $stmt->execute([
@@ -106,7 +106,7 @@ function dispatchEventToAll(string $eventType, array $payload): void {
     global $pdo;
 
     try {
-        $stmt = $pdo->query("SELECT integration_key FROM integrations WHERE enabled = 1");
+        $stmt = $pdo->query("SELECT integration_key FROM `" . t('integrations') . "` WHERE enabled = 1");
         $keys = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
         foreach ($keys as $key) {
@@ -124,7 +124,7 @@ function deliverIntegrationEvent(int $eventId, array $integration): void {
     global $pdo;
 
     try {
-        $stmt = $pdo->prepare("SELECT * FROM integration_events WHERE id = ?");
+        $stmt = $pdo->prepare("SELECT * FROM `" . t('integration_events') . "` WHERE id = ?");
         $stmt->execute([$eventId]);
         $event = $stmt->fetch();
         if (!$event) return;
@@ -137,7 +137,7 @@ function deliverIntegrationEvent(int $eventId, array $integration): void {
         $handlerFile = dirname(__DIR__) . "/functions/integrations/{$key}-handler.php";
         if (!file_exists($handlerFile)) {
             // No handler yet — mark as skipped
-            $stmt = $pdo->prepare("UPDATE integration_events SET status = 'skipped', processed_at = NOW(), error_message = 'No handler file' WHERE id = ?");
+            $stmt = $pdo->prepare("UPDATE `" . t('integration_events') . "` SET status = 'skipped', processed_at = NOW(), error_message = 'No handler file' WHERE id = ?");
             $stmt->execute([$eventId]);
             return;
         }
@@ -146,7 +146,7 @@ function deliverIntegrationEvent(int $eventId, array $integration): void {
         $handlerFunc = 'handle_' . str_replace('-', '_', $key) . '_event';
 
         if (!function_exists($handlerFunc)) {
-            $stmt = $pdo->prepare("UPDATE integration_events SET status = 'skipped', processed_at = NOW(), error_message = 'Handler function not found' WHERE id = ?");
+            $stmt = $pdo->prepare("UPDATE `" . t('integration_events') . "` SET status = 'skipped', processed_at = NOW(), error_message = 'Handler function not found' WHERE id = ?");
             $stmt->execute([$eventId]);
             return;
         }
@@ -157,7 +157,7 @@ function deliverIntegrationEvent(int $eventId, array $integration): void {
         // Update event with result
         $status = ($result['success'] ?? false) ? 'sent' : 'failed';
         $stmt = $pdo->prepare("
-            UPDATE integration_events
+            UPDATE `" . t('integration_events') . "`
             SET status = ?, response_code = ?, response_body = ?, error_message = ?, processed_at = NOW()
             WHERE id = ?
         ");
@@ -172,7 +172,7 @@ function deliverIntegrationEvent(int $eventId, array $integration): void {
         // Update integration status
         if ($status === 'sent') {
             updateIntegrationStatus($integration['id'], 'connected');
-            $pdo->prepare("UPDATE integrations SET last_sync_at = NOW() WHERE id = ?")->execute([$integration['id']]);
+            $pdo->prepare("UPDATE `" . t('integrations') . "` SET last_sync_at = NOW() WHERE id = ?")->execute([$integration['id']]);
         } else {
             updateIntegrationStatus($integration['id'], 'error', $result['error'] ?? 'Delivery failed');
         }
@@ -180,7 +180,7 @@ function deliverIntegrationEvent(int $eventId, array $integration): void {
     } catch (Exception $e) {
         error_log("deliverIntegrationEvent($eventId) failed: " . $e->getMessage());
         try {
-            $stmt = $pdo->prepare("UPDATE integration_events SET status = 'failed', processed_at = NOW(), error_message = ? WHERE id = ?");
+            $stmt = $pdo->prepare("UPDATE `" . t('integration_events') . "` SET status = 'failed', processed_at = NOW(), error_message = ? WHERE id = ?");
             $stmt->execute([$e->getMessage(), $eventId]);
         } catch (PDOException $ex) {
             // Ignore
@@ -201,7 +201,7 @@ function retryFailedEvents(string $integrationKey, int $limit = 50): array {
 
     try {
         $stmt = $pdo->prepare("
-            SELECT id FROM integration_events
+            SELECT id FROM `" . t('integration_events') . "`
             WHERE integration_id = ? AND status IN ('failed', 'pending')
             ORDER BY created_at ASC
             LIMIT ?
@@ -216,7 +216,7 @@ function retryFailedEvents(string $integrationKey, int $limit = 50): array {
             $retried++;
 
             // Check if it succeeded
-            $check = $pdo->prepare("SELECT status FROM integration_events WHERE id = ?");
+            $check = $pdo->prepare("SELECT status FROM `" . t('integration_events') . "` WHERE id = ?");
             $check->execute([$eid]);
             if ($check->fetchColumn() === 'sent') {
                 $succeeded++;

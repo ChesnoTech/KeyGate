@@ -27,8 +27,8 @@ function validateAdminSession() {
                 s.id, s.admin_id, s.expires_at, s.last_activity,
                 u.username, u.full_name, u.role, u.is_active, u.preferred_language,
                 u.password_changed_at, u.must_change_password
-            FROM admin_sessions s
-            JOIN admin_users u ON s.admin_id = u.id
+            FROM `" . t('admin_sessions') . "` s
+            JOIN `" . t('admin_users') . "` u ON s.admin_id = u.id
             WHERE s.session_token = ? AND s.is_active = 1
         ");
         $stmt->execute([$_SESSION['admin_token']]);
@@ -41,7 +41,7 @@ function validateAdminSession() {
         // Check if session expired (hard expiry set at creation time)
         if (strtotime($session['expires_at']) < time()) {
 
-            $stmt = $pdo->prepare("UPDATE admin_sessions SET is_active = 0 WHERE id = ?");
+            $stmt = $pdo->prepare("UPDATE `" . t('admin_sessions') . "` SET is_active = 0 WHERE id = ?");
             $stmt->execute([$session['id']]);
             return false;
         }
@@ -50,7 +50,7 @@ function validateAdminSession() {
         $timeoutMinutes = (int) getConfigWithDefault('admin_session_timeout_minutes', DEFAULT_ADMIN_SESSION_TIMEOUT_MINUTES);
         $timeoutSeconds = $timeoutMinutes * 60;
         if (strtotime($session['last_activity']) < (time() - $timeoutSeconds)) {
-            $stmt = $pdo->prepare("UPDATE admin_sessions SET is_active = 0 WHERE id = ?");
+            $stmt = $pdo->prepare("UPDATE `" . t('admin_sessions') . "` SET is_active = 0 WHERE id = ?");
             $stmt->execute([$session['id']]);
             return false;
         }
@@ -71,7 +71,7 @@ function validateAdminSession() {
         }
 
         // Update last activity
-        $stmt = $pdo->prepare("UPDATE admin_sessions SET last_activity = NOW() WHERE id = ?");
+        $stmt = $pdo->prepare("UPDATE `" . t('admin_sessions') . "` SET last_activity = NOW() WHERE id = ?");
         $stmt->execute([$session['id']]);
 
         return $session;
@@ -93,7 +93,7 @@ function logAdminActivity($admin_id, $session_id, $action, $description = '') {
     global $pdo;
     try {
         $stmt = $pdo->prepare("
-            INSERT INTO admin_activity_log (admin_id, session_id, action, description, ip_address, user_agent)
+            INSERT INTO `" . t('admin_activity_log') . "` (admin_id, session_id, action, description, ip_address, user_agent)
             VALUES (?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([
@@ -125,7 +125,7 @@ function authenticateAdmin($username, $password) {
     $lockoutMinutes  = (int) getConfigWithDefault('admin_lockout_duration_minutes', DEFAULT_ADMIN_LOCKOUT_MINUTES);
     $sessionTimeout  = (int) getConfigWithDefault('admin_session_timeout_minutes', DEFAULT_ADMIN_SESSION_TIMEOUT_MINUTES);
 
-    $stmt = $pdo->prepare("SELECT * FROM admin_users WHERE username = ? AND is_active = 1");
+    $stmt = $pdo->prepare("SELECT * FROM `" . t('admin_users') . "` WHERE username = ? AND is_active = 1");
     $stmt->execute([$username]);
     $admin = $stmt->fetch();
 
@@ -153,7 +153,7 @@ function authenticateAdmin($username, $password) {
         }
 
         $stmt = $pdo->prepare("
-            UPDATE admin_users
+            UPDATE `" . t('admin_users') . "`
             SET failed_login_attempts = ?, locked_until = ?
             WHERE id = ?
         ");
@@ -172,7 +172,7 @@ function authenticateAdmin($username, $password) {
     $expires_at = date('Y-m-d H:i:s', time() + ($sessionTimeout * 60));
 
     $stmt = $pdo->prepare("
-        INSERT INTO admin_sessions (admin_id, session_token, ip_address, user_agent, expires_at)
+        INSERT INTO `" . t('admin_sessions') . "` (admin_id, session_token, ip_address, user_agent, expires_at)
         VALUES (?, ?, ?, ?, ?)
     ");
     $stmt->execute([
@@ -182,7 +182,7 @@ function authenticateAdmin($username, $password) {
 
     // Reset failed attempts
     $stmt = $pdo->prepare("
-        UPDATE admin_users
+        UPDATE `" . t('admin_users') . "`
         SET failed_login_attempts = 0, locked_until = NULL, last_login = NOW(), last_login_ip = ?
         WHERE id = ?
     ");
@@ -217,7 +217,7 @@ function getUploadErrorMessage(int $errorCode): string {
  */
 function saveConfigBatch(PDO $pdo, array $configs, array $descriptions = []): void {
     $stmt = $pdo->prepare("
-        INSERT INTO system_config (config_key, config_value, description, updated_at)
+        INSERT INTO `" . t('system_config') . "` (config_key, config_value, description, updated_at)
         VALUES (?, ?, ?, NOW())
         ON DUPLICATE KEY UPDATE config_value = ?, updated_at = NOW()
     ");
@@ -251,8 +251,8 @@ function isActorSuperAdmin($adminId) {
     global $pdo;
     try {
         $stmt = $pdo->prepare("
-            SELECT r.role_name FROM acl_roles r
-            INNER JOIN admin_users u ON u.custom_role_id = r.id
+            SELECT r.role_name FROM `" . t('acl_roles') . "` r
+            INNER JOIN `" . t('admin_users') . "` u ON u.custom_role_id = r.id
             WHERE u.id = ? AND r.role_name = 'super_admin'
         ");
         $stmt->execute([$adminId]);

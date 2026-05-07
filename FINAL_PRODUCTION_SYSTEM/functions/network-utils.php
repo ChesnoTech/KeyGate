@@ -21,14 +21,14 @@ function checkTrustedNetwork($ip, $checkUSBAuth = false) {
         // Check if network allows USB authentication
         $stmt = $pdo->prepare("
             SELECT id, network_name, ip_range, bypass_2fa, allow_usb_auth
-            FROM trusted_networks
+            FROM `" . t('trusted_networks') . "`
             WHERE is_active = 1 AND allow_usb_auth = 1
         ");
     } else {
         // Check if network allows 2FA bypass
         $stmt = $pdo->prepare("
             SELECT id, network_name, ip_range, bypass_2fa, allow_usb_auth
-            FROM trusted_networks
+            FROM `" . t('trusted_networks') . "`
             WHERE is_active = 1 AND bypass_2fa = 1
         ");
     }
@@ -122,7 +122,7 @@ function logNetworkSecurityEvent($event_type, $ip_address, $network_id = null, $
 
     try {
         $stmt = $pdo->prepare("
-            INSERT INTO admin_activity_log (
+            INSERT INTO `" . t('admin_activity_log') . "` (
                 admin_id, session_id, action, description,
                 ip_address, user_agent, trusted_network_id
             ) VALUES (

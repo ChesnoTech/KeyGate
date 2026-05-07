@@ -6,7 +6,7 @@
 
 -- Table: rate_limit_violations
 -- Logs when API rate limits are exceeded for security monitoring
-CREATE TABLE IF NOT EXISTS `rate_limit_violations` (
+CREATE TABLE IF NOT EXISTS `#__rate_limit_violations` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `identifier` VARCHAR(100) NOT NULL COMMENT 'IP address or user ID',
     `action` VARCHAR(50) NOT NULL COMMENT 'Endpoint action (login, get-key, etc.)',
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS `rate_limit_violations` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Rate limit violation log for security monitoring';
 
 -- System configuration for rate limiting
-INSERT INTO `system_config` (`config_key`, `config_value`, `description`) VALUES
+INSERT INTO `#__system_config` (`config_key`, `config_value`, `description`) VALUES
 ('rate_limit_enabled', '1', 'Enable API rate limiting (1=yes, 0=no)'),
 ('rate_limit_global_per_minute', '100', 'Max requests per minute per IP (all endpoints)'),
 ('rate_limit_login_per_hour', '20', 'Max login attempts per hour per IP'),

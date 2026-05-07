@@ -87,7 +87,7 @@ function getVapidKeys(): ?array {
         $keys = VAPID::createVapidKeys();
 
         $stmt = $pdo->prepare("
-            INSERT INTO system_config (config_key, config_value, description)
+            INSERT INTO `" . t('system_config') . "` (config_key, config_value, description)
             VALUES (?, ?, ?)
             ON DUPLICATE KEY UPDATE config_value = VALUES(config_value)
         ");
@@ -129,11 +129,11 @@ function dispatchNotification(string $action, string $description, int $actorAdm
         // Get all admin IDs except the actor, who have this category enabled (or no preference row = default ON)
         $stmt = $pdo->prepare("
             SELECT DISTINCT au.id, au.preferred_language
-            FROM admin_users au
+            FROM `" . t('admin_users') . "` au
             WHERE au.id != ?
               AND au.is_active = 1
               AND NOT EXISTS (
-                  SELECT 1 FROM push_preferences pp
+                  SELECT 1 FROM `" . t('push_preferences') . "` pp
                   WHERE pp.admin_id = au.id AND pp.category = ? AND pp.enabled = 0
               )
         ");
@@ -148,7 +148,7 @@ function dispatchNotification(string $action, string $description, int $actorAdm
 
         // Insert bell notifications for all recipients
         $insertStmt = $pdo->prepare("
-            INSERT INTO notifications (admin_id, category, title_key, body, action_url)
+            INSERT INTO `" . t('notifications') . "` (admin_id, category, title_key, body, action_url)
             VALUES (?, ?, ?, ?, ?)
         ");
         foreach ($recipientIds as $adminId) {
@@ -212,7 +212,7 @@ function dispatchNotification(string $action, string $description, int $actorAdm
             if ($report->isSubscriptionExpired()) {
                 // Deactivate expired subscriptions
                 $expiredEndpoint = $report->getRequest()->getUri()->__toString();
-                $deactivateStmt = $pdo->prepare("UPDATE push_subscriptions SET is_active = 0 WHERE endpoint = ?");
+                $deactivateStmt = $pdo->prepare("UPDATE `" . t('push_subscriptions') . "` SET is_active = 0 WHERE endpoint = ?");
                 $deactivateStmt->execute([$expiredEndpoint]);
             }
         }

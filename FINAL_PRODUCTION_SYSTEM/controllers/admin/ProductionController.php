@@ -74,10 +74,10 @@ function handle_get_build_report(PDO $pdo, array $admin_session, $json_input): v
     $uuid = $json_input['uuid'] ?? $_GET['uuid'] ?? '';
 
     if ($id > 0) {
-        $stmt = $pdo->prepare("SELECT * FROM computer_build_reports WHERE id = ?");
+        $stmt = $pdo->prepare("SELECT * FROM `" . t('computer_build_reports') . "` WHERE id = ?");
         $stmt->execute([$id]);
     } elseif ($uuid) {
-        $stmt = $pdo->prepare("SELECT * FROM computer_build_reports WHERE report_uuid = ?");
+        $stmt = $pdo->prepare("SELECT * FROM `" . t('computer_build_reports') . "` WHERE report_uuid = ?");
         $stmt->execute([$uuid]);
     } else {
         jsonResponse(['success' => false, 'error' => 'Report ID or UUID required']);
@@ -99,7 +99,7 @@ function handle_export_build_report(PDO $pdo, array $admin_session, $json_input)
     $id = (int)($json_input['id'] ?? $_GET['id'] ?? 0);
     $format = $json_input['format'] ?? $_GET['format'] ?? 'json';
 
-    $stmt = $pdo->prepare("SELECT * FROM computer_build_reports WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT * FROM `" . t('computer_build_reports') . "` WHERE id = ?");
     $stmt->execute([$id]);
     $report = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -204,7 +204,7 @@ function handle_update_build_report_shipping(PDO $pdo, array $admin_session, $js
     }
 
     $params[] = $id;
-    $stmt = $pdo->prepare("UPDATE computer_build_reports SET " . implode(', ', $sets) . " WHERE id = ?");
+    $stmt = $pdo->prepare("UPDATE `" . t('computer_build_reports') . "` SET " . implode(', ', $sets) . " WHERE id = ?");
     $stmt->execute($params);
 
     logAdminActivity($admin_session['admin_id'], $admin_session['id'] ?? 0, 'CBR_SHIPPING_UPDATED', "Updated CBR #{$id} shipping: {$shippingStatus}");
@@ -228,13 +228,13 @@ function handle_get_key_pool_status(PDO $pdo, array $admin_session, $json_input)
             SUM(CASE WHEN key_status = 'allocated' THEN 1 ELSE 0 END) AS allocated_keys,
             SUM(CASE WHEN key_status = 'good' THEN 1 ELSE 0 END) AS used_keys,
             SUM(CASE WHEN key_status = 'bad' THEN 1 ELSE 0 END) AS bad_keys
-        FROM oem_keys
+        FROM `" . t('oem_keys') . "`
         GROUP BY oem_identifier
     ");
     $pools = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // Get pool config
-    $configStmt = $pdo->query("SELECT * FROM key_pool_config ORDER BY product_edition");
+    $configStmt = $pdo->query("SELECT * FROM `" . t('key_pool_config') . "` ORDER BY product_edition");
     $configs = [];
     foreach ($configStmt->fetchAll(PDO::FETCH_ASSOC) as $c) {
         $configs[$c['product_edition']] = $c;
@@ -287,7 +287,7 @@ function handle_save_key_pool_config(PDO $pdo, array $admin_session, $json_input
     }
 
     $stmt = $pdo->prepare("
-        INSERT INTO key_pool_config (product_edition, low_threshold, critical_threshold, auto_notify, notify_email)
+        INSERT INTO `" . t('key_pool_config') . "` (product_edition, low_threshold, critical_threshold, auto_notify, notify_email)
         VALUES (?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             low_threshold = VALUES(low_threshold),
@@ -326,15 +326,15 @@ function handle_check_hardware_binding(PDO $pdo, array $admin_session, $json_inp
         // Return recent bindings
         $stmt = $pdo->query("
             SELECT hkb.*, ok.product_key, ok.oem_identifier AS product_type
-            FROM hardware_key_bindings hkb
-            LEFT JOIN oem_keys ok ON ok.id = hkb.product_key_id
+            FROM `" . t('hardware_key_bindings') . "` hkb
+            LEFT JOIN `" . t('oem_keys') . "` ok ON ok.id = hkb.product_key_id
             ORDER BY hkb.bound_at DESC LIMIT 50
         ");
     } else {
         $stmt = $pdo->prepare("
             SELECT hkb.*, ok.product_key, ok.oem_identifier AS product_type
-            FROM hardware_key_bindings hkb
-            LEFT JOIN oem_keys ok ON ok.id = hkb.product_key_id
+            FROM `" . t('hardware_key_bindings') . "` hkb
+            LEFT JOIN `" . t('oem_keys') . "` ok ON ok.id = hkb.product_key_id
             WHERE " . implode(' AND ', $where) . "
             ORDER BY hkb.bound_at DESC LIMIT 50
         ");
@@ -348,7 +348,7 @@ function handle_check_hardware_binding(PDO $pdo, array $admin_session, $json_inp
     if ($keyId > 0) {
         $conflictStmt = $pdo->prepare("
             SELECT device_fingerprint, motherboard_serial, bound_at
-            FROM hardware_key_bindings
+            FROM `" . t('hardware_key_bindings') . "`
             WHERE product_key_id = ? AND status = 'active'
         ");
         $conflictStmt->execute([$keyId]);
@@ -371,7 +371,7 @@ function handle_release_hardware_binding(PDO $pdo, array $admin_session, $json_i
     }
 
     $stmt = $pdo->prepare("
-        UPDATE hardware_key_bindings
+        UPDATE `" . t('hardware_key_bindings') . "`
         SET status = 'released', released_at = NOW(), released_by_admin_id = ?
         WHERE id = ? AND status = 'active'
     ");
@@ -411,7 +411,7 @@ function handle_import_dpk_batch(PDO $pdo, array $admin_session): void {
 
     // Create batch record
     $batchStmt = $pdo->prepare("
-        INSERT INTO dpk_import_batches
+        INSERT INTO `" . t('dpk_import_batches') . "`
             (batch_name, import_source, product_edition, source_filename, source_checksum,
              imported_by_admin_id, imported_by_username, import_status)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'processing')
@@ -446,9 +446,9 @@ function handle_import_dpk_batch(PDO $pdo, array $admin_session): void {
     $duplicates = 0;
     $failed = 0;
 
-    $checkExisting = $pdo->prepare("SELECT COUNT(*) FROM oem_keys WHERE product_key = ?");
+    $checkExisting = $pdo->prepare("SELECT COUNT(*) FROM `" . t('oem_keys') . "` WHERE product_key = ?");
     $insertKey = $pdo->prepare("
-        INSERT INTO oem_keys (product_key, oem_identifier, key_status)
+        INSERT INTO `" . t('oem_keys') . "` (product_key, oem_identifier, key_status)
         VALUES (?, ?, 'unused')
     ");
 
@@ -469,7 +469,7 @@ function handle_import_dpk_batch(PDO $pdo, array $admin_session): void {
 
     // Update batch record
     $pdo->prepare("
-        UPDATE dpk_import_batches
+        UPDATE `" . t('dpk_import_batches') . "`
         SET total_keys = ?, imported_keys = ?, duplicate_keys = ?, failed_keys = ?,
             import_status = 'completed', completed_at = NOW()
         WHERE id = ?
@@ -483,7 +483,7 @@ function handle_import_dpk_batch(PDO $pdo, array $admin_session): void {
     // Update key pool replenishment timestamp
     if ($productEdition && $imported > 0) {
         $pdo->prepare("
-            UPDATE key_pool_config SET last_replenished_at = NOW() WHERE product_edition = ?
+            UPDATE `" . t('key_pool_config') . "` SET last_replenished_at = NOW() WHERE product_edition = ?
         ")->execute([$productEdition]);
     }
 
@@ -526,7 +526,7 @@ function parseDPKXml(string $content): array {
 function handle_list_dpk_batches(PDO $pdo, array $admin_session, $json_input): void {
     requirePermission('view_keys', $admin_session);
 
-    $stmt = $pdo->query("SELECT * FROM dpk_import_batches ORDER BY created_at DESC LIMIT 50");
+    $stmt = $pdo->query("SELECT * FROM `" . t('dpk_import_batches') . "` ORDER BY created_at DESC LIMIT 50");
 
     jsonResponse(['success' => true, 'batches' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
 }
@@ -621,13 +621,13 @@ function handle_save_work_order(PDO $pdo, array $admin_session, $json_input): vo
         }
 
         $params[] = $id;
-        $stmt = $pdo->prepare("UPDATE work_orders SET " . implode(', ', $sets) . " WHERE id = ?");
+        $stmt = $pdo->prepare("UPDATE `" . t('work_orders') . "` SET " . implode(', ', $sets) . " WHERE id = ?");
         $stmt->execute($params);
     } else {
         $data['created_by_admin_id'] = (int)$admin_session['admin_id'];
         $cols = array_keys($data);
         $placeholders = array_fill(0, count($cols), '?');
-        $stmt = $pdo->prepare("INSERT INTO work_orders (" . implode(',', $cols) . ") VALUES (" . implode(',', $placeholders) . ")");
+        $stmt = $pdo->prepare("INSERT INTO `" . t('work_orders') . "` (" . implode(',', $cols) . ") VALUES (" . implode(',', $placeholders) . ")");
         $stmt->execute(array_values($data));
         $id = (int)$pdo->lastInsertId();
     }
@@ -646,7 +646,7 @@ function handle_get_work_order(PDO $pdo, array $admin_session, $json_input): voi
         return;
     }
 
-    $stmt = $pdo->prepare("SELECT * FROM work_orders WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT * FROM `" . t('work_orders') . "` WHERE id = ?");
     $stmt->execute([$id]);
     $order = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -659,7 +659,7 @@ function handle_get_work_order(PDO $pdo, array $admin_session, $json_input): voi
     $cbrStmt = $pdo->prepare("
         SELECT id, report_uuid, order_number, activation_status, shipping_status,
                motherboard_model, cpu_model, created_at
-        FROM computer_build_reports
+        FROM `" . t('computer_build_reports') . "`
         WHERE work_order_id = ?
         ORDER BY created_at ASC
     ");
@@ -679,7 +679,7 @@ function handle_delete_work_order(PDO $pdo, array $admin_session, $json_input): 
     }
 
     // Only allow deleting draft/cancelled orders
-    $check = $pdo->prepare("SELECT status, work_order_number FROM work_orders WHERE id = ?");
+    $check = $pdo->prepare("SELECT status, work_order_number FROM `" . t('work_orders') . "` WHERE id = ?");
     $check->execute([$id]);
     $row = $check->fetch();
 
@@ -692,7 +692,7 @@ function handle_delete_work_order(PDO $pdo, array $admin_session, $json_input): 
         return;
     }
 
-    $pdo->prepare("DELETE FROM work_orders WHERE id = ?")->execute([$id]);
+    $pdo->prepare("DELETE FROM `" . t('work_orders') . "` WHERE id = ?")->execute([$id]);
 
     logAdminActivity($admin_session['admin_id'], $admin_session['id'] ?? 0, 'WORK_ORDER_DELETED', "Deleted work order: {$row['work_order_number']}");
 

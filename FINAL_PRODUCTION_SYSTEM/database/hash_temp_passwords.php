@@ -8,7 +8,7 @@ require_once __DIR__ . '/../config.php';
 
 echo "Hashing plaintext temp_passwords...\n";
 
-$stmt = $pdo->query("SELECT id, temp_password FROM technicians WHERE temp_password IS NOT NULL AND temp_password != ''");
+$stmt = $pdo->query("SELECT id, temp_password FROM `" . t('technicians') . "` WHERE temp_password IS NOT NULL AND temp_password != ''");
 $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $updated = 0;
@@ -20,7 +20,7 @@ foreach ($rows as $row) {
     }
 
     $hashed = password_hash($row['temp_password'], PASSWORD_BCRYPT, ['cost' => BCRYPT_COST]);
-    $update = $pdo->prepare("UPDATE technicians SET temp_password = ? WHERE id = ?");
+    $update = $pdo->prepare("UPDATE `" . t('technicians') . "` SET temp_password = ? WHERE id = ?");
     $update->execute([$hashed, $row['id']]);
     $updated++;
     echo "  Hashed temp_password for ID {$row['id']}\n";

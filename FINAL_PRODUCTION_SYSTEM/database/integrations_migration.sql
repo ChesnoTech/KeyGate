@@ -3,7 +3,7 @@
 -- Supports osTicket, 1C ERP, and future integrations
 -- =============================================================
 
-CREATE TABLE IF NOT EXISTS `integrations` (
+CREATE TABLE IF NOT EXISTS `#__integrations` (
   `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   `integration_key` VARCHAR(50) NOT NULL UNIQUE,
   `display_name` VARCHAR(100) NOT NULL,
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS `integrations` (
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `integration_events` (
+CREATE TABLE IF NOT EXISTS `#__integration_events` (
   `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   `integration_id` INT UNSIGNED NOT NULL,
   `event_type` VARCHAR(50) NOT NULL,
@@ -29,14 +29,14 @@ CREATE TABLE IF NOT EXISTS `integration_events` (
   `error_message` TEXT,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `processed_at` TIMESTAMP NULL DEFAULT NULL,
-  FOREIGN KEY (`integration_id`) REFERENCES `integrations`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`integration_id`) REFERENCES `#__integrations`(`id`) ON DELETE CASCADE,
   INDEX `idx_ie_status` (`status`),
   INDEX `idx_ie_event_type` (`event_type`),
   INDEX `idx_ie_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Seed default integrations
-INSERT INTO `integrations` (`integration_key`, `display_name`, `description`, `integration_type`, `enabled`, `config`) VALUES
+INSERT INTO `#__integrations` (`integration_key`, `display_name`, `description`, `integration_type`, `enabled`, `config`) VALUES
 ('osticket', 'osTicket', 'Track PC build orders as support tickets in osTicket', 'api_sync', 0,
  JSON_OBJECT(
    'base_url', '',

@@ -39,7 +39,7 @@ function allocateKeyAtomically($pdo, $technician_id, $order_number) {
         }
 
         $stmt = $pdo->prepare("
-            SELECT * FROM oem_keys
+            SELECT * FROM `" . t('oem_keys') . "`
             WHERE key_status IN ('unused', 'retry')
             AND (fail_counter < " . MAX_KEY_FAIL_COUNTER . " OR key_status = 'unused')
             ORDER BY
@@ -55,7 +55,7 @@ function allocateKeyAtomically($pdo, $technician_id, $order_number) {
 
         if ($key) {
             $stmt = $pdo->prepare("
-                UPDATE oem_keys
+                UPDATE `" . t('oem_keys') . "`
                 SET key_status = 'allocated',
                     last_use_date = CURDATE(),
                     last_use_time = CURTIME(),

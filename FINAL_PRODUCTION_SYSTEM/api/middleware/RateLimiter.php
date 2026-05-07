@@ -140,7 +140,7 @@ class RateLimiter {
 
         try {
             $stmt = $pdo->prepare("
-                INSERT INTO rate_limit_violations (
+                INSERT INTO `" . t('rate_limit_violations') . "` (
                     identifier, action, endpoint, client_ip, user_agent,
                     request_count, limit_threshold, window_seconds
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)

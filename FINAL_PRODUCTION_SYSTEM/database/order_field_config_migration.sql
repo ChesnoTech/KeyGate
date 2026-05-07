@@ -5,19 +5,19 @@
 
 -- 1. Widen order_number columns from VARCHAR(10) to VARCHAR(50)
 --    Preserve original NULL/NOT NULL constraints per table
-ALTER TABLE activation_attempts MODIFY order_number VARCHAR(50) NOT NULL;
-ALTER TABLE active_sessions MODIFY order_number VARCHAR(50) NULL;
-ALTER TABLE hardware_info MODIFY order_number VARCHAR(50) NOT NULL;
-ALTER TABLE qc_compliance_results MODIFY order_number VARCHAR(50) NOT NULL;
+ALTER TABLE `#__activation_attempts` MODIFY order_number VARCHAR(50) NOT NULL;
+ALTER TABLE `#__active_sessions` MODIFY order_number VARCHAR(50) NULL;
+ALTER TABLE `#__hardware_info` MODIFY order_number VARCHAR(50) NOT NULL;
+ALTER TABLE `#__qc_compliance_results` MODIFY order_number VARCHAR(50) NOT NULL;
 -- hardware_collection_log: only alter if table exists (not present in all installations)
 SET @tbl_exists = (SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'hardware_collection_log');
-SET @sql = IF(@tbl_exists > 0, 'ALTER TABLE hardware_collection_log MODIFY order_number VARCHAR(50) NOT NULL', 'SELECT 1');
+SET @sql = IF(@tbl_exists > 0, 'ALTER TABLE `#__hardware_collection_log` MODIFY order_number VARCHAR(50) NOT NULL', 'SELECT 1');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 -- 2. Seed system_config with order field configuration defaults
-INSERT INTO system_config (config_key, config_value, description, updated_at)
+INSERT INTO `#__system_config` (config_key, config_value, description, updated_at)
 VALUES
     ('order_field_label_en', 'Order Number', 'Display label for the order field (English)', NOW()),
     ('order_field_label_ru', 'Номер заказа', 'Display label for the order field (Russian)', NOW()),

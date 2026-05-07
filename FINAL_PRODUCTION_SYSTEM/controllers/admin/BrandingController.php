@@ -140,7 +140,7 @@ function handle_upload_brand_asset(PDO $pdo, array $admin_session): void {
     // Store relative path in system_config
     $relativePath = 'uploads/branding/' . $storedFilename;
     $stmt = $pdo->prepare("
-        INSERT INTO system_config (config_key, config_value, description, updated_at)
+        INSERT INTO `" . t('system_config') . "` (config_key, config_value, description, updated_at)
         VALUES (?, ?, '', NOW())
         ON DUPLICATE KEY UPDATE config_value = ?, updated_at = NOW()
     ");
@@ -181,7 +181,7 @@ function handle_delete_brand_asset(PDO $pdo, array $admin_session, ?array $json_
 
     // Clear config value
     $stmt = $pdo->prepare("
-        INSERT INTO system_config (config_key, config_value, description, updated_at)
+        INSERT INTO `" . t('system_config') . "` (config_key, config_value, description, updated_at)
         VALUES (?, '', '', NOW())
         ON DUPLICATE KEY UPDATE config_value = '', updated_at = NOW()
     ");

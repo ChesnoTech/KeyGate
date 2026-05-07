@@ -9,7 +9,7 @@ require_once dirname(__DIR__, 2) . '/functions/integration-helpers.php';
 function handle_list_integrations(PDO $pdo, array $admin_session): void {
     requirePermission('system_settings', $admin_session);
 
-    $stmt = $pdo->query("SELECT * FROM integrations ORDER BY id ASC");
+    $stmt = $pdo->query("SELECT * FROM `" . t('integrations') . "` ORDER BY id ASC");
     $rows = $stmt->fetchAll();
 
     // Decode config JSON and mask sensitive fields
@@ -29,7 +29,7 @@ function handle_list_integrations(PDO $pdo, array $admin_session): void {
                 COUNT(*) as total,
                 SUM(status = 'failed') as failed,
                 SUM(status = 'pending') as pending
-            FROM integration_events WHERE integration_id = ?
+            FROM `" . t('integration_events') . "` WHERE integration_id = ?
         ");
         $countStmt->execute([$row['id']]);
         $row['event_counts'] = $countStmt->fetch();
@@ -48,7 +48,7 @@ function handle_get_integration(PDO $pdo, array $admin_session): void {
         return;
     }
 
-    $stmt = $pdo->prepare("SELECT * FROM integrations WHERE integration_key = ?");
+    $stmt = $pdo->prepare("SELECT * FROM `" . t('integrations') . "` WHERE integration_key = ?");
     $stmt->execute([$key]);
     $intg = $stmt->fetch();
     if (!$intg) {
@@ -61,7 +61,7 @@ function handle_get_integration(PDO $pdo, array $admin_session): void {
     // Recent events (last 20)
     $evtStmt = $pdo->prepare("
         SELECT id, event_type, status, response_code, error_message, created_at, processed_at
-        FROM integration_events
+        FROM `" . t('integration_events') . "`
         WHERE integration_id = ?
         ORDER BY created_at DESC LIMIT 20
     ");
@@ -85,7 +85,7 @@ function handle_save_integration(PDO $pdo, array $admin_session, ?array $json_in
         return;
     }
 
-    $stmt = $pdo->prepare("SELECT * FROM integrations WHERE integration_key = ?");
+    $stmt = $pdo->prepare("SELECT * FROM `" . t('integrations') . "` WHERE integration_key = ?");
     $stmt->execute([$key]);
     $intg = $stmt->fetch();
     if (!$intg) {
@@ -111,7 +111,7 @@ function handle_save_integration(PDO $pdo, array $admin_session, ?array $json_in
     }
 
     $updateStmt = $pdo->prepare("
-        UPDATE integrations
+        UPDATE `" . t('integrations') . "`
         SET enabled = ?, config = ?, updated_at = NOW()
         WHERE integration_key = ?
     ");

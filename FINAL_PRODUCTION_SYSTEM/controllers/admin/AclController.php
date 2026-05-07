@@ -62,7 +62,7 @@ function handle_acl_create_role(PDO $pdo, array $admin_session, ?array $json_inp
     }
 
     // Rate limit: max 20 custom roles
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM acl_roles WHERE is_system_role = 0");
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM `" . t('acl_roles') . "` WHERE is_system_role = 0");
     $stmt->execute();
     if ((int)$stmt->fetchColumn() >= 20) {
         jsonResponse(['success' => false, 'error' => 'Maximum custom roles limit reached (20)']);

@@ -26,14 +26,20 @@ if (file_exists($lockFile) && file_exists($configFile)) {
         && preg_match("/'password'\s*=>\s*'([^']*)'/", $configSrc, $pM)
         && preg_match("/'port'\s*=>\s*(\d+)/", $configSrc, $portM)) {
         $autoHost = strtolower($hM[1]) === 'localhost' ? '127.0.0.1' : $hM[1];
+        // Read DB_PREFIX from config (empty for legacy installs).
+        $autoPrefix = '';
+        if (preg_match("/define\(\s*'DB_PREFIX'\s*,\s*'([^']*)'\s*\)/", $configSrc, $pxM)) {
+            $autoPrefix = $pxM[1];
+        }
+        $autoAdminTable = $autoPrefix . 'admin_users';
         try {
             $autoPdo = new PDO(
                 "mysql:host={$autoHost};port={$portM[1]};dbname={$nM[1]};charset=utf8mb4",
                 $uM[1], $pM[1],
                 [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 5]
             );
-            $hasAdminTable = (bool) $autoPdo->query("SHOW TABLES LIKE 'admin_users'")->fetch();
-            $adminCount = $hasAdminTable ? (int) $autoPdo->query("SELECT COUNT(*) FROM admin_users")->fetchColumn() : 0;
+            $hasAdminTable = (bool) $autoPdo->query("SHOW TABLES LIKE " . $autoPdo->quote($autoAdminTable))->fetch();
+            $adminCount = $hasAdminTable ? (int) $autoPdo->query("SELECT COUNT(*) FROM `{$autoAdminTable}`")->fetchColumn() : 0;
             if (!$hasAdminTable || $adminCount === 0) {
                 @unlink($lockFile);
                 @file_put_contents(

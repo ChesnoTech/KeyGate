@@ -84,7 +84,7 @@ function generateInstanceId(PDO $pdo): string {
 
     // Get database creation timestamp (stable across restarts)
     try {
-        $stmt = $pdo->query("SELECT MIN(created_at) AS first_record FROM admin_users");
+        $stmt = $pdo->query("SELECT MIN(created_at) AS first_record FROM `" . t('admin_users') . "`");
         $row = $stmt->fetch();
         $dbSeed = $row['first_record'] ?? date('Y-m-d');
     } catch (Exception $e) {
@@ -171,7 +171,7 @@ function createLicenseJwt(array $payload, string $secret = 'keygate-community-ve
  */
 function getCurrentLicense(PDO $pdo): ?array {
     try {
-        $stmt = $pdo->query("SELECT * FROM license_info WHERE is_active = 1 ORDER BY id DESC LIMIT 1");
+        $stmt = $pdo->query("SELECT * FROM `" . t('license_info') . "` WHERE is_active = 1 ORDER BY id DESC LIMIT 1");
         return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     } catch (Exception $e) {
         // Table may not exist yet (pre-migration)
@@ -258,11 +258,11 @@ function registerLicense(PDO $pdo, string $licenseKey): array {
     $tierDef = LICENSE_TIERS[$tier];
 
     // Deactivate any existing license
-    $pdo->exec("UPDATE license_info SET is_active = 0");
+    $pdo->exec("UPDATE `" . t('license_info') . "` SET is_active = 0");
 
     // Insert new license
     $stmt = $pdo->prepare("
-        INSERT INTO license_info
+        INSERT INTO `" . t('license_info') . "`
             (license_key, instance_id, tier, licensed_to_email, licensed_to_name,
              max_technicians, max_keys, features,
              issued_at, expires_at, last_validated_at, validation_status, is_active)
@@ -307,7 +307,7 @@ function isFeatureAvailable(PDO $pdo, string $feature): bool {
  */
 function canAddTechnician(PDO $pdo): array {
     $license = getEffectiveLicense($pdo);
-    $stmt = $pdo->query("SELECT COUNT(*) FROM technicians WHERE status = 'active'");
+    $stmt = $pdo->query("SELECT COUNT(*) FROM `" . t('technicians') . "` WHERE status = 'active'");
     $currentCount = (int)$stmt->fetchColumn();
 
     if ($currentCount >= $license['max_technicians']) {
@@ -328,7 +328,7 @@ function canAddTechnician(PDO $pdo): array {
  */
 function canAddKeys(PDO $pdo, int $count = 1): array {
     $license = getEffectiveLicense($pdo);
-    $stmt = $pdo->query("SELECT COUNT(*) FROM oem_keys");
+    $stmt = $pdo->query("SELECT COUNT(*) FROM `" . t('oem_keys') . "`");
     $currentCount = (int)$stmt->fetchColumn();
 
     if (($currentCount + $count) > $license['max_keys']) {

@@ -16,7 +16,7 @@ ApiMiddleware::validateTechnicianId($technician_id);
 try {
     // Get technician details (including language preference)
     $stmt = $pdo->prepare("
-        SELECT * FROM technicians
+        SELECT * FROM `" . t('technicians') . "`
         WHERE technician_id = ? AND is_active = 1
     ");
     $stmt->execute([$technician_id]);
@@ -64,7 +64,7 @@ try {
         }
         
         $stmt = $pdo->prepare("
-            UPDATE technicians 
+            UPDATE `" . t('technicians') . "` 
             SET failed_login_attempts = ?, locked_until = ?
             WHERE technician_id = ?
         ");
@@ -94,7 +94,7 @@ try {
     
     // Login successful - reset failed attempts
     $stmt = $pdo->prepare("
-        UPDATE technicians 
+        UPDATE `" . t('technicians') . "` 
         SET failed_login_attempts = 0, locked_until = NULL, last_login = NOW()
         WHERE technician_id = ?
     ");
@@ -137,7 +137,7 @@ try {
 
     // Include active product lines for order type selection
     try {
-        $plStmt = $pdo->query("SELECT id, name, order_pattern, description FROM product_lines WHERE is_active = 1 ORDER BY name ASC");
+        $plStmt = $pdo->query("SELECT id, name, order_pattern, description FROM `" . t('product_lines') . "` WHERE is_active = 1 ORDER BY name ASC");
         $productLines = $plStmt->fetchAll(PDO::FETCH_ASSOC);
         if (!empty($productLines)) {
             $response['product_lines'] = array_map(function($pl) {

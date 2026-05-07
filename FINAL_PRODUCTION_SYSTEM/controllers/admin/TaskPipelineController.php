@@ -15,7 +15,7 @@ function handle_list_task_templates(PDO $pdo, array $admin_session, $json_input)
     requirePermission('system_settings', $admin_session);
 
     $stmt = $pdo->query("
-        SELECT * FROM task_templates
+        SELECT * FROM `" . t('task_templates') . "`
         ORDER BY is_system DESC, task_key ASC
     ");
 
@@ -54,13 +54,13 @@ function handle_save_task_template(PDO $pdo, array $admin_session, $json_input):
 
     if ($id > 0) {
         // Check not editing a system task's key/type
-        $existing = $pdo->prepare("SELECT is_system FROM task_templates WHERE id = ?");
+        $existing = $pdo->prepare("SELECT is_system FROM `" . t('task_templates') . "` WHERE id = ?");
         $existing->execute([$id]);
         $row = $existing->fetch();
         if ($row && $row['is_system']) {
             // System tasks: only allow editing name, description, timeout, on_failure, icon
             $stmt = $pdo->prepare("
-                UPDATE task_templates
+                UPDATE `" . t('task_templates') . "`
                 SET task_name = ?, description = ?, default_timeout_seconds = ?,
                     default_on_failure = ?, icon = ?
                 WHERE id = ?
@@ -68,7 +68,7 @@ function handle_save_task_template(PDO $pdo, array $admin_session, $json_input):
             $stmt->execute([$taskName, $description, $defaultTimeout, $defaultOnFailure, $icon, $id]);
         } else {
             $stmt = $pdo->prepare("
-                UPDATE task_templates
+                UPDATE `" . t('task_templates') . "`
                 SET task_key = ?, task_name = ?, task_type = ?, description = ?,
                     default_code = ?, default_timeout_seconds = ?, default_on_failure = ?, icon = ?
                 WHERE id = ? AND is_system = 0
@@ -77,7 +77,7 @@ function handle_save_task_template(PDO $pdo, array $admin_session, $json_input):
         }
     } else {
         $stmt = $pdo->prepare("
-            INSERT INTO task_templates
+            INSERT INTO `" . t('task_templates') . "`
                 (task_key, task_name, task_type, description, default_code,
                  default_timeout_seconds, default_on_failure, is_system, icon)
             VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
@@ -101,7 +101,7 @@ function handle_delete_task_template(PDO $pdo, array $admin_session, $json_input
     }
 
     // Cannot delete system tasks
-    $check = $pdo->prepare("SELECT is_system, task_key FROM task_templates WHERE id = ?");
+    $check = $pdo->prepare("SELECT is_system, task_key FROM `" . t('task_templates') . "` WHERE id = ?");
     $check->execute([$id]);
     $row = $check->fetch();
     if (!$row) {
@@ -114,8 +114,8 @@ function handle_delete_task_template(PDO $pdo, array $admin_session, $json_input
     }
 
     // Remove from all product line assignments first
-    $pdo->prepare("DELETE FROM product_line_tasks WHERE task_template_id = ?")->execute([$id]);
-    $pdo->prepare("DELETE FROM task_templates WHERE id = ? AND is_system = 0")->execute([$id]);
+    $pdo->prepare("DELETE FROM `" . t('product_line_tasks') . "` WHERE task_template_id = ?")->execute([$id]);
+    $pdo->prepare("DELETE FROM `" . t('task_templates') . "` WHERE id = ? AND is_system = 0")->execute([$id]);
 
     logAdminActivity($admin_session['admin_id'], $admin_session['id'] ?? 0, 'TASK_TEMPLATE_DELETED', "Deleted task template: {$row['task_key']} (#{$id})");
 
@@ -137,8 +137,8 @@ function handle_get_product_line_tasks(PDO $pdo, array $admin_session, $json_inp
         SELECT plt.*, tt.task_key, tt.task_name AS template_name, tt.task_type,
                tt.description AS template_description, tt.default_code,
                tt.default_timeout_seconds, tt.default_on_failure, tt.is_system, tt.icon
-        FROM product_line_tasks plt
-        JOIN task_templates tt ON tt.id = plt.task_template_id
+        FROM `" . t('product_line_tasks') . "` plt
+        JOIN `" . t('task_templates') . "` tt ON tt.id = plt.task_template_id
         WHERE plt.product_line_id = ?
         ORDER BY plt.sort_order ASC
     ");
@@ -165,11 +165,11 @@ function handle_save_product_line_tasks(PDO $pdo, array $admin_session, $json_in
     $pdo->beginTransaction();
     try {
         // Remove existing assignments
-        $pdo->prepare("DELETE FROM product_line_tasks WHERE product_line_id = ?")->execute([$productLineId]);
+        $pdo->prepare("DELETE FROM `" . t('product_line_tasks') . "` WHERE product_line_id = ?")->execute([$productLineId]);
 
         // Insert new assignments in order
         $insertStmt = $pdo->prepare("
-            INSERT INTO product_line_tasks
+            INSERT INTO `" . t('product_line_tasks') . "`
                 (product_line_id, task_template_id, sort_order, enabled,
                  custom_name, custom_code, custom_timeout_seconds, custom_on_failure)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -246,7 +246,7 @@ function handle_get_activation_pipeline(PDO $pdo, array $admin_session, $json_in
             SELECT id AS task_template_id, task_key, task_name, task_type,
                    default_code AS code, default_timeout_seconds AS timeout_seconds,
                    default_on_failure AS on_failure, 1 AS enabled
-            FROM task_templates
+            FROM `" . t('task_templates') . "`
             WHERE is_system = 1
             ORDER BY id ASC
         ");
@@ -263,8 +263,8 @@ function handle_get_activation_pipeline(PDO $pdo, array $admin_session, $json_in
                COALESCE(plt.custom_timeout_seconds, tt.default_timeout_seconds) AS timeout_seconds,
                COALESCE(plt.custom_on_failure, tt.default_on_failure) AS on_failure,
                plt.enabled
-        FROM product_line_tasks plt
-        JOIN task_templates tt ON tt.id = plt.task_template_id
+        FROM `" . t('product_line_tasks') . "` plt
+        JOIN `" . t('task_templates') . "` tt ON tt.id = plt.task_template_id
         WHERE plt.product_line_id = ? AND plt.enabled = 1
         ORDER BY plt.sort_order ASC
     ");
@@ -277,7 +277,7 @@ function handle_get_activation_pipeline(PDO $pdo, array $admin_session, $json_in
             SELECT id AS task_template_id, task_key, task_name, task_type,
                    default_code AS code, default_timeout_seconds AS timeout_seconds,
                    default_on_failure AS on_failure, 1 AS enabled
-            FROM task_templates
+            FROM `" . t('task_templates') . "`
             WHERE is_system = 1
             ORDER BY id ASC
         ");
@@ -297,7 +297,7 @@ function handle_log_task_execution(PDO $pdo, array $admin_session, $json_input):
     }
 
     $stmt = $pdo->prepare("
-        INSERT INTO task_execution_log
+        INSERT INTO `" . t('task_execution_log') . "`
             (activation_attempt_id, product_line_id, task_template_id, task_key,
              task_name, status, started_at, completed_at, duration_ms,
              output, error_message, technician_id, order_number)

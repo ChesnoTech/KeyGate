@@ -154,7 +154,7 @@ loadLanguage($adminLang);
 if (isset($_POST['action']) && $_POST['action'] === 'change_language' && isset($_POST['language'])) {
     $newLang = preg_replace('/[^a-z]/', '', strtolower($_POST['language']));
     if (in_array($newLang, ['en', 'ru'])) {
-        $stmt = $pdo->prepare("UPDATE admin_users SET preferred_language = ? WHERE id = ?");
+        $stmt = $pdo->prepare("UPDATE `" . t('admin_users') . "` SET preferred_language = ? WHERE id = ?");
         $stmt->execute([$newLang, $admin_session['admin_id']]);
         loadLanguage($newLang);
         if (!empty($_SERVER['HTTP_X_REQUESTED_WITH'])) {
@@ -404,7 +404,7 @@ if (isset($_GET['action']) || isset($_POST['action']) || isset($json_input['acti
 // Handle logout
 if (isset($_GET['logout'])) {
     if (isset($_SESSION['admin_token'])) {
-        $stmt = $pdo->prepare("UPDATE admin_sessions SET is_active = 0 WHERE session_token = ?");
+        $stmt = $pdo->prepare("UPDATE `" . t('admin_sessions') . "` SET is_active = 0 WHERE session_token = ?");
         $stmt->execute([$_SESSION['admin_token']]);
     }
     session_destroy();

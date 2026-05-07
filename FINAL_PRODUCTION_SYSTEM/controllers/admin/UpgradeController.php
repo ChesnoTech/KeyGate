@@ -34,7 +34,7 @@ function getBackupDir(): string {
 }
 
 function loadUpgradeRow(PDO $pdo, int $upgradeId): ?array {
-    $stmt = $pdo->prepare("SELECT * FROM upgrade_history WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT * FROM `" . t('upgrade_history') . "` WHERE id = ?");
     $stmt->execute([$upgradeId]);
     return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
 }
@@ -47,7 +47,7 @@ function updateUpgradeStatus(PDO $pdo, int $id, string $status, array $extra = [
         $params[] = $val;
     }
     $params[] = $id;
-    $sql = "UPDATE upgrade_history SET " . implode(', ', $sets) . " WHERE id = ?";
+    $sql = "UPDATE `" . t('upgrade_history') . "` SET " . implode(', ', $sets) . " WHERE id = ?";
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
 }
@@ -275,7 +275,7 @@ function handle_upgrade_download_github(PDO $pdo, array $admin_session, $json_in
 
     // Check no active upgrade
     $stmt = $pdo->prepare("
-        SELECT id, status FROM upgrade_history
+        SELECT id, status FROM `" . t('upgrade_history') . "`
         WHERE status NOT IN ('completed', 'failed', 'rolled_back')
         LIMIT 1
     ");
@@ -368,7 +368,7 @@ function handle_upgrade_download_github(PDO $pdo, array $admin_session, $json_in
 
     // Create upgrade_history row
     $stmt = $pdo->prepare("
-        INSERT INTO upgrade_history
+        INSERT INTO `" . t('upgrade_history') . "`
             (from_version, to_version, from_version_code, to_version_code,
              status, manifest_json, package_filename, package_checksum,
              admin_id, admin_username)
@@ -416,7 +416,7 @@ function handle_upgrade_get_status(PDO $pdo, array $admin_session, $json_input):
 
     // Active (non-terminal) upgrade
     $stmt = $pdo->query("
-        SELECT * FROM upgrade_history
+        SELECT * FROM `" . t('upgrade_history') . "`
         WHERE status NOT IN ('completed', 'failed', 'rolled_back')
         ORDER BY created_at DESC LIMIT 1
     ");
@@ -427,7 +427,7 @@ function handle_upgrade_get_status(PDO $pdo, array $admin_session, $json_input):
         SELECT id, from_version, to_version, status, package_filename,
                error_message, started_at, completed_at, rolled_back_at,
                admin_username, created_at
-        FROM upgrade_history
+        FROM `" . t('upgrade_history') . "`
         ORDER BY created_at DESC LIMIT 10
     ");
     $recentUpgrades = $stmt2->fetchAll(PDO::FETCH_ASSOC);
@@ -511,7 +511,7 @@ function handle_upgrade_upload_package(PDO $pdo, array $admin_session): void {
 
     // Check no active upgrade in progress
     $stmt = $pdo->prepare("
-        SELECT id, status FROM upgrade_history
+        SELECT id, status FROM `" . t('upgrade_history') . "`
         WHERE status NOT IN ('completed', 'failed', 'rolled_back')
         LIMIT 1
     ");
@@ -536,7 +536,7 @@ function handle_upgrade_upload_package(PDO $pdo, array $admin_session): void {
 
     // Create upgrade_history row
     $stmt = $pdo->prepare("
-        INSERT INTO upgrade_history
+        INSERT INTO `" . t('upgrade_history') . "`
             (from_version, to_version, from_version_code, to_version_code,
              status, manifest_json, package_filename, package_checksum,
              admin_id, admin_username)
@@ -859,7 +859,7 @@ function handle_upgrade_apply(PDO $pdo, array $admin_session, $json_input): void
 
     // Lock the row to prevent concurrent execution
     $pdo->beginTransaction();
-    $lockStmt = $pdo->prepare("SELECT id FROM upgrade_history WHERE id = ? FOR UPDATE");
+    $lockStmt = $pdo->prepare("SELECT id FROM `" . t('upgrade_history') . "` WHERE id = ? FOR UPDATE");
     $lockStmt->execute([$upgradeId]);
     $lockStmt->closeCursor();
     $pdo->commit();
@@ -899,7 +899,7 @@ function handle_upgrade_apply(PDO $pdo, array $admin_session, $json_input): void
         $migVersion = (int)($mig['version'] ?? 0);
 
         // Check if already applied
-        $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM schema_versions WHERE filename = ?");
+        $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM `" . t('schema_versions') . "` WHERE filename = ?");
         $checkStmt->execute([basename($migFile)]);
         $alreadyApplied = (int)$checkStmt->fetchColumn() > 0;
         $checkStmt->closeCursor();
@@ -945,7 +945,7 @@ function handle_upgrade_apply(PDO $pdo, array $admin_session, $json_input): void
 
             // Record in schema_versions
             $checksum = hash('sha256', $migContent);
-            $svStmt = $pdo->prepare("INSERT INTO schema_versions (version, filename, checksum) VALUES (?, ?, ?)");
+            $svStmt = $pdo->prepare("INSERT INTO `" . t('schema_versions') . "` (version, filename, checksum) VALUES (?, ?, ?)");
             $svStmt->execute([$migVersion, basename($migFile), $checksum]);
             $svStmt->closeCursor();
 
@@ -1327,7 +1327,7 @@ function handle_upgrade_rollback(PDO $pdo, array $admin_session, $json_input): v
         );
 
         $freshPdo->prepare("
-            INSERT INTO upgrade_history
+            INSERT INTO `" . t('upgrade_history') . "`
                 (from_version, to_version, status, error_message,
                  admin_id, admin_username, rolled_back_at)
             VALUES (?, ?, 'rolled_back', ?, ?, ?, ?)
@@ -1363,7 +1363,7 @@ function handle_upgrade_history(PDO $pdo, array $admin_session, $json_input): vo
                status, package_filename, error_message,
                started_at, completed_at, rolled_back_at,
                admin_id, admin_username, created_at
-        FROM upgrade_history
+        FROM `" . t('upgrade_history') . "`
         ORDER BY created_at DESC
         LIMIT 50
     ");

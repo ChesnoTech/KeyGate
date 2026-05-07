@@ -68,7 +68,7 @@ function handle_upload_client_resource(PDO $pdo, array $admin_session): void {
     $destPath = $uploadDir . '/' . $storedFilename;
 
     // Delete existing resource with same key (replace mode)
-    $existing = $pdo->prepare("SELECT filename FROM client_resources WHERE resource_key = ?");
+    $existing = $pdo->prepare("SELECT filename FROM `" . t('client_resources') . "` WHERE resource_key = ?");
     $existing->execute([$resourceKey]);
     $oldFile = $existing->fetchColumn();
     if ($oldFile) {
@@ -76,7 +76,7 @@ function handle_upload_client_resource(PDO $pdo, array $admin_session): void {
         if (file_exists($oldPath)) {
             unlink($oldPath);
         }
-        $pdo->prepare("DELETE FROM client_resources WHERE resource_key = ?")->execute([$resourceKey]);
+        $pdo->prepare("DELETE FROM `" . t('client_resources') . "` WHERE resource_key = ?")->execute([$resourceKey]);
     }
 
     // Move uploaded file
@@ -95,7 +95,7 @@ function handle_upload_client_resource(PDO $pdo, array $admin_session): void {
 
     // Insert DB record
     $stmt = $pdo->prepare("
-        INSERT INTO client_resources (resource_key, filename, original_filename, file_size, mime_type, checksum_sha256, description, uploaded_by)
+        INSERT INTO `" . t('client_resources') . "` (resource_key, filename, original_filename, file_size, mime_type, checksum_sha256, description, uploaded_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ");
     $stmt->execute([$resourceKey, $storedFilename, $originalName, $fileSize, $mimeType, $checksum, $description, $adminId]);
@@ -134,7 +134,7 @@ function handle_delete_client_resource(PDO $pdo, array $admin_session, ?array $j
         return;
     }
 
-    $stmt = $pdo->prepare("SELECT filename FROM client_resources WHERE resource_key = ?");
+    $stmt = $pdo->prepare("SELECT filename FROM `" . t('client_resources') . "` WHERE resource_key = ?");
     $stmt->execute([$resourceKey]);
     $filename = $stmt->fetchColumn();
 
@@ -151,7 +151,7 @@ function handle_delete_client_resource(PDO $pdo, array $admin_session, ?array $j
     }
 
     // Delete DB record
-    $pdo->prepare("DELETE FROM client_resources WHERE resource_key = ?")->execute([$resourceKey]);
+    $pdo->prepare("DELETE FROM `" . t('client_resources') . "` WHERE resource_key = ?")->execute([$resourceKey]);
 
     logAdminActivity(
         $admin_session['admin_id'],
@@ -172,8 +172,8 @@ function handle_list_client_resources(PDO $pdo, array $admin_session): void {
 
     $stmt = $pdo->prepare("
         SELECT cr.*, au.username AS uploaded_by_name
-        FROM client_resources cr
-        LEFT JOIN admin_users au ON cr.uploaded_by = au.id
+        FROM `" . t('client_resources') . "` cr
+        LEFT JOIN `" . t('admin_users') . "` au ON cr.uploaded_by = au.id
         ORDER BY cr.created_at DESC
     ");
     $stmt->execute();
@@ -200,7 +200,7 @@ function handle_download_client_resource(PDO $pdo, array $admin_session): void {
         return;
     }
 
-    $stmt = $pdo->prepare("SELECT filename, original_filename, mime_type, file_size, checksum_sha256 FROM client_resources WHERE resource_key = ?");
+    $stmt = $pdo->prepare("SELECT filename, original_filename, mime_type, file_size, checksum_sha256 FROM `" . t('client_resources') . "` WHERE resource_key = ?");
     $stmt->execute([$resourceKey]);
     $resource = $stmt->fetch(PDO::FETCH_ASSOC);
 

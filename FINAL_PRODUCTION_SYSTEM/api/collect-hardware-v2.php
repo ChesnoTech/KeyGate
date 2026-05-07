@@ -26,8 +26,8 @@ try {
     // Validate session token and get technician info
     $stmt = $pdo->prepare("
         SELECT s.technician_id, t.full_name, s.expires_at
-        FROM active_sessions s
-        INNER JOIN technicians t ON s.technician_id = t.technician_id
+        FROM `" . t('active_sessions') . "` s
+        INNER JOIN `" . t('technicians') . "` t ON s.technician_id = t.technician_id
         WHERE s.session_token = ?
           AND s.expires_at > NOW()
         LIMIT 1
@@ -44,7 +44,7 @@ try {
     // Check if hardware info already exists for this order number
     $stmt = $pdo->prepare("
         SELECT id, collection_timestamp
-        FROM hardware_info
+        FROM `" . t('hardware_info') . "`
         WHERE order_number = ?
         ORDER BY collection_timestamp DESC
         LIMIT 1
@@ -164,7 +164,7 @@ try {
 
     // Insert hardware information
     $stmt = $pdo->prepare("
-        INSERT INTO hardware_info (
+        INSERT INTO `" . t('hardware_info') . "` (
             activation_id, order_number, technician_id, session_token,
             motherboard_manufacturer, motherboard_product, motherboard_serial, motherboard_version,
             bios_manufacturer, bios_version, bios_release_date, bios_serial_number,
@@ -280,7 +280,7 @@ try {
 
     // Log the collection attempt
     $stmt = $pdo->prepare("
-        INSERT INTO hardware_collection_log (
+        INSERT INTO `" . t('hardware_collection_log') . "` (
             order_number, technician_id, session_token, hardware_info_id, collection_status
         ) VALUES (?, ?, ?, ?, 'success')
     ");
@@ -316,7 +316,7 @@ try {
     try {
         if (isset($technicianId) && isset($orderNumber) && isset($sessionToken)) {
             $stmt = $pdo->prepare("
-                INSERT INTO hardware_collection_log (
+                INSERT INTO `" . t('hardware_collection_log') . "` (
                     order_number, technician_id, session_token, hardware_info_id,
                     collection_status, error_message
                 ) VALUES (?, ?, ?, NULL, 'failed', ?)

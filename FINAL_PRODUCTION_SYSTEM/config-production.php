@@ -89,7 +89,7 @@ function getConfig($key, $useCache = true) {
     }
     
     try {
-        $stmt = $pdo->prepare("SELECT config_value FROM system_config WHERE config_key = ?");
+        $stmt = $pdo->prepare("SELECT config_value FROM `" . t('system_config') . "` WHERE config_key = ?");
         $stmt->execute([$key]);
         $result = $stmt->fetch();
         $value = $result ? $result['config_value'] : null;
@@ -192,9 +192,9 @@ function validateSession($token) {
     try {
         $stmt = $pdo->prepare("
             SELECT s.*, k.product_key, k.key_status, t.is_active as tech_active
-            FROM active_sessions s 
-            LEFT JOIN oem_keys k ON s.key_id = k.id
-            LEFT JOIN technicians t ON s.technician_id = t.technician_id
+            FROM `" . t('active_sessions') . "` s 
+            LEFT JOIN `" . t('oem_keys') . "` k ON s.key_id = k.id
+            LEFT JOIN `" . t('technicians') . "` t ON s.technician_id = t.technician_id
             WHERE s.session_token = ? 
             AND s.is_active = 1 
             AND s.expires_at > NOW()
@@ -233,7 +233,7 @@ function allocateKeyAtomically($pdo, $technician_id, $order_number) {
         
         // Select and lock the best available key
         $stmt = $pdo->prepare("
-            SELECT * FROM oem_keys 
+            SELECT * FROM `" . t('oem_keys') . "` 
             WHERE key_status IN ('unused', 'retry') 
             AND (fail_counter < 3 OR key_status = 'unused')
             ORDER BY 
@@ -250,7 +250,7 @@ function allocateKeyAtomically($pdo, $technician_id, $order_number) {
         if ($key) {
             // Mark key as in use immediately
             $stmt = $pdo->prepare("
-                UPDATE oem_keys
+                UPDATE `" . t('oem_keys') . "`
                 SET key_status = 'allocated',
                     last_use_date = CURDATE(),
                     last_use_time = CURTIME(),
@@ -295,7 +295,7 @@ function allocateKeyAtomically($pdo, $technician_id, $order_number) {
 function cleanupExpiredSessions($pdo) {
     try {
         $stmt = $pdo->prepare("
-            UPDATE active_sessions 
+            UPDATE `" . t('active_sessions') . "` 
             SET is_active = 0 
             WHERE expires_at < NOW() AND is_active = 1
             LIMIT 1000
@@ -321,8 +321,8 @@ function getActiveSession($pdo, $technician_id) {
         
         $stmt = $pdo->prepare("
             SELECT s.*, k.product_key, k.oem_identifier, k.key_status, k.fail_counter
-            FROM active_sessions s 
-            LEFT JOIN oem_keys k ON s.key_id = k.id
+            FROM `" . t('active_sessions') . "` s 
+            LEFT JOIN `" . t('oem_keys') . "` k ON s.key_id = k.id
             WHERE s.technician_id = ? 
             AND s.is_active = 1 
             AND s.expires_at > NOW()

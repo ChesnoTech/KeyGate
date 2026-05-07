@@ -23,7 +23,7 @@ try {
     // Verify valid session
     $stmt = $pdo->prepare("
         SELECT s.technician_id
-        FROM active_sessions s
+        FROM `" . t('active_sessions') . "` s
         WHERE s.session_token = ? AND s.expires_at > NOW()
     ");
     $stmt->execute([$sessionToken]);

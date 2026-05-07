@@ -10,7 +10,7 @@
 -- ============================================================
 
 -- Permission Categories (groups permissions for UI accordion)
-CREATE TABLE IF NOT EXISTS acl_permission_categories (
+CREATE TABLE IF NOT EXISTS `#__acl_permission_categories` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     category_key VARCHAR(50) NOT NULL UNIQUE,
     display_name VARCHAR(100) NOT NULL,
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS acl_permission_categories (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Granular Permissions
-CREATE TABLE IF NOT EXISTS acl_permissions (
+CREATE TABLE IF NOT EXISTS `#__acl_permissions` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     permission_key VARCHAR(100) NOT NULL UNIQUE,
     display_name VARCHAR(100) NOT NULL,
@@ -28,13 +28,13 @@ CREATE TABLE IF NOT EXISTS acl_permissions (
     resource_type VARCHAR(50) NOT NULL,
     action_type ENUM('view','create','edit','delete','manage','execute') NOT NULL,
     is_dangerous TINYINT(1) DEFAULT 0 COMMENT 'Requires confirmation / shown with warning',
-    FOREIGN KEY (category_id) REFERENCES acl_permission_categories(id),
+    FOREIGN KEY (category_id) REFERENCES `#__acl_permission_categories`(id),
     INDEX idx_resource (resource_type),
     INDEX idx_category (category_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Custom Roles
-CREATE TABLE IF NOT EXISTS acl_roles (
+CREATE TABLE IF NOT EXISTS `#__acl_roles` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     role_name VARCHAR(50) NOT NULL UNIQUE,
     display_name VARCHAR(100) NOT NULL,
@@ -51,19 +51,19 @@ CREATE TABLE IF NOT EXISTS acl_roles (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Role <-> Permission Junction
-CREATE TABLE IF NOT EXISTS acl_role_permissions (
+CREATE TABLE IF NOT EXISTS `#__acl_role_permissions` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     role_id INT NOT NULL,
     permission_id INT NOT NULL,
     granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     granted_by INT NULL,
     UNIQUE KEY unique_role_perm (role_id, permission_id),
-    FOREIGN KEY (role_id) REFERENCES acl_roles(id) ON DELETE CASCADE,
-    FOREIGN KEY (permission_id) REFERENCES acl_permissions(id) ON DELETE CASCADE
+    FOREIGN KEY (role_id) REFERENCES `#__acl_roles`(id) ON DELETE CASCADE,
+    FOREIGN KEY (permission_id) REFERENCES `#__acl_permissions`(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Per-User Permission Overrides
-CREATE TABLE IF NOT EXISTS acl_user_overrides (
+CREATE TABLE IF NOT EXISTS `#__acl_user_overrides` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_type ENUM('admin','technician') NOT NULL,
     user_id INT NOT NULL,
@@ -74,13 +74,13 @@ CREATE TABLE IF NOT EXISTS acl_user_overrides (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by INT NULL,
     UNIQUE KEY unique_user_perm (user_type, user_id, permission_id),
-    FOREIGN KEY (permission_id) REFERENCES acl_permissions(id) ON DELETE CASCADE,
+    FOREIGN KEY (permission_id) REFERENCES `#__acl_permissions`(id) ON DELETE CASCADE,
     INDEX idx_user (user_type, user_id),
     INDEX idx_expires (expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ACL Change Audit Log
-CREATE TABLE IF NOT EXISTS acl_change_log (
+CREATE TABLE IF NOT EXISTS `#__acl_change_log` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     actor_id INT NOT NULL,
     actor_type ENUM('admin','system') DEFAULT 'admin',
@@ -102,15 +102,15 @@ CREATE TABLE IF NOT EXISTS acl_change_log (
 -- ============================================================
 
 -- Add custom_role_id to admin_users (links to acl_roles for new ACL)
-ALTER TABLE admin_users ADD COLUMN custom_role_id INT NULL AFTER role;
-ALTER TABLE admin_users ADD CONSTRAINT fk_admin_acl_role FOREIGN KEY (custom_role_id) REFERENCES acl_roles(id) ON DELETE SET NULL;
+ALTER TABLE `#__admin_users` ADD COLUMN custom_role_id INT NULL AFTER role;
+ALTER TABLE `#__admin_users` ADD CONSTRAINT fk_admin_acl_role FOREIGN KEY (custom_role_id) REFERENCES `#__acl_roles`(id) ON DELETE SET NULL;
 
 -- Add role_id to technicians (links to acl_roles for technician roles)
-ALTER TABLE technicians ADD COLUMN role_id INT NULL AFTER is_active;
-ALTER TABLE technicians ADD CONSTRAINT fk_tech_acl_role FOREIGN KEY (role_id) REFERENCES acl_roles(id) ON DELETE SET NULL;
+ALTER TABLE `#__technicians` ADD COLUMN role_id INT NULL AFTER is_active;
+ALTER TABLE `#__technicians` ADD CONSTRAINT fk_tech_acl_role FOREIGN KEY (role_id) REFERENCES `#__acl_roles`(id) ON DELETE SET NULL;
 
 -- Add acl_v2_enabled config flag (disabled by default for safety)
-INSERT INTO system_config (config_key, config_value, description)
+INSERT INTO `#__system_config` (config_key, config_value, description)
 VALUES ('acl_v2_enabled', '0', 'Enable database-driven ACL system (0=legacy hardcoded, 1=new ACL)')
 ON DUPLICATE KEY UPDATE config_key = config_key;
 
@@ -118,7 +118,7 @@ ON DUPLICATE KEY UPDATE config_key = config_key;
 -- SEED: Permission Categories
 -- ============================================================
 
-INSERT INTO acl_permission_categories (category_key, display_name, icon, sort_order) VALUES
+INSERT INTO `#__acl_permission_categories` (category_key, display_name, icon, sort_order) VALUES
 ('dashboard',    'Dashboard & Reports',       NULL, 10),
 ('keys',         'OEM Key Management',        NULL, 20),
 ('technicians',  'Technician Management',     NULL, 30),
@@ -134,7 +134,7 @@ INSERT INTO acl_permission_categories (category_key, display_name, icon, sort_or
 -- SEED: Granular Permissions (~38)
 -- ============================================================
 
-INSERT INTO acl_permissions (permission_key, display_name, description, category_id, resource_type, action_type, is_dangerous) VALUES
+INSERT INTO `#__acl_permissions` (permission_key, display_name, description, category_id, resource_type, action_type, is_dangerous) VALUES
 -- Dashboard (cat 1)
 ('view_dashboard',     'View Dashboard',          'Access the main dashboard with statistics',     1, 'dashboard', 'view', 0),
 ('view_reports',       'View Reports',            'Access activation and usage reports',           1, 'dashboard', 'view', 0),
@@ -199,7 +199,7 @@ INSERT INTO acl_permissions (permission_key, display_name, description, category
 -- SEED: Roles (7 admin + 2 technician)
 -- ============================================================
 
-INSERT INTO acl_roles (role_name, display_name, description, role_type, is_system_role, priority, color) VALUES
+INSERT INTO `#__acl_roles` (role_name, display_name, description, role_type, is_system_role, priority, color) VALUES
 -- Admin roles
 ('super_admin',       'Super Administrator',  'Full system access including admin management, system settings, backups, and role management', 'admin', 1, 100, '#dc3545'),
 ('admin',             'Administrator',        'All data operations except delete, admin management, and system settings',                     'admin', 1, 80,  '#007bff'),
@@ -218,15 +218,15 @@ INSERT INTO acl_roles (role_name, display_name, description, role_type, is_syste
 
 -- Helper: Get role and permission IDs for assignment
 -- super_admin: ALL permissions
-INSERT INTO acl_role_permissions (role_id, permission_id)
+INSERT INTO `#__acl_role_permissions` (role_id, permission_id)
 SELECT r.id, p.id
-FROM acl_roles r CROSS JOIN acl_permissions p
+FROM `#__acl_roles` r CROSS JOIN `#__acl_permissions` p
 WHERE r.role_name = 'super_admin';
 
 -- admin: All view + edit/create operations, NO delete, NO admin mgmt, NO system settings, NO role mgmt
-INSERT INTO acl_role_permissions (role_id, permission_id)
+INSERT INTO `#__acl_role_permissions` (role_id, permission_id)
 SELECT r.id, p.id
-FROM acl_roles r, acl_permissions p
+FROM `#__acl_roles` r, acl_permissions p
 WHERE r.role_name = 'admin' AND p.permission_key IN (
     'view_dashboard', 'view_reports', 'export_data',
     'view_keys', 'add_key', 'import_keys', 'edit_key', 'recycle_key',
@@ -239,9 +239,9 @@ WHERE r.role_name = 'admin' AND p.permission_key IN (
 );
 
 -- billing_manager: Dashboard, keys (view only), activations (view), reports, export, logs
-INSERT INTO acl_role_permissions (role_id, permission_id)
+INSERT INTO `#__acl_role_permissions` (role_id, permission_id)
 SELECT r.id, p.id
-FROM acl_roles r, acl_permissions p
+FROM `#__acl_roles` r, acl_permissions p
 WHERE r.role_name = 'billing_manager' AND p.permission_key IN (
     'view_dashboard', 'view_reports', 'export_data',
     'view_keys',
@@ -250,9 +250,9 @@ WHERE r.role_name = 'billing_manager' AND p.permission_key IN (
 );
 
 -- hr_manager: Dashboard, technician CRUD, password reset, role assignment
-INSERT INTO acl_role_permissions (role_id, permission_id)
+INSERT INTO `#__acl_role_permissions` (role_id, permission_id)
 SELECT r.id, p.id
-FROM acl_roles r, acl_permissions p
+FROM `#__acl_roles` r, acl_permissions p
 WHERE r.role_name = 'hr_manager' AND p.permission_key IN (
     'view_dashboard',
     'view_technicians', 'add_technician', 'edit_technician', 'reset_tech_password', 'assign_tech_role',
@@ -260,9 +260,9 @@ WHERE r.role_name = 'hr_manager' AND p.permission_key IN (
 );
 
 -- qc_inspector: View activations, hardware, add notes, export
-INSERT INTO acl_role_permissions (role_id, permission_id)
+INSERT INTO `#__acl_role_permissions` (role_id, permission_id)
 SELECT r.id, p.id
-FROM acl_roles r, acl_permissions p
+FROM `#__acl_roles` r, acl_permissions p
 WHERE r.role_name = 'qc_inspector' AND p.permission_key IN (
     'view_dashboard', 'view_reports', 'export_data',
     'view_activations', 'add_activation_note',
@@ -270,9 +270,9 @@ WHERE r.role_name = 'qc_inspector' AND p.permission_key IN (
 );
 
 -- dept_manager: View technicians, activations, hardware, dashboard, add notes
-INSERT INTO acl_role_permissions (role_id, permission_id)
+INSERT INTO `#__acl_role_permissions` (role_id, permission_id)
 SELECT r.id, p.id
-FROM acl_roles r, acl_permissions p
+FROM `#__acl_roles` r, acl_permissions p
 WHERE r.role_name = 'dept_manager' AND p.permission_key IN (
     'view_dashboard', 'view_reports', 'export_data',
     'view_technicians',
@@ -282,9 +282,9 @@ WHERE r.role_name = 'dept_manager' AND p.permission_key IN (
 );
 
 -- viewer: Read-only across the board
-INSERT INTO acl_role_permissions (role_id, permission_id)
+INSERT INTO `#__acl_role_permissions` (role_id, permission_id)
 SELECT r.id, p.id
-FROM acl_roles r, acl_permissions p
+FROM `#__acl_roles` r, acl_permissions p
 WHERE r.role_name = 'viewer' AND p.permission_key IN (
     'view_dashboard', 'view_reports', 'export_data',
     'view_keys',
@@ -297,17 +297,17 @@ WHERE r.role_name = 'viewer' AND p.permission_key IN (
 );
 
 -- technician_full: Can activate, submit hardware
-INSERT INTO acl_role_permissions (role_id, permission_id)
+INSERT INTO `#__acl_role_permissions` (role_id, permission_id)
 SELECT r.id, p.id
-FROM acl_roles r, acl_permissions p
+FROM `#__acl_roles` r, acl_permissions p
 WHERE r.role_name = 'technician_full' AND p.permission_key IN (
     'view_keys', 'view_activations', 'view_hardware'
 );
 
 -- technician_limited: View only
-INSERT INTO acl_role_permissions (role_id, permission_id)
+INSERT INTO `#__acl_role_permissions` (role_id, permission_id)
 SELECT r.id, p.id
-FROM acl_roles r, acl_permissions p
+FROM `#__acl_roles` r, acl_permissions p
 WHERE r.role_name = 'technician_limited' AND p.permission_key IN (
     'view_keys'
 );
@@ -317,6 +317,6 @@ WHERE r.role_name = 'technician_limited' AND p.permission_key IN (
 -- Map legacy role ENUM to new custom_role_id
 -- ============================================================
 
-UPDATE admin_users au
-INNER JOIN acl_roles ar ON ar.role_name COLLATE utf8mb4_general_ci = au.role COLLATE utf8mb4_general_ci AND ar.role_type = 'admin'
+UPDATE `#__admin_users` au
+INNER JOIN `#__acl_roles` ar ON ar.role_name COLLATE utf8mb4_general_ci = au.role COLLATE utf8mb4_general_ci AND ar.role_type = 'admin'
 SET au.custom_role_id = ar.id;

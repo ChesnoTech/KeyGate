@@ -23,7 +23,7 @@ function handle_qc_save_settings(PDO $pdo, array $admin_session, ?array $json_in
 
     foreach ($allowedKeys as $key) {
         if (isset($json_input[$key])) {
-            $stmt = $pdo->prepare("UPDATE qc_global_settings SET setting_value = ?, updated_by = ? WHERE setting_key = ?");
+            $stmt = $pdo->prepare("UPDATE `" . t('qc_global_settings') . "` SET setting_value = ?, updated_by = ? WHERE setting_key = ?");
             $stmt->execute([$json_input[$key], $admin_session['admin_id'], $key]);
         }
     }
@@ -95,7 +95,7 @@ function handle_qc_list_motherboards(PDO $pdo, array $admin_session, ?array $jso
     unset($row);
 
     // Distinct manufacturers for filter dropdown
-    $mfrs = $pdo->query("SELECT DISTINCT manufacturer FROM qc_motherboard_registry ORDER BY manufacturer")->fetchAll(PDO::FETCH_COLUMN);
+    $mfrs = $pdo->query("SELECT DISTINCT manufacturer FROM `" . t('qc_motherboard_registry') . "` ORDER BY manufacturer")->fetchAll(PDO::FETCH_COLUMN);
 
     jsonResponse([
         'success' => true,
@@ -111,7 +111,7 @@ function handle_qc_get_motherboard(PDO $pdo, array $admin_session, ?array $json_
     requirePermission('view_compliance', $admin_session);
 
     $id = (int) ($_GET['id'] ?? 0);
-    $stmt = $pdo->prepare("SELECT * FROM qc_motherboard_registry WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT * FROM `" . t('qc_motherboard_registry') . "` WHERE id = ?");
     $stmt->execute([$id]);
     $board = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -161,7 +161,7 @@ function handle_qc_update_motherboard(PDO $pdo, array $admin_session, ?array $js
     $params[] = $admin_session['admin_id'];
     $params[] = $id;
 
-    $stmt = $pdo->prepare("UPDATE qc_motherboard_registry SET " . implode(", ", $fields) . " WHERE id = ?");
+    $stmt = $pdo->prepare("UPDATE `" . t('qc_motherboard_registry') . "` SET " . implode(", ", $fields) . " WHERE id = ?");
     $stmt->execute($params);
 
     logAdminActivity($admin_session['admin_id'], $admin_session['id'], 'QC_MOTHERBOARD_UPDATE', "Updated motherboard registry #$id");
@@ -174,14 +174,14 @@ function handle_qc_list_manufacturers(PDO $pdo, array $admin_session, ?array $js
     requirePermission('view_compliance', $admin_session);
 
     // Configured manufacturers
-    $stmt = $pdo->query("SELECT * FROM qc_manufacturer_defaults ORDER BY manufacturer");
+    $stmt = $pdo->query("SELECT * FROM `" . t('qc_manufacturer_defaults') . "` ORDER BY manufacturer");
     $configured = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // Unconfigured: manufacturers seen in registry but no defaults entry
     $stmt = $pdo->query("
         SELECT DISTINCT r.manufacturer
-        FROM qc_motherboard_registry r
-        LEFT JOIN qc_manufacturer_defaults md ON r.manufacturer = md.manufacturer
+        FROM `" . t('qc_motherboard_registry') . "` r
+        LEFT JOIN `" . t('qc_manufacturer_defaults') . "` md ON r.manufacturer = md.manufacturer
         WHERE md.id IS NULL
         ORDER BY r.manufacturer
     ");
@@ -200,7 +200,7 @@ function handle_qc_update_manufacturer(PDO $pdo, array $admin_session, ?array $j
     }
 
     $stmt = $pdo->prepare("
-        INSERT INTO qc_manufacturer_defaults (manufacturer, secure_boot_required, secure_boot_enforcement, min_bios_version, recommended_bios_version, bios_enforcement, hackbgrt_enforcement, notes, updated_by)
+        INSERT INTO `" . t('qc_manufacturer_defaults') . "` (manufacturer, secure_boot_required, secure_boot_enforcement, min_bios_version, recommended_bios_version, bios_enforcement, hackbgrt_enforcement, notes, updated_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             secure_boot_required = VALUES(secure_boot_required),
@@ -454,7 +454,7 @@ function handle_qc_get_stats(PDO $pdo, array $admin_session, ?array $json_input 
     requirePermission('view_compliance', $admin_session);
 
     // Result counts
-    $stmt = $pdo->query("SELECT check_result, COUNT(*) as cnt FROM qc_compliance_results GROUP BY check_result");
+    $stmt = $pdo->query("SELECT check_result, COUNT(*) as cnt FROM `" . t('qc_compliance_results') . "` GROUP BY check_result");
     $resultCounts = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
     $total = array_sum($resultCounts);
@@ -463,8 +463,8 @@ function handle_qc_get_stats(PDO $pdo, array $admin_session, ?array $json_input 
     // Top failing boards
     $stmt = $pdo->query("
         SELECT hi.motherboard_manufacturer, hi.motherboard_product, COUNT(*) as fail_count
-        FROM qc_compliance_results cr
-        JOIN hardware_info hi ON cr.hardware_info_id = hi.id
+        FROM `" . t('qc_compliance_results') . "` cr
+        JOIN `" . t('hardware_info') . "` hi ON cr.hardware_info_id = hi.id
         WHERE cr.check_result = 'fail'
         GROUP BY hi.motherboard_manufacturer, hi.motherboard_product
         ORDER BY fail_count DESC
@@ -473,19 +473,19 @@ function handle_qc_get_stats(PDO $pdo, array $admin_session, ?array $json_input 
     $topFailing = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // Unresolved blocking
-    $stmt = $pdo->query("SELECT COUNT(DISTINCT hardware_info_id) FROM qc_compliance_results WHERE enforcement_level = 3 AND check_result = 'fail'");
+    $stmt = $pdo->query("SELECT COUNT(DISTINCT hardware_info_id) FROM `" . t('qc_compliance_results') . "` WHERE enforcement_level = 3 AND check_result = 'fail'");
     $unresolvedBlocking = (int) $stmt->fetchColumn();
 
     // Registry stats
-    $stmt = $pdo->query("SELECT COUNT(*) FROM qc_motherboard_registry");
+    $stmt = $pdo->query("SELECT COUNT(*) FROM `" . t('qc_motherboard_registry') . "`");
     $registeredBoards = (int) $stmt->fetchColumn();
-    $stmt = $pdo->query("SELECT COUNT(*) FROM qc_manufacturer_defaults");
+    $stmt = $pdo->query("SELECT COUNT(*) FROM `" . t('qc_manufacturer_defaults') . "`");
     $mfrsWithDefaults = (int) $stmt->fetchColumn();
 
     // Check type breakdown
     $stmt = $pdo->query("
         SELECT check_type, check_result, COUNT(*) as cnt
-        FROM qc_compliance_results
+        FROM `" . t('qc_compliance_results') . "`
         GROUP BY check_type, check_result
     ");
     $byType = [];

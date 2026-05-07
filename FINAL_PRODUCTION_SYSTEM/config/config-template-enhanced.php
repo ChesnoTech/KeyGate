@@ -46,7 +46,7 @@ try {
 function getConfig($key, $default = null) {
     global $pdo;
     try {
-        $stmt = $pdo->prepare("SELECT config_value FROM system_config WHERE config_key = ?");
+        $stmt = $pdo->prepare("SELECT config_value FROM `" . t('system_config') . "` WHERE config_key = ?");
         $stmt->execute([$key]);
         $result = $stmt->fetch();
         return $result ? $result['config_value'] : $default;
@@ -61,7 +61,7 @@ function setConfig($key, $value, $description = '') {
     global $pdo;
     try {
         $stmt = $pdo->prepare("
-            INSERT INTO system_config (config_key, config_value, description)
+            INSERT INTO `" . t('system_config') . "` (config_key, config_value, description)
             VALUES (?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 config_value = VALUES(config_value),
@@ -102,7 +102,7 @@ function validateTechnician($technician_id, $password) {
 
     try {
         $stmt = $pdo->prepare("
-            SELECT * FROM technicians
+            SELECT * FROM `" . t('technicians') . "`
             WHERE technician_id = ? AND is_active = 1
         ");
         $stmt->execute([$technician_id]);
@@ -121,7 +121,7 @@ function validateTechnician($technician_id, $password) {
         if (password_verify($password, $technician['password_hash'])) {
             // Reset failed attempts on successful login
             $stmt = $pdo->prepare("
-                UPDATE technicians
+                UPDATE `" . t('technicians') . "`
                 SET failed_login_attempts = 0, locked_until = NULL, last_login = NOW()
                 WHERE technician_id = ?
             ");
@@ -132,7 +132,7 @@ function validateTechnician($technician_id, $password) {
 
         // Increment failed attempts
         $stmt = $pdo->prepare("
-            UPDATE technicians
+            UPDATE `" . t('technicians') . "`
             SET failed_login_attempts = failed_login_attempts + 1,
                 locked_until = IF(failed_login_attempts + 1 >= 5, DATE_ADD(NOW(), INTERVAL 15 MINUTE), NULL)
             WHERE technician_id = ?
