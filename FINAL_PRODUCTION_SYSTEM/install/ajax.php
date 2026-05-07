@@ -55,6 +55,18 @@ switch ($action) {
     case 'health':
         handleHealth();
         break;
+    case 'progress_get':
+        handleProgressGet();
+        break;
+    case 'progress_set':
+        handleProgressSet();
+        break;
+    case 'progress_clear':
+        handleProgressClear();
+        break;
+    case 'migration_skip':
+        handleMigrationSkip();
+        break;
     default:
         echo json_encode(['success' => false, 'message' => 'Unknown action']);
 }
@@ -996,9 +1008,15 @@ function handleFinalize() {
         'admin_username'  => $adminUser,
         'php_version'     => PHP_VERSION,
         'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown',
+        'db_prefix'       => $prefix,
+        'db_charset'      => $charset,
     ];
     $lockPath = realpath(__DIR__ . '/..') . '/install.lock';
     file_put_contents($lockPath, json_encode($lockData, JSON_PRETTY_PRINT));
+
+    // ── Clear resume breadcrumb (install is complete) ──
+    @unlink(installerProgressPath());
+    installerLog("finalize: install complete; admin={$adminUser}, prefix='" . $prefix . "', charset={$charset}");
 
     // ── Response ──
     echo json_encode([
@@ -1534,4 +1552,101 @@ function installerLog(string $line): void {
         '[' . date('Y-m-d H:i:s') . '] ' . $line . PHP_EOL,
         FILE_APPEND
     );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// P2: Resumable installer (progress breadcrumb file)
+// ═══════════════════════════════════════════════════════════════
+
+function installerProgressPath(): string {
+    return __DIR__ . '/.progress.json';
+}
+
+/**
+ * Read the progress breadcrumb. Returns the highest step the user has
+ * completed plus a per-step timestamp map.
+ */
+function handleProgressGet(): void {
+    $path = installerProgressPath();
+    if (!file_exists($path)) {
+        echo json_encode(['success' => true, 'progress' => null]);
+        return;
+    }
+    $data = json_decode(@file_get_contents($path), true);
+    if (!is_array($data)) {
+        echo json_encode(['success' => true, 'progress' => null]);
+        return;
+    }
+    echo json_encode(['success' => true, 'progress' => $data]);
+}
+
+/**
+ * Persist a step completion breadcrumb.
+ * Body: { step: 1..6 }
+ */
+function handleProgressSet(): void {
+    $step = (int)($_POST['step'] ?? 0);
+    if ($step < 1 || $step > 6) {
+        echo json_encode(['success' => false, 'message' => 'Invalid step']);
+        return;
+    }
+
+    $path = installerProgressPath();
+    $current = ['steps' => [], 'last_step' => 0, 'updated_at' => date('Y-m-d H:i:s')];
+    if (file_exists($path)) {
+        $loaded = json_decode(@file_get_contents($path), true);
+        if (is_array($loaded)) $current = array_merge($current, $loaded);
+    }
+
+    $current['steps'][(string)$step] = date('Y-m-d H:i:s');
+    if ($step > (int)($current['last_step'] ?? 0)) {
+        $current['last_step'] = $step;
+    }
+    $current['updated_at'] = date('Y-m-d H:i:s');
+
+    @file_put_contents($path, json_encode($current, JSON_PRETTY_PRINT));
+    installerLog("step_done: {$step}");
+    echo json_encode(['success' => true, 'progress' => $current]);
+}
+
+/**
+ * Wipe the progress file. Used on user-initiated "Start Over".
+ */
+function handleProgressClear(): void {
+    @unlink(installerProgressPath());
+    installerLog("progress_cleared by user");
+    echo json_encode(['success' => true]);
+}
+
+/**
+ * Mark a migration as forcibly skipped after an error (user clicked Skip
+ * on the per-migration retry UI). Records in schema_versions with the
+ * `checksum` column suffixed `:SKIPPED` so we can tell apart from
+ * successful applies.
+ *
+ * Body: { file: 'install.sql', version: 1, error: 'optional msg' }
+ */
+function handleMigrationSkip(): void {
+    $pdo = getInstallerPdo();
+    if (!$pdo) return;
+
+    $file    = $_POST['file']    ?? '';
+    $version = (int)($_POST['version'] ?? 0);
+    $error   = (string)($_POST['error'] ?? '');
+
+    $allowed = array_column(installerMigrationList(), 0);
+    if (!in_array($file, $allowed, true)) {
+        echo json_encode(['success' => false, 'message' => "Migration '{$file}' not on the canonical list."]);
+        return;
+    }
+
+    $svTable = '`' . installerT('schema_versions') . '`';
+    try {
+        $stmt = $pdo->prepare("INSERT IGNORE INTO {$svTable} (version, filename, checksum) VALUES (?, ?, ?)");
+        $stmt->execute([$version, $file, 'SKIPPED:' . substr(hash('sha256', $error . microtime()), 0, 16)]);
+        installerLog("migration_skipped: {$file} (error: " . substr($error, 0, 200) . ")");
+        echo json_encode(['success' => true, 'message' => "Migration '{$file}' marked as skipped."]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    }
 }

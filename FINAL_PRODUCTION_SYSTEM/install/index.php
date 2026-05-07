@@ -616,9 +616,13 @@ $serverUrl = $protocol . '://' . $host . $baseUrl;
                 </ul>
             </div>
 
-            <a class="btn btn-primary" id="goToAdmin" href="../secure-admin.php" style="text-decoration:none;margin-top:16px;">
-                Open Admin Panel &rarr;
-            </a>
+            <div style="display:flex;gap:8px;justify-content:center;margin-top:16px;flex-wrap:wrap;">
+                <a class="btn btn-primary" id="goToAdmin" href="../secure-admin.php" style="text-decoration:none;">
+                    Open Admin Panel &rarr;
+                </a>
+                <button type="button" class="btn btn-outline" onclick="runHealthCheck(this)">Run health check</button>
+            </div>
+            <div id="healthResult" class="hidden" style="margin-top:14px;text-align:left;"></div>
         </div>
     </div>
 
@@ -645,7 +649,32 @@ function goStep(n) {
     });
 
     currentStep = n;
+    // Persist breadcrumb so reload picks up where the user left off (P2).
+    if (n > 1) post('progress_set', { step: n - 1 }).catch(() => {});
     window.scrollTo(0, 0);
+}
+
+// ── Resume on boot (P2): if .progress.json exists, jump to last+1 step ──
+async function maybeResumeFromProgress() {
+    try {
+        const r = await post('progress_get', {});
+        if (r.success && r.progress && r.progress.last_step) {
+            const last = parseInt(r.progress.last_step, 10);
+            if (last >= 1 && last < 6) {
+                const ok = confirm(
+                    'Previous installation in progress (step ' + last + ' completed at ' +
+                    (r.progress.steps[last] || 'unknown') + ').\n\nResume from step ' +
+                    (last + 1) + '?  (Cancel = start over)'
+                );
+                if (ok) {
+                    goStep(last + 1);
+                    return true;
+                }
+                await post('progress_clear', {});
+            }
+        }
+    } catch (e) { /* progress endpoint optional */ }
+    return false;
 }
 
 // ── AJAX Helper ──────────────────────────────────────
@@ -845,6 +874,14 @@ async function runMigrations() {
 
         if (!r.success && r.status === 'error') {
             hadError = true;
+            // Append inline Retry / Skip buttons next to the error row
+            const errRow = log.lastChild;
+            const btnBar = document.createElement('div');
+            btnBar.style.cssText = 'margin:6px 0 12px 22px;display:flex;gap:8px;';
+            btnBar.innerHTML =
+                `<button class="btn btn-outline" style="padding:4px 12px;font-size:12px;" onclick="retryMigration('${m.file}', ${m.version}, this)">Retry</button>` +
+                `<button class="btn btn-outline" style="padding:4px 12px;font-size:12px;color:var(--warning);" onclick="skipMigration('${m.file}', ${m.version}, ${JSON.stringify(r.message || '').replace(/'/g, "\\'")}, this)">Skip</button>`;
+            errRow.appendChild(btnBar);
             // Stop loop on first hard error so user can read it.
             break;
         }
@@ -855,10 +892,68 @@ async function runMigrations() {
         $('migStatus').style.color = 'var(--success)';
         $('migNext').classList.remove('hidden');
     } else {
-        $('migStatus').textContent = 'Installation failed';
+        $('migStatus').textContent = 'Installation failed — click Retry or Skip on the failed step';
         $('migStatus').style.color = 'var(--danger)';
         $('migBack').disabled = false;
     }
+}
+
+// ── P2: Per-migration retry/skip ─────────────────────
+async function retryMigration(file, version, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Retrying...';
+    const r = await post('install_db_step', { ...dbCredentials, file, version });
+    btn.disabled = false;
+    btn.textContent = 'Retry';
+    const log = document.getElementById('migLog');
+    const cls = r.status === 'ok' ? 'ok' : r.status === 'skipped' ? 'skip' : 'err';
+    const icon = r.status === 'ok' ? '✓' : r.status === 'skipped' ? '→' : '✗';
+    log.innerHTML += `<div class="${cls}">${icon} ${file} (retry): ${r.message || ''}</div>`;
+    log.scrollTop = log.scrollHeight;
+    if (r.success && r.status !== 'error') {
+        // Resume forward by reloading the migration list and continuing.
+        runMigrations();
+    }
+}
+
+async function skipMigration(file, version, errorMsg, btn) {
+    if (!confirm(`Skip migration "${file}"?\n\nThe failed step will be marked applied so the rest can run, but you may end up in a broken state. Only do this if you know the failure is benign (e.g. the table already exists from a prior install).`)) {
+        return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Skipping...';
+    const r = await post('migration_skip', { ...dbCredentials, file, version, error: errorMsg });
+    btn.disabled = false;
+    btn.textContent = 'Skip';
+    const log = document.getElementById('migLog');
+    if (r.success) {
+        log.innerHTML += `<div class="skip">→ ${file}: marked SKIPPED by user</div>`;
+        runMigrations();
+    } else {
+        log.innerHTML += `<div class="err">✗ ${file}: skip failed: ${r.message}</div>`;
+    }
+    log.scrollTop = log.scrollHeight;
+}
+
+// ── P2: Step 6 health probe ──────────────────────────
+async function runHealthCheck(btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner" style="border-color:var(--primary-light);border-top-color:var(--primary);"></span> Probing...';
+    const r = await post('health', { ...dbCredentials });
+    btn.disabled = false;
+    btn.textContent = 'Run health check';
+
+    const out = document.getElementById('healthResult');
+    if (!out) return;
+    out.classList.remove('hidden');
+    let html = `<div class="alert ${r.success ? 'alert-success' : 'alert-warning'}"><strong>Health:</strong>`;
+    html += '<ul style="margin:6px 0 0 18px;font-size:13px;">';
+    for (const c of (r.checks || [])) {
+        const icon = c.status === 'pass' ? '✓' : '✗';
+        html += `<li>${icon} ${c.label}${c.value !== undefined ? ' (' + c.value + ')' : ''}${c.message ? ' — ' + c.message : ''}</li>`;
+    }
+    html += '</ul></div>';
+    out.innerHTML = html;
 }
 
 // ── Step 4: Create Admin ────────────────────────────
@@ -928,7 +1023,10 @@ async function finalize() {
 }
 
 // ── Auto-run env check on load ──────────────────────
-document.addEventListener('DOMContentLoaded', runEnvCheck);
+document.addEventListener('DOMContentLoaded', async () => {
+    const resumed = await maybeResumeFromProgress();
+    if (!resumed) runEnvCheck();
+});
 </script>
 
 </body>
