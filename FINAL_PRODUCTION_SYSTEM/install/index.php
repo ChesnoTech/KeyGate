@@ -372,7 +372,8 @@ $serverUrl = $protocol . '://' . $host . $baseUrl;
             <div class="form-row">
                 <div class="form-group">
                     <label>Database Host</label>
-                    <input type="text" id="dbHost" value="localhost" />
+                    <input type="text" id="dbHost" value="127.0.0.1" />
+                    <div class="form-hint">Use <code>127.0.0.1</code> on aaPanel/cPanel (avoids Unix-socket lookup). Use <code>localhost</code> only if you also set Socket Path below.</div>
                 </div>
                 <div class="form-group">
                     <label>Port</label>
@@ -392,8 +393,16 @@ $serverUrl = $protocol . '://' . $host . $baseUrl;
             <div class="form-group">
                 <label>Database Name</label>
                 <input type="text" id="dbName" value="oem_activation" />
-                <div class="form-hint">Will be created if it doesn't exist</div>
+                <div class="form-hint">Will be created if it doesn't exist (requires CREATE privilege).</div>
             </div>
+            <details class="form-group" style="margin-top:8px;">
+                <summary style="cursor:pointer;color:var(--primary);font-weight:600;">Advanced (optional) — Unix socket path</summary>
+                <div style="margin-top:10px;">
+                    <label>Socket Path</label>
+                    <input type="text" id="dbSocket" placeholder="/tmp/mysql.sock" />
+                    <div class="form-hint">If set, host/port are ignored. Common aaPanel paths: <code>/tmp/mysql.sock</code> or <code>/www/server/mysql/mysql.sock</code>.</div>
+                </div>
+            </details>
             <div id="dbTestResult" class="hidden"></div>
             <div class="btn-row">
                 <button class="btn btn-secondary" onclick="goStep(1)">&larr; Back</button>
@@ -653,12 +662,14 @@ async function testDb() {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner" style="border-color:var(--primary-light);border-top-color:var(--primary);"></span> Testing...';
 
+    const socketEl = document.getElementById('dbSocket');
     dbCredentials = {
-        db_host: document.getElementById('dbHost').value,
+        db_host: document.getElementById('dbHost').value.trim() || '127.0.0.1',
         db_port: document.getElementById('dbPort').value,
         db_user: document.getElementById('dbUser').value,
         db_pass: document.getElementById('dbPass').value,
         db_name: document.getElementById('dbName').value,
+        db_socket: socketEl ? socketEl.value.trim() : '',
     };
 
     const data = await post('test_db', dbCredentials);
