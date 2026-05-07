@@ -22,6 +22,11 @@
 define('KEYGATE_LICENSE_SERVER', 'https://keygate-license-server.msamirvip.workers.dev');
 define('KEYGATE_SPONSORS_URL', 'https://github.com/sponsors/ChesnoTech');
 
+// P1: server-side hardware fingerprint + rebind grace window.
+// 7-day grace lets admins click "Rebind hardware" before tier degrades.
+require_once __DIR__ . '/hardware-fingerprint.php';
+define('KEYGATE_REBIND_GRACE_SECONDS', 7 * 86400);
+
 // ── License Verification Public Key (RS256, PKCS#8 SPKI) ─────
 // Generated 2026-05-08 alongside Worker secret LICENSE_PRIVATE_KEY.
 // Safe to commit — public key is only useful for verification.
@@ -250,10 +255,15 @@ function rotateLicenseRowSecret(PDO $pdo): string {
 /**
  * Compute the integrity HMAC for a license_info row.
  *
- *   HMAC_SHA256( license_key | tier | max_techs | max_keys | exp_unix | instance_id, row_secret )
+ *   HMAC_SHA256(
+ *     license_key | tier | max_techs | max_keys | exp_unix | instance_id | hardware_fingerprint,
+ *     row_secret
+ *   )
  *
- * Anything else in the row (timestamps, JSON features blob, etc.) is not
- * covered — those fields are derivative or non-security-critical.
+ * P1 added the trailing hardware_fingerprint field. P0 rows (no hwfp
+ * column or NULL value) hash with empty-string for the field; after P1
+ * migration the field is always present so empty-string only means an
+ * intentionally unbound row (claim-pending).
  */
 function computeLicenseRowHmac(string $secret, array $row): string {
     $material = implode('|', [
@@ -264,6 +274,8 @@ function computeLicenseRowHmac(string $secret, array $row): string {
         // expires_at is stored as DATETIME — convert to unix epoch for stable hashing.
         (string)(empty($row['expires_at']) ? 0 : strtotime($row['expires_at'])),
         (string)($row['instance_id']     ?? ''),
+        // P1: hardware_fingerprint (composite SHA256 from hardware-fingerprint.php)
+        (string)($row['hardware_fingerprint'] ?? ''),
     ]);
     return hash_hmac('sha256', $material, $secret);
 }
@@ -296,48 +308,117 @@ function getCurrentLicense(PDO $pdo): ?array {
 
 /**
  * Get the effective license tier and limits.
- * Falls back to community tier if no valid license OR row HMAC fails
- * (defeats direct INSERT/UPDATE bypass against license_info).
+ *
+ * Decision tree (highest priority first):
+ *   1. No row OR row HMAC fail              → community (mark row invalid).
+ *   2. validation_status='rebinding_required' → previous tier inside 7d grace,
+ *                                              else community.
+ *   3. validation_status!='valid'            → community.
+ *   4. hwfp drift detected (3-of-5 fail)     → set rebinding_required, recurse.
+ *   5. Otherwise                             → row's tier.
+ *
+ * Defeats direct INSERT/UPDATE bypass (HMAC) AND VM-clone bypass (hwfp).
  */
 function getEffectiveLicense(PDO $pdo): array {
     $license = getCurrentLicense($pdo);
 
-    if ($license
-        && $license['validation_status'] === 'valid'
-        && verifyLicenseRow($pdo, $license)
-    ) {
-        $tier = $license['tier'] ?? 'community';
-        $tierDef = LICENSE_TIERS[$tier] ?? LICENSE_TIERS['community'];
-
-        return [
-            'tier'             => $tier,
-            'label'            => $tierDef['label'],
-            'max_technicians'  => (int)$license['max_technicians'],
-            'max_keys'         => (int)$license['max_keys'],
-            'features'         => $tierDef['features'],
-            'licensed_to'      => $license['licensed_to_email'] ?? '',
-            'expires_at'       => $license['expires_at'],
-            'is_registered'    => true,
-            'instance_id'      => $license['instance_id'],
-        ];
+    // ── 1. Missing row OR HMAC mismatch → community ──────────
+    if (!$license || !verifyLicenseRow($pdo, $license)) {
+        // If row exists but HMAC failed, mark it invalid so admin sees the issue.
+        // Best-effort; ignore failures (column missing pre-migration, etc.).
+        if ($license && $license['validation_status'] === 'valid') {
+            try {
+                $stmt = $pdo->prepare(
+                    "UPDATE `" . t('license_info') . "` SET validation_status = 'invalid' WHERE id = ?"
+                );
+                $stmt->execute([$license['id']]);
+                error_log("KeyGate: license row HMAC mismatch on id=" . $license['id'] . ", forced to community");
+            } catch (Exception $e) { /* legacy installs */ }
+        }
+        return _communityLicense($license !== null);
     }
 
-    // Row HMAC failed → mark the row invalid so admin sees the issue.
-    // Best-effort; ignore failures (e.g. integrity_hmac column missing
-    // pre-migration; legacy installs land here on first boot).
-    if ($license && $license['validation_status'] === 'valid') {
+    $tier    = $license['tier'] ?? 'community';
+    $tierDef = LICENSE_TIERS[$tier] ?? LICENSE_TIERS['community'];
+
+    // ── 2. rebinding_required → grace window of previous tier ──
+    if (($license['validation_status'] ?? '') === 'rebinding_required') {
+        $boundAt   = !empty($license['hwfp_last_rebind_at'])
+                     ? strtotime($license['hwfp_last_rebind_at'])
+                     : (int)strtotime($license['updated_at'] ?? 'now');
+        $graceEnds = $boundAt + KEYGATE_REBIND_GRACE_SECONDS;
+        if (time() < $graceEnds) {
+            $prevTier = (string)getConfig('license_prev_tier');
+            if ($prevTier && isset(LICENSE_TIERS[$prevTier])) {
+                $prevDef = LICENSE_TIERS[$prevTier];
+                return [
+                    'tier'             => $prevTier,
+                    'label'            => $prevDef['label'],
+                    'max_technicians'  => (int)($prevDef['max_technicians']),
+                    'max_keys'         => (int)($prevDef['max_keys']),
+                    'features'         => $prevDef['features'],
+                    'licensed_to'      => $license['licensed_to_email'] ?? '',
+                    'expires_at'       => $license['expires_at'],
+                    'is_registered'    => true,
+                    'instance_id'      => $license['instance_id'],
+                    'rebind_required'  => true,
+                    'rebind_grace_ends'=> date('c', $graceEnds),
+                ];
+            }
+        }
+        // Grace exhausted → community.
+        return _communityLicense(true, ['rebind_required' => true]);
+    }
+
+    // ── 3. Anything other than 'valid' → community ────────────
+    if (($license['validation_status'] ?? '') !== 'valid') {
+        return _communityLicense(true);
+    }
+
+    // ── 4. hwfp drift detection (P1) ──────────────────────────
+    // Only enforce if the row has a bound fingerprint (post-P1 install).
+    // Pre-P1 rows have NULL hardware_fingerprint and skip this gate until
+    // the customer re-registers (auto-binds current host hwfp).
+    if (!empty($license['hardware_fingerprint'])) {
         try {
-            $stmt = $pdo->prepare(
-                "UPDATE `" . t('license_info') . "` SET validation_status = 'invalid' WHERE id = ?"
-            );
-            $stmt->execute([$license['id']]);
-            error_log("KeyGate: license row HMAC mismatch on id=" . $license['id'] . ", forced to community");
-        } catch (Exception $e) { /* legacy installs */ }
+            $current = getServerHardwareFingerprint($pdo, false);
+            $bound   = ['composite' => $license['hardware_fingerprint'], 'components' => []];
+            $cmp     = compareHwfp($current, $bound);
+            if (!$cmp['accepted']) {
+                _markRebindingRequired($pdo, $license, $tier);
+                error_log("KeyGate: hwfp drift on license id=" . $license['id']
+                    . ", matches=" . $cmp['match_count'] . "/" . $cmp['total']
+                    . ", composite_eq=" . ($cmp['composite_eq'] ? '1' : '0'));
+                // Recurse — caller now sees rebinding_required path.
+                return getEffectiveLicense($pdo);
+            }
+        } catch (Exception $e) {
+            // Hardware-fingerprint helper unavailable (PHP module missing,
+            // unsupported OS) — fail open, log, continue with bound tier.
+            error_log("KeyGate: hwfp comparison threw: " . $e->getMessage());
+        }
     }
 
-    // Default community tier
-    $communityDef = LICENSE_TIERS['community'];
     return [
+        'tier'             => $tier,
+        'label'            => $tierDef['label'],
+        'max_technicians'  => (int)$license['max_technicians'],
+        'max_keys'         => (int)$license['max_keys'],
+        'features'         => $tierDef['features'],
+        'licensed_to'      => $license['licensed_to_email'] ?? '',
+        'expires_at'       => $license['expires_at'],
+        'is_registered'    => true,
+        'instance_id'      => $license['instance_id'],
+    ];
+}
+
+/**
+ * Build the canonical community-tier response. Shared by all the
+ * fallback paths in getEffectiveLicense().
+ */
+function _communityLicense(bool $isRegistered, array $extra = []): array {
+    $communityDef = LICENSE_TIERS['community'];
+    return array_merge([
         'tier'             => 'community',
         'label'            => 'Community',
         'max_technicians'  => $communityDef['max_technicians'],
@@ -345,9 +426,32 @@ function getEffectiveLicense(PDO $pdo): array {
         'features'         => $communityDef['features'],
         'licensed_to'      => '',
         'expires_at'       => null,
-        'is_registered'    => ($license !== null),
+        'is_registered'    => $isRegistered,
         'instance_id'      => '',
-    ];
+    ], $extra);
+}
+
+/**
+ * Set validation_status='rebinding_required' and persist the previous
+ * tier so the 7-day grace window can serve it. Called by the hwfp-drift
+ * branch of getEffectiveLicense() and (in P2) by phone-home responses
+ * carrying must_rebind:true.
+ */
+function _markRebindingRequired(PDO $pdo, array $license, string $prevTier): void {
+    try {
+        // Persist prev tier for the grace path.
+        if (function_exists('saveConfigBatch')) {
+            saveConfigBatch($pdo, ['license_prev_tier' => $prevTier]);
+        }
+        $stmt = $pdo->prepare(
+            "UPDATE `" . t('license_info') . "`
+             SET validation_status = 'rebinding_required'
+             WHERE id = ?"
+        );
+        $stmt->execute([$license['id']]);
+    } catch (Exception $e) {
+        error_log("KeyGate: failed to mark rebinding_required: " . $e->getMessage());
+    }
 }
 
 /**
@@ -404,36 +508,65 @@ function registerLicense(PDO $pdo, string $licenseKey): array {
     $maxKeys  = (int)($payload['max_keys']        ?? $tierDef['max_keys']);
     $expIso   = date('Y-m-d H:i:s', (int)$payload['exp']);
 
+    // ── P1: hardware fingerprint binding ─────────────────────
+    // Compute current host fingerprint. If the JWT carries an `hwfp`
+    // claim, validate against current with the 3-of-5 soft threshold.
+    // If absent (legacy or pre-P1 mint), auto-bind to current.
+    $serverHwfp = ['composite' => '', 'components' => []];
+    try {
+        $serverHwfp = getServerHardwareFingerprint($pdo, false);
+    } catch (Exception $e) {
+        error_log("KeyGate: hwfp helper unavailable on register: " . $e->getMessage());
+    }
+    $hostHwfpComposite = (string)($serverHwfp['composite'] ?? '');
+
+    if (!empty($payload['hwfp']) && $hostHwfpComposite !== '') {
+        $bound = ['composite' => $payload['hwfp'], 'components' => []];
+        $cmp   = compareHwfp($serverHwfp, $bound);
+        if (!$cmp['accepted']) {
+            return [
+                'success' => false,
+                'error'   => 'License is bound to different hardware. '
+                    . 'Match: ' . $cmp['match_count'] . '/' . $cmp['total']
+                    . ' components. Run /api/rebind from your previous host '
+                    . 'or contact support if the previous host is unrecoverable.',
+            ];
+        }
+    }
+
     // ── P0.3: rotate per-instance row secret on every register ──
     $rowSecret = rotateLicenseRowSecret($pdo);
 
-    // Compute integrity HMAC for the row.
+    // Compute integrity HMAC for the row (P1 formula includes hwfp).
     $rowForHmac = [
-        'license_key'     => $licenseKey,
-        'tier'            => $tier,
-        'max_technicians' => $maxTechs,
-        'max_keys'        => $maxKeys,
-        'expires_at'      => $expIso,
-        'instance_id'     => $instanceId,
+        'license_key'          => $licenseKey,
+        'tier'                 => $tier,
+        'max_technicians'      => $maxTechs,
+        'max_keys'             => $maxKeys,
+        'expires_at'           => $expIso,
+        'instance_id'          => $instanceId,
+        'hardware_fingerprint' => $hostHwfpComposite,
     ];
     $integrityHmac = computeLicenseRowHmac($rowSecret, $rowForHmac);
 
     // Deactivate any existing license
     $pdo->exec("UPDATE `" . t('license_info') . "` SET is_active = 0");
 
-    // Insert new license
+    // Insert new license (P1 columns included).
     $stmt = $pdo->prepare("
         INSERT INTO `" . t('license_info') . "`
-            (license_key, instance_id, tier, licensed_to_email, licensed_to_name,
+            (license_key, instance_id, hardware_fingerprint, hwfp_bound_at,
+             tier, licensed_to_email, licensed_to_name,
              max_technicians, max_keys, features,
              issued_at, expires_at, last_validated_at, validation_status, is_active,
              integrity_hmac)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), FROM_UNIXTIME(?), NOW(), 'valid', 1,
-                ?)
+        VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), FROM_UNIXTIME(?), NOW(),
+                'valid', 1, ?)
     ");
     $stmt->execute([
         $licenseKey,
         $instanceId,
+        $hostHwfpComposite ?: null,
         $tier,
         $payload['email'] ?? null,
         $payload['name'] ?? null,
@@ -445,19 +578,101 @@ function registerLicense(PDO $pdo, string $licenseKey): array {
         $integrityHmac,
     ]);
 
-    // Update system_config
-    saveConfigBatch($pdo, ['license_tier' => $tier]);
+    // Update system_config — store both current tier and the prev-tier
+    // anchor used by the rebinding_required grace window.
+    saveConfigBatch($pdo, [
+        'license_tier'      => $tier,
+        'license_prev_tier' => $tier,
+    ]);
 
     return [
-        'success' => true,
-        'tier'    => $tier,
-        'label'   => $tierDef['label'],
-        'algorithm'=> $payload['_alg'] ?? 'unknown',
-        'message' => "License registered successfully — {$tierDef['label']} tier activated"
+        'success'   => true,
+        'tier'      => $tier,
+        'label'     => $tierDef['label'],
+        'algorithm' => $payload['_alg'] ?? 'unknown',
+        'hwfp'      => $hostHwfpComposite,
+        'message'   => "License registered successfully — {$tierDef['label']} tier activated"
             . (($payload['_alg'] ?? '') === 'HS256-legacy'
                 ? ' (legacy algorithm; please re-issue via Re-register button before ' . KEYGATE_LEGACY_HS256_DEADLINE . ')'
                 : ''),
     ];
+}
+
+// ── Rebind support (P1) ─────────────────────────────────────
+
+/**
+ * Apply a successful /api/rebind response to the active license row.
+ * Caller hands in the fresh JWT (RS256, hwfp bound to current host) and
+ * the new rebind quota counters.
+ *
+ * Returns ['success'=>true, 'tier'=>...] on apply or ['success'=>false]
+ * on failure. The new JWT must validate via decodeLicenseJwt() and bind
+ * to the same instance_id as the existing row.
+ */
+function applyRebindResponse(PDO $pdo, string $newJwt, int $rebindCount): array {
+    $payload = decodeLicenseJwt($newJwt);
+    if (!$payload) {
+        return ['success' => false, 'error' => 'Rebind response carried invalid JWT'];
+    }
+    $current = getCurrentLicense($pdo);
+    if (!$current) {
+        return ['success' => false, 'error' => 'No active license to rebind'];
+    }
+    if (($payload['instance_id'] ?? '') !== $current['instance_id']) {
+        return ['success' => false, 'error' => 'Rebind response mismatched instance_id'];
+    }
+
+    $serverHwfp = getServerHardwareFingerprint($pdo, true); // force re-detect post-rebind
+    $hostHwfpComposite = (string)($serverHwfp['composite'] ?? '');
+
+    $tier    = $payload['tier'] ?? $current['tier'];
+    $tierDef = LICENSE_TIERS[$tier] ?? LICENSE_TIERS['community'];
+    $maxT    = (int)($payload['max_technicians'] ?? $tierDef['max_technicians']);
+    $maxK    = (int)($payload['max_keys']        ?? $tierDef['max_keys']);
+    $expIso  = date('Y-m-d H:i:s', (int)$payload['exp']);
+
+    $rowSecret = rotateLicenseRowSecret($pdo);
+    $hmac = computeLicenseRowHmac($rowSecret, [
+        'license_key'          => $newJwt,
+        'tier'                 => $tier,
+        'max_technicians'      => $maxT,
+        'max_keys'             => $maxK,
+        'expires_at'           => $expIso,
+        'instance_id'          => $current['instance_id'],
+        'hardware_fingerprint' => $hostHwfpComposite,
+    ]);
+
+    $stmt = $pdo->prepare("
+        UPDATE `" . t('license_info') . "`
+        SET license_key          = ?,
+            hardware_fingerprint = ?,
+            hwfp_bound_at        = NOW(),
+            hwfp_rebind_count    = ?,
+            hwfp_last_rebind_at  = NOW(),
+            tier                 = ?,
+            max_technicians      = ?,
+            max_keys             = ?,
+            expires_at           = FROM_UNIXTIME(?),
+            validation_status    = 'valid',
+            integrity_hmac       = ?,
+            last_validated_at    = NOW()
+        WHERE id = ?
+    ");
+    $stmt->execute([
+        $newJwt,
+        $hostHwfpComposite ?: null,
+        $rebindCount,
+        $tier,
+        $maxT,
+        $maxK,
+        (int)$payload['exp'],
+        $hmac,
+        $current['id'],
+    ]);
+
+    saveConfigBatch($pdo, ['license_tier' => $tier, 'license_prev_tier' => $tier]);
+
+    return ['success' => true, 'tier' => $tier, 'rebind_count' => $rebindCount];
 }
 
 // ── Enforcement ─────────────────────────────────────────────

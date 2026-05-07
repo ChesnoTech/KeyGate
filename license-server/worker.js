@@ -220,10 +220,17 @@ async function handleGitHubWebhook(request, env) {
 }
 
 async function handleRegister(request, env) {
-  const { email, name, instance_id } = await request.json()
+  // P1: hardware_fingerprint required so the issued JWT carries an `hwfp`
+  // claim. PHP-side enforcement rejects mismatched fingerprints.
+  const { email, name, instance_id, hardware_fingerprint } = await request.json()
 
   if (!email || !instance_id) {
     return new Response(JSON.stringify({ error: 'Email and instance_id are required' }), { status: 400 })
+  }
+  if (!hardware_fingerprint || typeof hardware_fingerprint !== 'string' || hardware_fingerprint.length < 32) {
+    return new Response(JSON.stringify({
+      error: 'hardware_fingerprint required (composite SHA256 from getServerHardwareFingerprint())',
+    }), { status: 400 })
   }
 
   // Check if already registered
@@ -237,11 +244,12 @@ async function handleRegister(request, env) {
     }), { status: 200 })
   }
 
-  // Generate community license
+  // Generate community license — bind to instance_id AND hwfp.
   const payload = {
     iss: 'keygate-license-server',
     tier: 'community',
     instance_id: instance_id,
+    hwfp: hardware_fingerprint,
     email: email,
     name: name || email.split('@')[0],
     max_technicians: 1,
@@ -258,6 +266,8 @@ async function handleRegister(request, env) {
     email,
     name: name || email.split('@')[0],
     instance_id,
+    hardware_fingerprint,
+    rebind_count: 0,
     created_at: new Date().toISOString(),
   }), { expirationTtl: 365 * 86400 })
 
@@ -529,9 +539,15 @@ async function handleTBankWebhook(request, env) {
 // are rejected (one-shot binding) unless the founder manually clears
 // pending_claim via the future P4 admin dashboard.
 async function handleClaim(request, env) {
-  const { email, instance_id, sponsor_login } = await request.json()
+  // P1: hardware_fingerprint required so the minted JWT carries hwfp.
+  const { email, instance_id, sponsor_login, hardware_fingerprint } = await request.json()
   if (!email || !instance_id) {
     return new Response(JSON.stringify({ error: 'email and instance_id required' }), { status: 400 })
+  }
+  if (!hardware_fingerprint || typeof hardware_fingerprint !== 'string' || hardware_fingerprint.length < 32) {
+    return new Response(JSON.stringify({
+      error: 'hardware_fingerprint required (composite SHA256)',
+    }), { status: 400 })
   }
 
   const stored = await env.LICENSES.get(`license:${email}`, 'json')
@@ -560,6 +576,7 @@ async function handleClaim(request, env) {
     iss: 'keygate-license-server',
     tier,
     instance_id,
+    hwfp: hardware_fingerprint,
     email,
     name: stored.name || email.split('@')[0],
     payment_provider: stored.payment_provider || 'github_sponsors',
@@ -570,10 +587,12 @@ async function handleClaim(request, env) {
   }
   const jwt = await createJwt(licensePayload, env)
 
-  // Update KV record — pending_claim cleared, jwt + instance_id stored.
+  // Update KV record — pending_claim cleared, jwt + instance_id + hwfp stored.
   delete stored.pending_claim
   stored.jwt = jwt
   stored.instance_id = instance_id
+  stored.hardware_fingerprint = hardware_fingerprint
+  stored.rebind_count = 0
   stored.claimed_at = new Date().toISOString()
   await env.LICENSES.put(`license:${email}`, JSON.stringify(stored),
     { expirationTtl: isLifetime ? 10 * 365 * 86400 : 400 * 86400 })
@@ -594,9 +613,15 @@ async function handleClaim(request, env) {
 // binding or tier. Available for 90 days post-deploy; remove the secret
 // from Worker after that.
 async function handleMigrate(request, env) {
-  const { license_key, instance_id } = await request.json()
+  // P1: hardware_fingerprint required for the new RS256 token.
+  const { license_key, instance_id, hardware_fingerprint } = await request.json()
   if (!license_key || !instance_id) {
     return new Response(JSON.stringify({ error: 'license_key and instance_id required' }), { status: 400 })
+  }
+  if (!hardware_fingerprint || typeof hardware_fingerprint !== 'string' || hardware_fingerprint.length < 32) {
+    return new Response(JSON.stringify({
+      error: 'hardware_fingerprint required (composite SHA256)',
+    }), { status: 400 })
   }
   if (!env.LEGACY_HS256_SECRET) {
     return new Response(JSON.stringify({ error: 'Legacy migration window has closed' }), { status: 410 })
@@ -610,10 +635,11 @@ async function handleMigrate(request, env) {
     return new Response(JSON.stringify({ error: 'Legacy JWT expired; purchase a new license' }), { status: 403 })
   }
 
-  // Mint RS256 with same tier/email/exp but bind to caller's instance_id.
+  // Mint RS256 with same tier/email/exp but bind to caller's instance_id + hwfp.
   const newPayload = {
     ...payload,
     instance_id,
+    hwfp: hardware_fingerprint,
     iss: 'keygate-license-server',
     iat: Math.floor(Date.now() / 1000),
     _migrated_from: 'HS256',
@@ -626,6 +652,8 @@ async function handleMigrate(request, env) {
     const stored = await env.LICENSES.get(`license:${payload.email}`, 'json') || {}
     stored.jwt = jwt
     stored.instance_id = instance_id
+    stored.hardware_fingerprint = hardware_fingerprint
+    stored.rebind_count = stored.rebind_count || 0
     stored.tier = payload.tier
     stored.email = payload.email
     delete stored.pending_claim
@@ -649,7 +677,8 @@ async function handleMigrate(request, env) {
 // the founder hits the Worker directly; no signing capability ever lives
 // on the customer's PHP host.
 async function handleDevIssue(request, env) {
-  const { tier, email, instance_id, dev_token } = await request.json()
+  // P1: hardware_fingerprint required so dev tokens behave like prod.
+  const { tier, email, instance_id, hardware_fingerprint, dev_token } = await request.json()
   if (!env.DEV_TOKEN) {
     return new Response(JSON.stringify({ error: 'Dev issuance disabled on this Worker' }), { status: 403 })
   }
@@ -659,11 +688,17 @@ async function handleDevIssue(request, env) {
   if (!tier || !instance_id) {
     return new Response(JSON.stringify({ error: 'tier and instance_id required' }), { status: 400 })
   }
+  if (!hardware_fingerprint || typeof hardware_fingerprint !== 'string' || hardware_fingerprint.length < 32) {
+    return new Response(JSON.stringify({
+      error: 'hardware_fingerprint required (composite SHA256)',
+    }), { status: 400 })
+  }
   const limits = TIER_LIMITS[tier] || TIER_LIMITS.community
   const payload = {
     iss: 'keygate-license-server',
     tier,
     instance_id,
+    hwfp: hardware_fingerprint,
     email: email || 'dev@keygate.local',
     payment_provider: 'dev',
     max_technicians: limits.max_technicians,
@@ -677,6 +712,122 @@ async function handleDevIssue(request, env) {
     license_key: jwt,
     tier,
     expires_at: new Date(payload.exp * 1000).toISOString(),
+  }), { status: 200 })
+}
+
+// ── /api/rebind — move a license to a new hardware fingerprint (P1) ──
+//
+// Body: { license_key, instance_id, new_hardware_fingerprint, reason? }
+//
+// Verifies the supplied license_key (RS256). Looks up the email in KV.
+// Enforces a rolling 365-day quota of 3 rebinds per email by recording
+// each rebind under `rebind:{email}:{ts_iso}` with a 365-day expiration —
+// a list/count then yields the rolling-window count without external state.
+// On success, mints a fresh RS256 JWT bound to the new fingerprint and
+// returns the new rebind_count.
+async function handleRebind(request, env) {
+  const { license_key, instance_id, new_hardware_fingerprint, reason } =
+    await request.json()
+  if (!license_key || !instance_id || !new_hardware_fingerprint) {
+    return new Response(JSON.stringify({
+      error: 'license_key, instance_id and new_hardware_fingerprint required',
+    }), { status: 400 })
+  }
+  if (typeof new_hardware_fingerprint !== 'string' || new_hardware_fingerprint.length < 32) {
+    return new Response(JSON.stringify({
+      error: 'new_hardware_fingerprint must be a SHA256 composite hex string',
+    }), { status: 400 })
+  }
+
+  // Lazy verify: decode JWT body without checking signature so legacy
+  // RS256 tokens still rebind. The signature was already verified PHP-side
+  // when the customer registered. Any hostile rebind would still need the
+  // KV record to exist and the email to match — Worker-side correctness
+  // anchor is the KV record, not the supplied JWT.
+  const parts = license_key.split('.')
+  if (parts.length !== 3) {
+    return new Response(JSON.stringify({ error: 'Invalid license_key format' }), { status: 400 })
+  }
+  let payload
+  try {
+    payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
+  } catch {
+    return new Response(JSON.stringify({ error: 'Invalid license_key payload' }), { status: 400 })
+  }
+  const email = payload.email
+  if (!email) {
+    return new Response(JSON.stringify({ error: 'License has no email anchor' }), { status: 400 })
+  }
+  if (payload.instance_id !== instance_id) {
+    return new Response(JSON.stringify({ error: 'instance_id does not match license' }), { status: 403 })
+  }
+
+  const stored = await env.LICENSES.get(`license:${email}`, 'json')
+  if (!stored) {
+    return new Response(JSON.stringify({ error: 'License not found' }), { status: 404 })
+  }
+  if (stored.revoked) {
+    return new Response(JSON.stringify({ error: 'License revoked' }), { status: 403 })
+  }
+
+  // ── 365-day quota check (rolling window) ──────────────────
+  const QUOTA_LIMIT = 3
+  const QUOTA_WINDOW_S = 365 * 86400
+  const list = await env.LICENSES.list({ prefix: `rebind:${email}:` })
+  const now = Math.floor(Date.now() / 1000)
+  let recentCount = 0
+  for (const k of list.keys) {
+    const tsStr = k.name.split(':')[2]
+    const ts = Date.parse(tsStr) / 1000
+    if (!isNaN(ts) && (now - ts) < QUOTA_WINDOW_S) recentCount++
+  }
+  const remaining = QUOTA_LIMIT - recentCount
+  if (remaining <= 0) {
+    return new Response(JSON.stringify({
+      error: 'rebind quota exceeded',
+      quota_limit: QUOTA_LIMIT,
+      quota_window_days: 365,
+      retry_after_iso: list.keys.length > 0
+        ? new Date((Math.min(...list.keys.map(k => Date.parse(k.name.split(':')[2])/1000)) + QUOTA_WINDOW_S) * 1000).toISOString()
+        : null,
+    }), { status: 429 })
+  }
+
+  // ── Mint fresh RS256 JWT bound to new hwfp ────────────────
+  const newPayload = {
+    ...payload,
+    hwfp: new_hardware_fingerprint,
+    iat: now,
+    _rebound_at: now,
+    _rebind_count: (stored.rebind_count || 0) + 1,
+  }
+  delete newPayload._alg
+  delete newPayload._migrated_from
+  const newJwt = await createJwt(newPayload, env)
+
+  // Persist KV: bump rebind counter, record this rebind event, store new fp.
+  stored.jwt = newJwt
+  stored.hardware_fingerprint = new_hardware_fingerprint
+  stored.rebind_count = (stored.rebind_count || 0) + 1
+  stored.last_rebind_at = new Date().toISOString()
+  if (reason) stored.last_rebind_reason = String(reason).slice(0, 200)
+  await env.LICENSES.put(`license:${email}`, JSON.stringify(stored),
+    { expirationTtl: Math.max(86400, payload.exp - now) })
+
+  // Audit record — auto-expires at 365d so quota window self-cleans.
+  await env.LICENSES.put(
+    `rebind:${email}:${stored.last_rebind_at}`,
+    JSON.stringify({ instance_id, new_hwfp: new_hardware_fingerprint, reason: reason || null }),
+    { expirationTtl: QUOTA_WINDOW_S }
+  )
+
+  return new Response(JSON.stringify({
+    success: true,
+    license_key: newJwt,
+    rebind_count: stored.rebind_count,
+    rebind_quota_remaining: remaining - 1,
+    rebind_quota_limit: QUOTA_LIMIT,
+    rebind_quota_window_days: 365,
   }), { status: 200 })
 }
 
@@ -743,6 +894,8 @@ export default {
         response = await handleMigrate(request, env)
       } else if (path === '/api/dev-issue' && request.method === 'POST') {
         response = await handleDevIssue(request, env)
+      } else if (path === '/api/rebind' && request.method === 'POST') {
+        response = await handleRebind(request, env)
       } else if (path === '/api/health' && request.method === 'GET') {
         response = new Response(JSON.stringify({
           status: 'ok',

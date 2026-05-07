@@ -26,6 +26,20 @@ function handle_license_status(PDO $pdo, array $admin_session, $json_input): voi
         $keyCount = (int)$stmt->fetchColumn();
     } catch (Exception $e) { /* table may not exist */ }
 
+    // P1: hardware fingerprint info — current host, bound row, drift state.
+    $hwfp = ['composite' => '', 'components' => []];
+    try { $hwfp = getServerHardwareFingerprint($pdo, false); } catch (Exception $e) { /* fail open */ }
+
+    $rebindCount = 0;
+    $boundFingerprint = '';
+    try {
+        $stmt = $pdo->query("SELECT hardware_fingerprint, hwfp_rebind_count, hwfp_bound_at, hwfp_last_rebind_at
+                             FROM `" . t('license_info') . "` WHERE is_active = 1 ORDER BY id DESC LIMIT 1");
+        $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $boundFingerprint = (string)($row['hardware_fingerprint'] ?? '');
+        $rebindCount = (int)($row['hwfp_rebind_count'] ?? 0);
+    } catch (Exception $e) { /* pre-P1 install, columns absent */ }
+
     jsonResponse([
         'success' => true,
         'license' => [
@@ -38,10 +52,20 @@ function handle_license_status(PDO $pdo, array $admin_session, $json_input): voi
             'max_keys'        => $license['max_keys'],
             'features'        => $license['features'],
             'instance_id'     => $instanceId,
+            'rebind_required' => !empty($license['rebind_required']),
+            'rebind_grace_ends' => $license['rebind_grace_ends'] ?? null,
         ],
         'usage' => [
             'technicians' => $techCount,
             'keys'        => $keyCount,
+        ],
+        'hardware' => [
+            'current_fingerprint' => (string)($hwfp['composite'] ?? ''),
+            'components'          => $hwfp['components'] ?? [],
+            'bound_fingerprint'   => $boundFingerprint,
+            'rebind_count'        => $rebindCount,
+            'rebind_quota_limit'  => 3,
+            'rebind_window_days'  => 365,
         ],
     ]);
 }
@@ -119,12 +143,19 @@ function handle_license_generate_dev(PDO $pdo, array $admin_session, $json_input
     }
 
     $instanceId = getInstanceId($pdo);
+    $hwfp       = getServerHardwareFingerprint($pdo, false);
+    $hwfpHex    = (string)($hwfp['composite'] ?? '');
+    if ($hwfpHex === '') {
+        jsonResponse(['success' => false, 'error' => 'Could not compute server hardware fingerprint']);
+        return;
+    }
 
     $body = json_encode([
-        'tier'        => $tier,
-        'email'       => 'dev@localhost',
-        'instance_id' => $instanceId,
-        'dev_token'   => $devToken,
+        'tier'                 => $tier,
+        'email'                => 'dev@localhost',
+        'instance_id'          => $instanceId,
+        'hardware_fingerprint' => $hwfpHex,
+        'dev_token'            => $devToken,
     ]);
     $ctx = stream_context_create([
         'http' => [
@@ -177,10 +208,17 @@ function handle_license_claim(PDO $pdo, array $admin_session, $json_input): void
     }
 
     $instanceId = getInstanceId($pdo);
+    $hwfp       = getServerHardwareFingerprint($pdo, false);
+    $hwfpHex    = (string)($hwfp['composite'] ?? '');
+    if ($hwfpHex === '') {
+        jsonResponse(['success' => false, 'error' => 'Could not compute server hardware fingerprint']);
+        return;
+    }
     $body = json_encode([
-        'email'         => $email,
-        'instance_id'   => $instanceId,
-        'sponsor_login' => $sponsorLogin ?: null,
+        'email'                => $email,
+        'instance_id'          => $instanceId,
+        'hardware_fingerprint' => $hwfpHex,
+        'sponsor_login'        => $sponsorLogin ?: null,
     ]);
     $ctx = stream_context_create([
         'http' => [
@@ -225,9 +263,16 @@ function handle_license_migrate(PDO $pdo, array $admin_session, $json_input): vo
     }
 
     $instanceId = getInstanceId($pdo);
+    $hwfp       = getServerHardwareFingerprint($pdo, false);
+    $hwfpHex    = (string)($hwfp['composite'] ?? '');
+    if ($hwfpHex === '') {
+        jsonResponse(['success' => false, 'error' => 'Could not compute server hardware fingerprint']);
+        return;
+    }
     $body = json_encode([
-        'license_key' => $legacyKey,
-        'instance_id' => $instanceId,
+        'license_key'          => $legacyKey,
+        'instance_id'          => $instanceId,
+        'hardware_fingerprint' => $hwfpHex,
     ]);
     $ctx = stream_context_create([
         'http' => [
@@ -255,4 +300,121 @@ function handle_license_migrate(PDO $pdo, array $admin_session, $json_input): vo
         'license_key' => $decoded['license_key'],
         'expires_at'  => $decoded['expires_at'] ?? null,
     ]));
+}
+
+// ── Re-detect server hardware fingerprint (P1) ──
+//
+// Body: {} — admin clicks "Re-detect hardware" button. Force-recomputes
+// the server hwfp helper (shells out for machine-id / system-uuid / MAC /
+// volume UUID), caches the new result, and returns the components.
+//
+// Does NOT change the license-bound fingerprint — that requires /api/rebind.
+function handle_license_redetect_hw(PDO $pdo, array $admin_session, $json_input): void {
+    requirePermission('system_settings', $admin_session);
+
+    try {
+        $hwfp = getServerHardwareFingerprint($pdo, true);
+    } catch (Exception $e) {
+        error_log("KeyGate redetect: " . $e->getMessage());
+        jsonResponse(['success' => false, 'error' => 'Hardware detection failed']);
+        return;
+    }
+
+    logAdminActivity(
+        $admin_session['admin_id'],
+        $admin_session['id'] ?? 0,
+        'LICENSE_HW_REDETECTED',
+        'Re-detected server hardware fingerprint'
+    );
+
+    jsonResponse([
+        'success'    => true,
+        'fingerprint'=> (string)($hwfp['composite'] ?? ''),
+        'components' => $hwfp['components'] ?? [],
+        'computed_at'=> $hwfp['computed_at'] ?? null,
+    ]);
+}
+
+// ── Rebind license to new hardware (P1) ──
+//
+// Body: { reason? }
+// Calls Worker /api/rebind with current license_key, instance_id, and the
+// freshly-detected hardware fingerprint. Worker enforces quota (3 per
+// rolling 365 days), mints a new RS256 JWT, returns rebind counters.
+// On success applyRebindResponse() updates the local row.
+function handle_license_rebind(PDO $pdo, array $admin_session, $json_input): void {
+    requirePermission('system_settings', $admin_session);
+
+    $current = getCurrentLicense($pdo);
+    if (!$current || empty($current['license_key'])) {
+        jsonResponse(['success' => false, 'error' => 'No active license to rebind']);
+        return;
+    }
+
+    // Always re-detect when rebinding — admin's intent is "the hardware just changed".
+    $hwfp = getServerHardwareFingerprint($pdo, true);
+    $hwfpHex = (string)($hwfp['composite'] ?? '');
+    if ($hwfpHex === '') {
+        jsonResponse(['success' => false, 'error' => 'Could not compute new server hardware fingerprint']);
+        return;
+    }
+
+    $reason = trim((string)($json_input['reason'] ?? ''));
+    $body = json_encode([
+        'license_key'              => $current['license_key'],
+        'instance_id'              => $current['instance_id'],
+        'new_hardware_fingerprint' => $hwfpHex,
+        'reason'                   => $reason ?: null,
+    ]);
+    $ctx = stream_context_create([
+        'http' => [
+            'method'        => 'POST',
+            'header'        => "Content-Type: application/json\r\n",
+            'content'       => $body,
+            'timeout'       => 10,
+            'ignore_errors' => true,
+        ],
+    ]);
+    $resp = @file_get_contents(KEYGATE_LICENSE_SERVER . '/api/rebind', false, $ctx);
+    if ($resp === false) {
+        jsonResponse(['success' => false, 'error' => 'Could not reach license server']);
+        return;
+    }
+    $decoded = json_decode($resp, true);
+    if (!is_array($decoded) || empty($decoded['success'])) {
+        jsonResponse([
+            'success' => false,
+            'error'   => $decoded['error'] ?? 'Rebind failed',
+            'quota_window_days'   => $decoded['quota_window_days']   ?? null,
+            'quota_limit'         => $decoded['quota_limit']         ?? null,
+            'retry_after_iso'     => $decoded['retry_after_iso']     ?? null,
+        ]);
+        return;
+    }
+
+    $apply = applyRebindResponse(
+        $pdo,
+        $decoded['license_key'],
+        (int)($decoded['rebind_count'] ?? 0)
+    );
+    if (!$apply['success']) {
+        jsonResponse(['success' => false, 'error' => $apply['error'] ?? 'Local rebind apply failed']);
+        return;
+    }
+
+    logAdminActivity(
+        $admin_session['admin_id'],
+        $admin_session['id'] ?? 0,
+        'LICENSE_REBOUND',
+        "Rebound license to new hardware fingerprint (count: {$apply['rebind_count']}, reason: " . ($reason ?: 'unspecified') . ')'
+    );
+
+    jsonResponse([
+        'success'                => true,
+        'tier'                   => $apply['tier'],
+        'rebind_count'           => $apply['rebind_count'],
+        'rebind_quota_remaining' => $decoded['rebind_quota_remaining'] ?? null,
+        'rebind_quota_limit'     => $decoded['rebind_quota_limit']     ?? 3,
+        'message'                => 'License rebound successfully',
+    ]);
 }

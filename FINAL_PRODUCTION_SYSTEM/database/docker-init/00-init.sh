@@ -152,6 +152,9 @@ run_sql "production_tracking_migration.sql"   26
 # Phase 15: License row integrity HMAC (P0 anti-piracy)
 run_sql "license_p0_hmac_migration.sql"       27
 
+# Phase 16: License hardware-fingerprint binding + rebind quota (P1)
+run_sql "license_p1_hwbind_migration.sql"     28
+
 echo ""
 echo "=== Database initialization complete ==="
 echo ""
