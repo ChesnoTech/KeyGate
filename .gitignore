@@ -26,6 +26,10 @@ logs/
 # ── Uploaded client artifacts (per-instance, regenerated at runtime) ──
 FINAL_PRODUCTION_SYSTEM/uploads/client-resources/
 
+# ── Installer runtime artifacts (per-host, never committed) ────────
+FINAL_PRODUCTION_SYSTEM/install/install.log
+FINAL_PRODUCTION_SYSTEM/install/.progress.json
+
 # ── PHP Dependencies (managed by Composer) ────────────────
 FINAL_PRODUCTION_SYSTEM/vendor/
 
