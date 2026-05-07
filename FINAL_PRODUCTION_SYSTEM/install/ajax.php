@@ -204,23 +204,31 @@ function handlePreflight() {
 // Step 2: Test Database Connection
 // ═══════════════════════════════════════════════════════════════
 function handleTestDb() {
-    $host = $_POST['db_host'] ?? 'localhost';
-    $port = $_POST['db_port'] ?? '3306';
-    $user = $_POST['db_user'] ?? '';
-    $pass = $_POST['db_pass'] ?? '';
-    $name = $_POST['db_name'] ?? 'oem_activation';
+    $host   = trim($_POST['db_host'] ?? '127.0.0.1');
+    $port   = (int)($_POST['db_port'] ?? 3306);
+    $user   = $_POST['db_user'] ?? '';
+    $pass   = $_POST['db_pass'] ?? '';
+    $name   = $_POST['db_name'] ?? 'oem_activation';
+    $socket = trim($_POST['db_socket'] ?? '');
 
     if (empty($user)) {
         echo json_encode(['success' => false, 'message' => 'Username is required']);
         return;
     }
 
+    // aaPanel / cPanel hint: many panels bind MariaDB to TCP only.
+    // Coerce 'localhost' → '127.0.0.1' to avoid PDO Unix-socket lookup
+    // unless an explicit socket path is supplied.
+    if ($socket === '' && strtolower($host) === 'localhost') {
+        $host = '127.0.0.1';
+    }
+
     try {
         // First: connect without database to check server
-        $dsn = "mysql:host={$host};port={$port};charset=utf8mb4";
+        $dsn = installerBuildDsn($host, $port, '', $socket);
         $pdo = new PDO($dsn, $user, $pass, [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_TIMEOUT => 5,
+            PDO::ATTR_TIMEOUT => 10,
         ]);
 
         // Get server version
@@ -242,9 +250,10 @@ function handleTestDb() {
         }
 
         // Verify we can connect to the database
-        $dsn2 = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
+        $dsn2 = installerBuildDsn($host, $port, $name, $socket);
         $pdo2 = new PDO($dsn2, $user, $pass, [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_TIMEOUT => 10,
         ]);
 
         // Check InnoDB support
@@ -263,21 +272,12 @@ function handleTestDb() {
         }
 
         // Store in session for later steps
-        $_SESSION['install_db'] = compact('host', 'port', 'user', 'pass', 'name');
+        $_SESSION['install_db'] = compact('host', 'port', 'user', 'pass', 'name', 'socket');
 
         echo json_encode(['success' => true, 'message' => $msg]);
 
     } catch (PDOException $e) {
-        $msg = $e->getMessage();
-        // Simplify common errors
-        if (strpos($msg, 'Access denied') !== false) {
-            $msg = 'Access denied. Check username and password.';
-        } elseif (strpos($msg, 'Connection refused') !== false || strpos($msg, 'No such file') !== false) {
-            $msg = "Cannot connect to {$host}:{$port}. Check host and port.";
-        } elseif (strpos($msg, 'Unknown MySQL server host') !== false || strpos($msg, 'getaddrinfo') !== false) {
-            $msg = "Cannot resolve host '{$host}'. Check the hostname.";
-        }
-        echo json_encode(['success' => false, 'message' => $msg]);
+        echo json_encode(['success' => false, 'message' => installerFriendlyDbError($e, $host, $port, $socket)]);
     }
 }
 
@@ -615,28 +615,89 @@ function handleFinalize() {
  * Create PDO connection from POST params or session
  */
 function getInstallerPdo(): ?PDO {
-    $host = $_POST['db_host'] ?? $_SESSION['install_db']['host'] ?? '';
-    $port = $_POST['db_port'] ?? $_SESSION['install_db']['port'] ?? '3306';
-    $user = $_POST['db_user'] ?? $_SESSION['install_db']['user'] ?? '';
-    $pass = $_POST['db_pass'] ?? $_SESSION['install_db']['pass'] ?? '';
-    $name = $_POST['db_name'] ?? $_SESSION['install_db']['name'] ?? '';
+    $host   = trim($_POST['db_host']   ?? $_SESSION['install_db']['host']   ?? '127.0.0.1');
+    $port   = (int)($_POST['db_port']  ?? $_SESSION['install_db']['port']   ?? 3306);
+    $user   = $_POST['db_user']        ?? $_SESSION['install_db']['user']   ?? '';
+    $pass   = $_POST['db_pass']        ?? $_SESSION['install_db']['pass']   ?? '';
+    $name   = $_POST['db_name']        ?? $_SESSION['install_db']['name']   ?? '';
+    $socket = trim($_POST['db_socket'] ?? $_SESSION['install_db']['socket'] ?? '');
 
     if (empty($user) || empty($name)) {
         echo json_encode(['success' => false, 'message' => 'Database credentials missing. Go back to step 2.']);
         return null;
     }
 
+    // Coerce 'localhost' → '127.0.0.1' (force TCP) when no explicit socket given
+    if ($socket === '' && strtolower($host) === 'localhost') {
+        $host = '127.0.0.1';
+    }
+
     try {
-        $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
+        $dsn = installerBuildDsn($host, $port, $name, $socket);
         return new PDO($dsn, $user, $pass, [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES   => false,
+            PDO::ATTR_TIMEOUT            => 15,
         ]);
     } catch (PDOException $e) {
-        echo json_encode(['success' => false, 'message' => 'Database connection failed: ' . $e->getMessage()]);
+        echo json_encode(['success' => false, 'message' => installerFriendlyDbError($e, $host, $port, $socket)]);
         return null;
     }
+}
+
+/**
+ * Build a PDO DSN that supports either TCP host:port or Unix socket path.
+ * When $socket is non-empty, host/port are ignored.
+ */
+function installerBuildDsn(string $host, int $port, string $name, string $socket = ''): string {
+    if ($socket !== '') {
+        $dsn = "mysql:unix_socket={$socket};charset=utf8mb4";
+    } else {
+        $dsn = "mysql:host={$host};port={$port};charset=utf8mb4";
+    }
+    if ($name !== '') {
+        // Insert dbname between host/socket and charset to keep DSN ordered cleanly
+        $dsn = str_replace(';charset=utf8mb4', ";dbname={$name};charset=utf8mb4", $dsn);
+    }
+    return $dsn;
+}
+
+/**
+ * Convert raw PDOException to a user-friendly, DSN-sanitized message.
+ * Hints aaPanel / cPanel users about common pitfalls.
+ */
+function installerFriendlyDbError(PDOException $e, string $host, int $port, string $socket): string {
+    $raw = $e->getMessage();
+    $code = $e->getCode();
+
+    // Strip any DSN fragments that could leak host/port/user
+    $raw = preg_replace('/\bmysql:[^\s]+/', '[DSN]', $raw);
+
+    if (stripos($raw, 'Access denied') !== false) {
+        return 'Access denied. Check username and password. On aaPanel, ensure the user is allowed from this host (set Host = % or 127.0.0.1 in phpMyAdmin → User accounts).';
+    }
+    if (stripos($raw, 'Unknown database') !== false) {
+        return "Database does not exist and could not be auto-created. Create it manually in aaPanel → Databases, then retry.";
+    }
+    if (stripos($raw, 'Unknown MySQL server host') !== false || stripos($raw, 'getaddrinfo') !== false) {
+        return "Cannot resolve host '{$host}'. Use 127.0.0.1 instead of localhost on most aaPanel installs.";
+    }
+    if (stripos($raw, 'Connection refused') !== false) {
+        return "Cannot connect to {$host}:{$port}. MariaDB/MySQL service may not be running, or it's bound to a different port. In aaPanel: App Store → MySQL → check Service is started.";
+    }
+    if (stripos($raw, 'No such file or directory') !== false) {
+        // Classic Unix-socket failure
+        $hint = $socket !== ''
+            ? "Socket path '{$socket}' does not exist."
+            : "PDO tried the default Unix socket but it does not exist. Use 127.0.0.1 instead of localhost, or specify the socket path. Common aaPanel paths: /tmp/mysql.sock, /www/server/mysql/mysql.sock";
+        return $hint;
+    }
+    if (stripos($raw, 'timed out') !== false || stripos($raw, 'timeout') !== false) {
+        return "Connection timed out reaching {$host}:{$port}. Firewall or wrong port?";
+    }
+    // Fallback — sanitized message only, no stack
+    return "Database connection failed: " . $raw;
 }
 
 /**
