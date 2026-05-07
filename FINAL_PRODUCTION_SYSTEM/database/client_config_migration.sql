@@ -5,7 +5,7 @@
 -- activation timing, and network diagnostics settings.
 -- =============================================================
 
-INSERT INTO system_config (config_key, config_value, description) VALUES
+INSERT INTO `#__system_config` (config_key, config_value, description) VALUES
 -- Pre-Activation Task Toggles
 ('client_task_wsus_cleanup', '1', 'Enable WSUS cleanup before activation'),
 ('client_task_security_hardening', '1', 'Enable SMB security hardening'),

@@ -21,7 +21,7 @@ try {
         if (qcIsEnabled($pdo)) {
             $globalSettings = qcGetGlobalSettings($pdo);
             if (!empty($globalSettings['blocking_prevents_key'])) {
-                $hwStmt = $pdo->prepare("SELECT id FROM hardware_info WHERE order_number = ? ORDER BY collection_timestamp DESC LIMIT 1");
+                $hwStmt = $pdo->prepare("SELECT id FROM `" . t('hardware_info') . "` WHERE order_number = ? ORDER BY collection_timestamp DESC LIMIT 1");
                 $hwStmt->execute([$order_number]);
                 $hwRow = $hwStmt->fetch(PDO::FETCH_ASSOC);
                 if ($hwRow && qcHasBlockingIssues($pdo, (int) $hwRow['id'])) {
@@ -47,7 +47,7 @@ try {
         // Update existing session with new order number if different
         if ($existing_session['order_number'] !== $order_number) {
             $stmt = $pdo->prepare("
-                UPDATE active_sessions 
+                UPDATE `" . t('active_sessions') . "` 
                 SET order_number = ?, expires_at = DATE_ADD(NOW(), INTERVAL ? MINUTE)
                 WHERE id = ?
             ");
@@ -74,7 +74,7 @@ try {
         $pdo->rollback();
 
         // Check if ANY keys exist vs. all keys exhausted (for automatic failover)
-        $stmt = $pdo->prepare("SELECT COUNT(*) as available_count FROM oem_keys WHERE key_status IN ('unused', 'retry')");
+        $stmt = $pdo->prepare("SELECT COUNT(*) as available_count FROM `" . t('oem_keys') . "` WHERE key_status IN ('unused', 'retry')");
         $stmt->execute();
         $availableCount = $stmt->fetch(PDO::FETCH_ASSOC)['available_count'];
 
@@ -104,7 +104,7 @@ try {
     
     // Insert new session (we already checked for existing sessions above)
     $stmt = $pdo->prepare("
-        INSERT INTO active_sessions (technician_id, session_token, key_id, order_number, expires_at, auth_method, computer_name)
+        INSERT INTO `" . t('active_sessions') . "` (technician_id, session_token, key_id, order_number, expires_at, auth_method, computer_name)
         VALUES (?, ?, ?, ?, ?, 'password', ?)
     ");
     $stmt->execute([$technician_id, $session_token, $key['id'], $order_number, $expires_at, $computerName]);
@@ -121,7 +121,7 @@ try {
     // Check key pool levels and send alerts if needed
     try {
         $edition = $key['product_type'] ?? 'Unknown';
-        $poolStmt = $pdo->prepare("SELECT COUNT(*) as remaining FROM oem_keys WHERE key_status IN ('unused', 'retry') AND product_type = ?");
+        $poolStmt = $pdo->prepare("SELECT COUNT(*) as remaining FROM `" . t('oem_keys') . "` WHERE key_status IN ('unused', 'retry') AND product_type = ?");
         $poolStmt->execute([$edition]);
         $remaining = (int)$poolStmt->fetch()['remaining'];
 

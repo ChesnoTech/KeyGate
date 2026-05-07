@@ -5,7 +5,7 @@
 
 -- Table: backup_history
 -- Tracks all database backups (automated and manual)
-CREATE TABLE IF NOT EXISTS `backup_history` (
+CREATE TABLE IF NOT EXISTS `#__backup_history` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `backup_filename` VARCHAR(255) NOT NULL COMMENT 'Filename in backups directory',
     `backup_size_mb` DECIMAL(10,2) NOT NULL COMMENT 'Backup file size in megabytes',
@@ -25,12 +25,12 @@ CREATE TABLE IF NOT EXISTS `backup_history` (
     INDEX `idx_backup_type` (`backup_type`),
     INDEX `idx_deleted_at` (`deleted_at`),
     INDEX `idx_filename` (`backup_filename`),
-    FOREIGN KEY (`created_by_admin_id`) REFERENCES `admin_users`(`id`) ON DELETE SET NULL
+    FOREIGN KEY (`created_by_admin_id`) REFERENCES `#__admin_users`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Database backup history and tracking';
 
 -- Table: backup_restore_log
 -- Tracks database restore operations for disaster recovery audit
-CREATE TABLE IF NOT EXISTS `backup_restore_log` (
+CREATE TABLE IF NOT EXISTS `#__backup_restore_log` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `backup_history_id` INT NULL COMMENT 'Which backup was restored',
     `backup_filename` VARCHAR(255) NOT NULL COMMENT 'Backup file used for restore',
@@ -44,12 +44,12 @@ CREATE TABLE IF NOT EXISTS `backup_restore_log` (
 
     INDEX `idx_restored_at` (`restored_at`),
     INDEX `idx_restore_status` (`restore_status`),
-    FOREIGN KEY (`backup_history_id`) REFERENCES `backup_history`(`id`) ON DELETE SET NULL,
-    FOREIGN KEY (`restored_by_admin_id`) REFERENCES `admin_users`(`id`) ON DELETE SET NULL
+    FOREIGN KEY (`backup_history_id`) REFERENCES `#__backup_history`(`id`) ON DELETE SET NULL,
+    FOREIGN KEY (`restored_by_admin_id`) REFERENCES `#__admin_users`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Database restore operation audit log';
 
 -- System configuration for automated backups
-INSERT INTO `system_config` (`config_key`, `config_value`, `description`) VALUES
+INSERT INTO `#__system_config` (`config_key`, `config_value`, `description`) VALUES
 ('backup_enabled', '1', 'Enable automated database backups (1=yes, 0=no)'),
 ('backup_retention_days', '30', 'Number of days to keep backups before deletion'),
 ('backup_schedule', '0 2 * * *', 'Backup cron schedule (default: daily at 2 AM UTC)'),

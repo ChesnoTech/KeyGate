@@ -8,7 +8,7 @@ START TRANSACTION;
 SET time_zone = "+00:00";
 
 -- Create technicians table
-CREATE TABLE `technicians` (
+CREATE TABLE `#__technicians` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `technician_id` varchar(20) NOT NULL,
   `full_name` varchar(100) NOT NULL,
@@ -31,7 +31,7 @@ CREATE TABLE `technicians` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Create oem_keys table
-CREATE TABLE `oem_keys` (
+CREATE TABLE `#__oem_keys` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `product_key` varchar(29) NOT NULL,
   `oem_identifier` varchar(20) NOT NULL,
@@ -56,7 +56,7 @@ CREATE TABLE `oem_keys` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Create activation_attempts table
-CREATE TABLE `activation_attempts` (
+CREATE TABLE `#__activation_attempts` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `key_id` int(11) NOT NULL,
   `technician_id` varchar(20) NOT NULL,
@@ -76,12 +76,12 @@ CREATE TABLE `activation_attempts` (
   KEY `idx_attempted_at` (`attempted_at`),
   KEY `idx_attempted_date` (`attempted_date`),
   KEY `idx_key_tech_date` (`key_id`, `technician_id`, `attempted_at`),
-  CONSTRAINT `activation_attempts_ibfk_1` FOREIGN KEY (`key_id`) REFERENCES `oem_keys` (`id`),
-  CONSTRAINT `activation_attempts_ibfk_2` FOREIGN KEY (`technician_id`) REFERENCES `technicians` (`technician_id`)
+  CONSTRAINT `activation_attempts_ibfk_1` FOREIGN KEY (`key_id`) REFERENCES `#__oem_keys` (`id`),
+  CONSTRAINT `activation_attempts_ibfk_2` FOREIGN KEY (`technician_id`) REFERENCES `#__technicians` (`technician_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Create active_sessions table
-CREATE TABLE `active_sessions` (
+CREATE TABLE `#__active_sessions` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `technician_id` varchar(20) NOT NULL,
   `session_token` varchar(64) NOT NULL,
@@ -99,12 +99,12 @@ CREATE TABLE `active_sessions` (
   KEY `idx_expires_at` (`expires_at`),
   KEY `idx_tech_active_expires` (`technician_id`, `is_active`, `expires_at`),
   KEY `idx_expires_active` (`expires_at`, `is_active`),
-  CONSTRAINT `active_sessions_ibfk_1` FOREIGN KEY (`key_id`) REFERENCES `oem_keys` (`id`),
-  CONSTRAINT `active_sessions_ibfk_2` FOREIGN KEY (`technician_id`) REFERENCES `technicians` (`technician_id`)
+  CONSTRAINT `active_sessions_ibfk_1` FOREIGN KEY (`key_id`) REFERENCES `#__oem_keys` (`id`),
+  CONSTRAINT `active_sessions_ibfk_2` FOREIGN KEY (`technician_id`) REFERENCES `#__technicians` (`technician_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Create admin_users table
-CREATE TABLE `admin_users` (
+CREATE TABLE `#__admin_users` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `username` varchar(50) NOT NULL,
   `full_name` varchar(100) NOT NULL,
@@ -125,11 +125,11 @@ CREATE TABLE `admin_users` (
   KEY `created_by` (`created_by`),
   KEY `idx_username` (`username`),
   KEY `idx_is_active` (`is_active`),
-  CONSTRAINT `admin_users_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `admin_users` (`id`)
+  CONSTRAINT `admin_users_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `#__admin_users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Create admin_sessions table
-CREATE TABLE `admin_sessions` (
+CREATE TABLE `#__admin_sessions` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `admin_id` int(11) NOT NULL,
   `session_token` varchar(64) NOT NULL,
@@ -145,11 +145,11 @@ CREATE TABLE `admin_sessions` (
   KEY `idx_session_token` (`session_token`),
   KEY `idx_admin_id` (`admin_id`),
   KEY `idx_expires_at` (`expires_at`),
-  CONSTRAINT `admin_sessions_ibfk_1` FOREIGN KEY (`admin_id`) REFERENCES `admin_users` (`id`)
+  CONSTRAINT `admin_sessions_ibfk_1` FOREIGN KEY (`admin_id`) REFERENCES `#__admin_users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Create admin_activity_log table
-CREATE TABLE `admin_activity_log` (
+CREATE TABLE `#__admin_activity_log` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `admin_id` int(11) DEFAULT NULL,
   `session_id` int(11) DEFAULT NULL,
@@ -164,12 +164,12 @@ CREATE TABLE `admin_activity_log` (
   KEY `idx_admin_id` (`admin_id`),
   KEY `idx_created_at` (`created_at`),
   KEY `idx_action` (`action`),
-  CONSTRAINT `admin_activity_log_ibfk_1` FOREIGN KEY (`admin_id`) REFERENCES `admin_users` (`id`),
-  CONSTRAINT `admin_activity_log_ibfk_2` FOREIGN KEY (`session_id`) REFERENCES `admin_sessions` (`id`)
+  CONSTRAINT `admin_activity_log_ibfk_1` FOREIGN KEY (`admin_id`) REFERENCES `#__admin_users` (`id`),
+  CONSTRAINT `admin_activity_log_ibfk_2` FOREIGN KEY (`session_id`) REFERENCES `#__admin_sessions` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Create admin_ip_whitelist table
-CREATE TABLE `admin_ip_whitelist` (
+CREATE TABLE `#__admin_ip_whitelist` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `ip_address` varchar(45) NOT NULL,
   `ip_range` varchar(45) DEFAULT NULL,
@@ -181,11 +181,11 @@ CREATE TABLE `admin_ip_whitelist` (
   KEY `created_by` (`created_by`),
   KEY `idx_ip_address` (`ip_address`),
   KEY `idx_is_active` (`is_active`),
-  CONSTRAINT `admin_ip_whitelist_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `admin_users` (`id`)
+  CONSTRAINT `admin_ip_whitelist_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `#__admin_users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Create system_config table
-CREATE TABLE `system_config` (
+CREATE TABLE `#__system_config` (
   `config_key` varchar(50) NOT NULL,
   `config_value` text NOT NULL,
   `description` text DEFAULT NULL,
@@ -194,7 +194,7 @@ CREATE TABLE `system_config` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Create password_reset_tokens table
-CREATE TABLE `password_reset_tokens` (
+CREATE TABLE `#__password_reset_tokens` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `technician_id` varchar(20) NOT NULL,
   `reset_token` varchar(64) NOT NULL,
@@ -206,11 +206,11 @@ CREATE TABLE `password_reset_tokens` (
   KEY `technician_id` (`technician_id`),
   KEY `idx_reset_token` (`reset_token`),
   KEY `idx_expires_at` (`expires_at`),
-  CONSTRAINT `password_reset_tokens_ibfk_1` FOREIGN KEY (`technician_id`) REFERENCES `technicians` (`technician_id`)
+  CONSTRAINT `password_reset_tokens_ibfk_1` FOREIGN KEY (`technician_id`) REFERENCES `#__technicians` (`technician_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Insert default system configuration
-INSERT INTO `system_config` (`config_key`, `config_value`, `description`) VALUES
+INSERT INTO `#__system_config` (`config_key`, `config_value`, `description`) VALUES
 ('smtp_server', 'smtp.zoho.com', 'SMTP server for notifications'),
 ('smtp_port', '587', 'SMTP port'),
 ('smtp_username', '', 'SMTP username'),
@@ -236,7 +236,7 @@ INSERT INTO `system_config` (`config_key`, `config_value`, `description`) VALUES
 ('admin_log_retention_days', '365', 'Keep admin activity logs for N days');
 
 -- Create sample technician account (for testing)
-INSERT INTO `technicians` (`technician_id`, `full_name`, `email`, `password_hash`, `temp_password`, `must_change_password`, `created_by`, `notes`) VALUES
+INSERT INTO `#__technicians` (`technician_id`, `full_name`, `email`, `password_hash`, `temp_password`, `must_change_password`, `created_by`, `notes`) VALUES
 ('demo', 'Demo Technician', 'demo@example.com', '$2y$12$LQv3c1yqBwlVHpPd7u/Dw.G2K2wjDUl9jhJxfTULt3lOAOWuTDBKG', 'demo123', 1, 'system', 'Demo account for testing - Password: demo123');
 
 COMMIT;

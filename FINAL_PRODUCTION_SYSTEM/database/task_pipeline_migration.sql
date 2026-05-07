@@ -7,7 +7,7 @@
 -- =============================================================
 
 -- Global task template library (reusable across product lines)
-CREATE TABLE IF NOT EXISTS task_templates (
+CREATE TABLE IF NOT EXISTS `#__task_templates` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     task_key VARCHAR(50) NOT NULL UNIQUE COMMENT 'Internal identifier (e.g. hardware_collection)',
     task_name VARCHAR(100) NOT NULL COMMENT 'Display name',
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS task_templates (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Per-product-line task assignments (which tasks run, in what order, with overrides)
-CREATE TABLE IF NOT EXISTS product_line_tasks (
+CREATE TABLE IF NOT EXISTS `#__product_line_tasks` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     product_line_id INT NOT NULL COMMENT 'FK to product_lines table',
     task_template_id INT NOT NULL COMMENT 'FK to task_templates',
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS product_line_tasks (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Task execution log (tracks what ran during each activation)
-CREATE TABLE IF NOT EXISTS task_execution_log (
+CREATE TABLE IF NOT EXISTS `#__task_execution_log` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     activation_attempt_id INT DEFAULT NULL COMMENT 'FK to activation_attempts',
     product_line_id INT DEFAULT NULL,
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS task_execution_log (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Seed built-in task templates
-INSERT INTO task_templates (task_key, task_name, task_type, description, default_timeout_seconds, default_on_failure, is_system, icon) VALUES
+INSERT INTO `#__task_templates` (task_key, task_name, task_type, description, default_timeout_seconds, default_on_failure, is_system, icon) VALUES
 ('hardware_collection',  'Hardware Collection',     'built_in', 'Collect full hardware inventory (MB, CPU, RAM, GPU, disks, network)',             60,  'stop', 1, 'Cpu'),
 ('qc_compliance',        'QC Compliance Check',     'built_in', 'Run quality control checks (Secure Boot, BIOS version, HackBGRT)',               30,  'stop', 1, 'ShieldCheck'),
 ('oem_activation',       'OEM Key Activation',      'built_in', 'Request OEM key from server, install and activate Windows',                     180,  'stop', 1, 'Key'),
@@ -73,7 +73,7 @@ INSERT INTO task_templates (task_key, task_name, task_type, description, default
 ON DUPLICATE KEY UPDATE task_name = VALUES(task_name);
 
 -- Seed example custom tasks (disabled by default, admin can enable per product line)
-INSERT INTO task_templates (task_key, task_name, task_type, description, default_code, default_timeout_seconds, default_on_failure, is_system, icon) VALUES
+INSERT INTO `#__task_templates` (task_key, task_name, task_type, description, default_code, default_timeout_seconds, default_on_failure, is_system, icon) VALUES
 ('set_power_plan',       'Set Power Plan',          'custom', 'Configure Windows power plan (High Performance, Balanced, etc.)',
  'powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  # High Performance', 15, 'skip', 0, 'Zap'),
 ('disable_sleep',        'Disable Sleep Mode',      'custom', 'Prevent the PC from going to sleep',

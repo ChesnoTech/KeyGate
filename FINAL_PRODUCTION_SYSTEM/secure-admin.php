@@ -39,7 +39,7 @@ function checkIPWhitelist() {
     
     // Get all active whitelist entries
     $stmt = $pdo->prepare("
-        SELECT ip_address, ip_range FROM admin_ip_whitelist 
+        SELECT ip_address, ip_range FROM `" . t('admin_ip_whitelist') . "` 
         WHERE is_active = 1
     ");
     $stmt->execute();
@@ -77,7 +77,7 @@ if (!checkIPWhitelist()) {
 // Handle logout
 if (isset($_GET['logout'])) {
     if (isset($_SESSION['admin_token'])) {
-        $stmt = $pdo->prepare("UPDATE admin_sessions SET is_active = 0 WHERE session_token = ?");
+        $stmt = $pdo->prepare("UPDATE `" . t('admin_sessions') . "` SET is_active = 0 WHERE session_token = ?");
         $stmt->execute([$_SESSION['admin_token']]);
         logAdminActivity($_SESSION['admin_id'], $_SESSION['session_id'], 'LOGOUT', 'User logout');
     }

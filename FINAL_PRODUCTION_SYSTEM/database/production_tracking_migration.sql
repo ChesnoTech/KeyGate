@@ -7,7 +7,7 @@
 
 -- ── 1. Computer Build Reports (CBR) ────────────────────────
 -- Structured per-machine reports for auditing and compliance.
-CREATE TABLE IF NOT EXISTS computer_build_reports (
+CREATE TABLE IF NOT EXISTS `#__computer_build_reports` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     report_uuid VARCHAR(36) NOT NULL UNIQUE COMMENT 'UUID v4 for external reference',
     activation_attempt_id INT DEFAULT NULL,
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS computer_build_reports (
 
 -- ── 2. Key Pool Management ─────────────────────────────────
 -- Alert thresholds and replenishment tracking per product edition.
-CREATE TABLE IF NOT EXISTS key_pool_config (
+CREATE TABLE IF NOT EXISTS `#__key_pool_config` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     product_edition VARCHAR(100) NOT NULL UNIQUE COMMENT 'e.g. Windows 11 Pro, Windows 11 Home',
     low_threshold INT NOT NULL DEFAULT 10 COMMENT 'Alert when unused keys drop below this',
@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS key_pool_config (
 
 -- ── 3. Hardware Binding Registry ───────────────────────────
 -- Tracks which keys have been used on which hardware.
-CREATE TABLE IF NOT EXISTS hardware_key_bindings (
+CREATE TABLE IF NOT EXISTS `#__hardware_key_bindings` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     product_key_id INT NOT NULL COMMENT 'FK to oem_keys',
     device_fingerprint VARCHAR(500) NOT NULL,
@@ -118,7 +118,7 @@ CREATE TABLE IF NOT EXISTS hardware_key_bindings (
 
 -- ── 4. DPK Import Batches ──────────────────────────────────
 -- Tracks bulk key imports from Microsoft OEM deliveries.
-CREATE TABLE IF NOT EXISTS dpk_import_batches (
+CREATE TABLE IF NOT EXISTS `#__dpk_import_batches` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     batch_name VARCHAR(255) NOT NULL COMMENT 'e.g. "Microsoft Order #12345"',
     import_source VARCHAR(100) NOT NULL DEFAULT 'manual' COMMENT 'manual, microsoft_csv, microsoft_xml',
@@ -142,7 +142,7 @@ CREATE TABLE IF NOT EXISTS dpk_import_batches (
 
 -- ── 5. Work Orders (Production Line Tracking) ──────────────
 -- Links builds to customer orders, batch production runs.
-CREATE TABLE IF NOT EXISTS work_orders (
+CREATE TABLE IF NOT EXISTS `#__work_orders` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     work_order_number VARCHAR(50) NOT NULL UNIQUE COMMENT 'Auto-generated or manual',
     batch_number VARCHAR(100) DEFAULT NULL COMMENT 'Production batch grouping',

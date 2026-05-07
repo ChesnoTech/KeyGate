@@ -65,7 +65,7 @@ try {
 
     // Update database
     $stmt = $pdo->prepare("
-        UPDATE admin_totp_secrets
+        UPDATE `" . t('admin_totp_secrets') . "`
         SET backup_codes = ?
         WHERE admin_id = ?
     ");
@@ -76,7 +76,7 @@ try {
 
     // Log activity
     $stmt = $pdo->prepare("
-        INSERT INTO admin_activity_log (admin_id, session_id, action, description, ip_address, user_agent)
+        INSERT INTO `" . t('admin_activity_log') . "` (admin_id, session_id, action, description, ip_address, user_agent)
         VALUES (?, ?, 'TOTP_BACKUP_REGEN', 'Regenerated 2FA backup codes', ?, ?)
     ");
     $stmt->execute([

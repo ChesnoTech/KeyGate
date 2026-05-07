@@ -469,13 +469,13 @@ function handleInstallDbInit() {
     }
 
     // Bootstrap schema_versions first (the tracking table for all later migrations).
+    // Run through installerRunSqlFile so the `#__` prefix substitution kicks in.
     $schemaFile = $sqlDir . '/schema_versions_migration.sql';
     if (file_exists($schemaFile)) {
-        try {
-            $pdo->exec(file_get_contents($schemaFile));
-        } catch (PDOException $e) { /* probably already exists */ }
+        installerRunSqlFile($pdo, file_get_contents($schemaFile));  // Best-effort; ignore errors.
     }
 
+    $svTable = '`' . installerT('schema_versions') . '`';
     $list = [];
     foreach (installerMigrationList() as [$file, $version]) {
         $filePath = $sqlDir . '/' . $file;
@@ -484,7 +484,7 @@ function handleInstallDbInit() {
 
         if ($exists) {
             try {
-                $stmt = $pdo->prepare("SELECT COUNT(*) AS c FROM schema_versions WHERE filename = ?");
+                $stmt = $pdo->prepare("SELECT COUNT(*) AS c FROM {$svTable} WHERE filename = ?");
                 $stmt->execute([$file]);
                 $applied = ((int)$stmt->fetchColumn()) > 0;
             } catch (PDOException $e) { /* table missing → not applied */ }
@@ -532,9 +532,11 @@ function handleInstallDbStep() {
         return;
     }
 
+    $svTable = '`' . installerT('schema_versions') . '`';
+
     // Skip if already applied
     try {
-        $stmt = $pdo->prepare("SELECT COUNT(*) AS c FROM schema_versions WHERE filename = ?");
+        $stmt = $pdo->prepare("SELECT COUNT(*) AS c FROM {$svTable} WHERE filename = ?");
         $stmt->execute([$file]);
         if ((int)$stmt->fetchColumn() > 0) {
             echo json_encode(['file' => $file, 'success' => true, 'status' => 'skipped', 'message' => 'Already applied']);
@@ -548,7 +550,7 @@ function handleInstallDbStep() {
     if ($result['ok']) {
         try {
             $checksum = hash('sha256', $sql);
-            $stmt = $pdo->prepare("INSERT IGNORE INTO schema_versions (version, filename, checksum) VALUES (?, ?, ?)");
+            $stmt = $pdo->prepare("INSERT IGNORE INTO {$svTable} (version, filename, checksum) VALUES (?, ?, ?)");
             $stmt->execute([$version, $file, $checksum]);
         } catch (PDOException $e) { /* ignore */ }
 
@@ -566,7 +568,7 @@ function handleInstallDbStep() {
     if (preg_match('/Duplicate|already exists|1060|1061|1050|1062/i', $result['error'])) {
         try {
             $checksum = hash('sha256', $sql);
-            $stmt = $pdo->prepare("INSERT IGNORE INTO schema_versions (version, filename, checksum) VALUES (?, ?, ?)");
+            $stmt = $pdo->prepare("INSERT IGNORE INTO {$svTable} (version, filename, checksum) VALUES (?, ?, ?)");
             $stmt->execute([$version, $file, $checksum]);
         } catch (PDOException $e2) { /* ignore */ }
 
@@ -602,12 +604,13 @@ function handleInstallDbAll() {
         return;
     }
 
-    // Bootstrap schema_versions
+    // Bootstrap schema_versions (run through installerRunSqlFile so prefix substitution applies)
     $schemaFile = $sqlDir . '/schema_versions_migration.sql';
     if (file_exists($schemaFile)) {
-        try { $pdo->exec(file_get_contents($schemaFile)); } catch (PDOException $e) { /* ok */ }
+        installerRunSqlFile($pdo, file_get_contents($schemaFile));
     }
 
+    $svTable = '`' . installerT('schema_versions') . '`';
     $results = [];
     foreach (installerMigrationList() as $i => [$file, $version]) {
         if ($i === 0) {
@@ -622,7 +625,7 @@ function handleInstallDbAll() {
         }
 
         try {
-            $stmt = $pdo->prepare("SELECT COUNT(*) AS c FROM schema_versions WHERE filename = ?");
+            $stmt = $pdo->prepare("SELECT COUNT(*) AS c FROM {$svTable} WHERE filename = ?");
             $stmt->execute([$file]);
             if ((int)$stmt->fetchColumn() > 0) {
                 $results[] = ['file' => $file, 'status' => 'skipped', 'message' => 'Already applied'];
@@ -636,14 +639,14 @@ function handleInstallDbAll() {
         if ($r['ok']) {
             try {
                 $checksum = hash('sha256', $sql);
-                $stmt = $pdo->prepare("INSERT IGNORE INTO schema_versions (version, filename, checksum) VALUES (?, ?, ?)");
+                $stmt = $pdo->prepare("INSERT IGNORE INTO {$svTable} (version, filename, checksum) VALUES (?, ?, ?)");
                 $stmt->execute([$version, $file, $checksum]);
             } catch (PDOException $e) { /* ignore */ }
             $results[] = ['file' => $file, 'status' => 'ok', 'message' => 'Applied (' . $r['stmts_run'] . ' statements)'];
         } elseif (preg_match('/Duplicate|already exists|1060|1061|1050|1062/i', $r['error'])) {
             try {
                 $checksum = hash('sha256', $sql);
-                $stmt = $pdo->prepare("INSERT IGNORE INTO schema_versions (version, filename, checksum) VALUES (?, ?, ?)");
+                $stmt = $pdo->prepare("INSERT IGNORE INTO {$svTable} (version, filename, checksum) VALUES (?, ?, ?)");
                 $stmt->execute([$version, $file, $checksum]);
             } catch (PDOException $e) { /* ignore */ }
             $results[] = ['file' => $file, 'status' => 'ok', 'message' => 'Applied (some objects already existed)'];
@@ -675,6 +678,17 @@ function installerRunSqlFile(PDO $pdo, string $sql): array {
     $sql = preg_replace('/^\s*(START\s+TRANSACTION|BEGIN)\s*;\s*$/im', '', $sql);
     $sql = preg_replace('/^\s*COMMIT\s*;\s*$/im', '', $sql);
 
+    // Substitute table prefix sentinel `#__` with the configured prefix.
+    // Empty prefix → identical to pre-prefix schema.
+    $prefix = (string)($_SESSION['install_db']['prefix'] ?? '');
+    $sql = str_replace('#__', $prefix, $sql);
+
+    // Defense-in-depth: if substitution somehow missed and `#__` remains,
+    // abort loudly rather than send invalid SQL.
+    if (strpos($sql, '#__') !== false) {
+        return ['ok' => false, 'stmts_run' => 0, 'error' => 'Internal error: unsubstituted `#__` sentinel still present after prefix replacement.'];
+    }
+
     $stmts = installerSplitSql($sql);
     $count = 0;
     foreach ($stmts as $stmt) {
@@ -688,6 +702,16 @@ function installerRunSqlFile(PDO $pdo, string $sql): array {
         }
     }
     return ['ok' => true, 'stmts_run' => $count, 'error' => ''];
+}
+
+/**
+ * Resolve the prefixed name for a logical table during installation.
+ * Mirrors functions/db-helpers.php t() but reads from $_SESSION since
+ * the installer runs before config.php exists.
+ */
+function installerT(string $name): string {
+    $prefix = (string)($_SESSION['install_db']['prefix'] ?? '');
+    return $prefix . $name;
 }
 
 /**
@@ -815,30 +839,33 @@ function handleCreateAdmin() {
         return;
     }
 
+    $adminTable = '`' . installerT('admin_users') . '`';
+    $aclTable   = '`' . installerT('acl_roles') . '`';
+
     try {
         // Check if admin already exists
-        $stmt = $pdo->prepare("SELECT id FROM admin_users WHERE username = ?");
+        $stmt = $pdo->prepare("SELECT id FROM {$adminTable} WHERE username = ?");
         $stmt->execute([$username]);
         if ($stmt->fetch()) {
             // Update existing
             $hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
-            $stmt = $pdo->prepare("UPDATE admin_users SET password_hash = ?, full_name = ?, email = ?, role = 'super_admin', is_active = 1, must_change_password = 0, failed_login_attempts = 0, locked_until = NULL WHERE username = ?");
+            $stmt = $pdo->prepare("UPDATE {$adminTable} SET password_hash = ?, full_name = ?, email = ?, role = 'super_admin', is_active = 1, must_change_password = 0, failed_login_attempts = 0, locked_until = NULL WHERE username = ?");
             $stmt->execute([$hash, $fullName, $email, $username]);
             echo json_encode(['success' => true, 'message' => "Admin account '{$username}' updated."]);
         } else {
             // Create new
             $hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
-            $stmt = $pdo->prepare("INSERT INTO admin_users (username, full_name, email, password_hash, role, is_active, must_change_password) VALUES (?, ?, ?, ?, 'super_admin', 1, 0)");
+            $stmt = $pdo->prepare("INSERT INTO {$adminTable} (username, full_name, email, password_hash, role, is_active, must_change_password) VALUES (?, ?, ?, ?, 'super_admin', 1, 0)");
             $stmt->execute([$username, $fullName, $email, $hash]);
 
             // Try to assign ACL role if table exists
             try {
                 $adminId = $pdo->lastInsertId();
-                $roleStmt = $pdo->prepare("SELECT id FROM acl_roles WHERE name = 'super_admin' LIMIT 1");
+                $roleStmt = $pdo->prepare("SELECT id FROM {$aclTable} WHERE name = 'super_admin' LIMIT 1");
                 $roleStmt->execute();
                 $role = $roleStmt->fetch(PDO::FETCH_ASSOC);
                 if ($role) {
-                    $pdo->prepare("UPDATE admin_users SET custom_role_id = ? WHERE id = ?")->execute([$role['id'], $adminId]);
+                    $pdo->prepare("UPDATE {$adminTable} SET custom_role_id = ? WHERE id = ?")->execute([$role['id'], $adminId]);
                 }
             } catch (PDOException $e) {
                 // ACL tables might not exist — that's fine
@@ -873,7 +900,9 @@ function handleFinalize() {
     }
 
     // ── Write config.php ──
-    $configContent = generateConfig($host, $port, $user, $pass, $name, $timezone);
+    $prefix  = (string)($_SESSION['install_db']['prefix']  ?? '');
+    $charset = (string)($_SESSION['install_db']['charset'] ?? 'utf8mb4');
+    $configContent = generateConfig($host, $port, $user, $pass, $name, $timezone, $prefix, $charset);
     $configPath = realpath(__DIR__ . '/..') . '/config.php';
 
     if (file_put_contents($configPath, $configContent) === false) {
@@ -888,6 +917,12 @@ function handleFinalize() {
     try {
         $pdo = getInstallerPdo();
         if ($pdo) {
+            $tConfig    = '`' . installerT('system_config')      . '`';
+            $tTech      = '`' . installerT('technicians')        . '`';
+            $tAdmin     = '`' . installerT('admin_users')        . '`';
+            $tTrustedN  = '`' . installerT('trusted_networks')   . '`';
+            $tAdminIp   = '`' . installerT('admin_ip_whitelist') . '`';
+
             $settings = [
                 'system_name'      => $systemName,
                 'server_url'       => $serverUrl,
@@ -895,13 +930,13 @@ function handleFinalize() {
                 'timezone'         => $timezone,
             ];
             foreach ($settings as $key => $value) {
-                $stmt = $pdo->prepare("INSERT INTO system_config (config_key, config_value, description) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE config_value = VALUES(config_value)");
+                $stmt = $pdo->prepare("INSERT INTO {$tConfig} (config_key, config_value, description) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE config_value = VALUES(config_value)");
                 $stmt->execute([$key, $value, "Set by installer"]);
             }
 
             // Delete demo technician if it exists
             try {
-                $pdo->exec("DELETE FROM technicians WHERE technician_id = 'demo' AND notes LIKE '%Demo account%'");
+                $pdo->exec("DELETE FROM {$tTech} WHERE technician_id = 'demo' AND notes LIKE '%Demo account%'");
             } catch (PDOException $e) { /* ignore */ }
 
             // ── Auto-detect installer's network and add as trusted ──
@@ -909,7 +944,7 @@ function handleFinalize() {
                 $clientIp = getClientIp();
                 if ($clientIp && $clientIp !== 'unknown') {
                     // Get admin ID for foreign key
-                    $adminStmt = $pdo->prepare("SELECT id FROM admin_users WHERE username = ? LIMIT 1");
+                    $adminStmt = $pdo->prepare("SELECT id FROM {$tAdmin} WHERE username = ? LIMIT 1");
                     $adminStmt->execute([$adminUser]);
                     $adminRow = $adminStmt->fetch(PDO::FETCH_ASSOC);
                     $adminId = $adminRow ? $adminRow['id'] : null;
@@ -920,7 +955,7 @@ function handleFinalize() {
                     // Add to trusted_networks (for 2FA bypass + USB auth)
                     try {
                         $stmt = $pdo->prepare("
-                            INSERT INTO trusted_networks (network_name, ip_range, bypass_2fa, allow_usb_auth, description, created_by_admin_id)
+                            INSERT INTO {$tTrustedN} (network_name, ip_range, bypass_2fa, allow_usb_auth, description, created_by_admin_id)
                             VALUES (?, ?, 1, 1, ?, ?)
                         ");
                         $stmt->execute([
@@ -934,7 +969,7 @@ function handleFinalize() {
                     // Add to admin_ip_whitelist (for admin panel access)
                     try {
                         $stmt = $pdo->prepare("
-                            INSERT INTO admin_ip_whitelist (ip_address, ip_range, description, created_by)
+                            INSERT INTO {$tAdminIp} (ip_address, ip_range, description, created_by)
                             VALUES (?, ?, ?, ?)
                         ");
                         $stmt->execute([
@@ -1144,9 +1179,20 @@ function calculateSubnet(string $ip, int $prefix = 24): string {
 /**
  * Generate the production config.php content
  */
-function generateConfig(string $host, string $port, string $user, string $pass, string $name, string $timezone): string {
+function generateConfig(
+    string $host,
+    string $port,
+    string $user,
+    string $pass,
+    string $name,
+    string $timezone,
+    string $prefix = '',
+    string $charset = 'utf8mb4'
+): string {
     // Escape single quotes in password for PHP string
-    $passEscaped = addcslashes($pass, "'\\");
+    $passEscaped   = addcslashes($pass, "'\\");
+    $prefixEscaped = addcslashes($prefix, "'\\");
+    $charsetEsc    = preg_replace('/[^a-z0-9_]/', '', $charset) ?: 'utf8mb4';
 
     return <<<'PHP_HEADER'
 <?php
@@ -1157,25 +1203,26 @@ function generateConfig(string $host, string $port, string $user, string $pass, 
  * Generated by the web installer.
  *
  * This file:
- *  1. Loads constants
+ *  1. Loads constants (which loads functions/db-helpers.php for t())
  *  2. Creates the PDO database connection (with retry logic)
  *  3. Provides getConfig() for reading system_config rows
  *  4. Includes helper modules (http, session, key, order-field)
  */
 
-require_once __DIR__ . '/constants.php';
-
-// ── Environment Detection ───────────────────────────────────────
-$isProduction = !in_array($_SERVER['HTTP_HOST'] ?? 'localhost', ['localhost', '127.0.0.1', 'activate.local']);
-
 PHP_HEADER
-    . "\n// ── Database Configuration ──────────────────────────────────────\n"
+    . "// ── Table Prefix ────────────────────────────────────────────────\n"
+    . "// Joomla-style sentinel. Empty string → no prefix (legacy schema).\n"
+    . "define('DB_PREFIX', '{$prefixEscaped}');\n\n"
+    . "require_once __DIR__ . '/constants.php';\n\n"
+    . "// ── Environment Detection ───────────────────────────────────────\n"
+    . "\$isProduction = !in_array(\$_SERVER['HTTP_HOST'] ?? 'localhost', ['localhost', '127.0.0.1', 'activate.local']);\n\n"
+    . "// ── Database Configuration ──────────────────────────────────────\n"
     . "\$db_config = [\n"
     . "    'host'     => '{$host}',\n"
     . "    'dbname'   => '{$name}',\n"
     . "    'username' => '{$user}',\n"
     . "    'password' => '{$passEscaped}',\n"
-    . "    'charset'  => 'utf8mb4',\n"
+    . "    'charset'  => '{$charsetEsc}',\n"
     . "    'port'     => {$port},\n"
     . "];\n\n"
     . <<<'PHP_BODY'
@@ -1355,6 +1402,13 @@ function installerCheckIncompleteState(): void {
     $host = $hM[1]; $name = $nM[1]; $user = $uM[1]; $pass = $pM[1]; $port = (int)$portM[1];
     if (strtolower($host) === 'localhost') $host = '127.0.0.1';
 
+    // Read DB_PREFIX from config (empty for legacy installs).
+    $prefix = '';
+    if (preg_match("/define\(\s*'DB_PREFIX'\s*,\s*'([^']*)'\s*\)/", $configSrc, $pxM)) {
+        $prefix = $pxM[1];
+    }
+    $adminTable = $prefix . 'admin_users';
+
     try {
         $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
         $pdo = new PDO($dsn, $user, $pass, [
@@ -1363,15 +1417,15 @@ function installerCheckIncompleteState(): void {
         ]);
 
         // admin_users table missing → install was never completed.
-        $stmt = $pdo->query("SHOW TABLES LIKE 'admin_users'");
+        $stmt = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($adminTable));
         if (!$stmt->fetch()) {
-            installerLog("auto-unlock: admin_users table missing — clearing install.lock");
+            installerLog("auto-unlock: {$adminTable} missing — clearing install.lock");
             @unlink($lockPath);
             return;
         }
 
         // admin_users empty → install was never completed.
-        $cnt = (int)$pdo->query("SELECT COUNT(*) FROM admin_users")->fetchColumn();
+        $cnt = (int)$pdo->query("SELECT COUNT(*) FROM `{$adminTable}`")->fetchColumn();
         if ($cnt === 0) {
             installerLog("auto-unlock: admin_users empty — clearing install.lock");
             @unlink($lockPath);
@@ -1447,17 +1501,19 @@ function handleHealth(): void {
 
     $expectTables = ['admin_users', 'oem_keys', 'technicians', 'system_config', 'schema_versions'];
     foreach ($expectTables as $t) {
+        $physical = installerT($t);
         try {
-            $stmt = $pdo->query("SHOW TABLES LIKE '" . str_replace("'", '', $t) . "'");
+            $stmt = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($physical));
             $found = (bool)$stmt->fetch();
-            $checks[] = ['label' => "Table {$t}", 'status' => $found ? 'pass' : 'fail'];
+            $checks[] = ['label' => "Table {$physical}", 'status' => $found ? 'pass' : 'fail'];
         } catch (PDOException $e) {
-            $checks[] = ['label' => "Table {$t}", 'status' => 'fail'];
+            $checks[] = ['label' => "Table {$physical}", 'status' => 'fail'];
         }
     }
 
     try {
-        $admins = (int)$pdo->query("SELECT COUNT(*) FROM admin_users")->fetchColumn();
+        $adminTable = '`' . installerT('admin_users') . '`';
+        $admins = (int)$pdo->query("SELECT COUNT(*) FROM {$adminTable}")->fetchColumn();
         $checks[] = ['label' => 'Admin accounts', 'status' => $admins > 0 ? 'pass' : 'fail', 'value' => $admins];
     } catch (PDOException $e) {
         $checks[] = ['label' => 'Admin accounts', 'status' => 'fail'];

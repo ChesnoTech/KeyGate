@@ -23,6 +23,9 @@ logs/
 # Don't commit 12MB+ artifacts — every dev rebuilds locally on first commit.
 **/graphify-out/
 
+# ── Uploaded client artifacts (per-instance, regenerated at runtime) ──
+FINAL_PRODUCTION_SYSTEM/uploads/client-resources/
+
 # ── PHP Dependencies (managed by Composer) ────────────────
 FINAL_PRODUCTION_SYSTEM/vendor/
 

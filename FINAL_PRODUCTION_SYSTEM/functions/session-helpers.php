@@ -32,9 +32,9 @@ function validateSession($token) {
     try {
         $stmt = $pdo->prepare("
             SELECT s.*, k.product_key, k.key_status, t.is_active as tech_active
-            FROM active_sessions s
-            LEFT JOIN oem_keys k ON s.key_id = k.id
-            LEFT JOIN technicians t ON s.technician_id = t.technician_id
+            FROM `" . t('active_sessions') . "` s
+            LEFT JOIN `" . t('oem_keys') . "` k ON s.key_id = k.id
+            LEFT JOIN `" . t('technicians') . "` t ON s.technician_id = t.technician_id
             WHERE s.session_token = ?
             AND s.is_active = 1
             AND s.expires_at > NOW()
@@ -54,7 +54,7 @@ function validateSession($token) {
 function cleanupExpiredSessions($pdo) {
     try {
         $stmt = $pdo->prepare("
-            UPDATE active_sessions
+            UPDATE `" . t('active_sessions') . "`
             SET is_active = 0
             WHERE expires_at < NOW() AND is_active = 1
             LIMIT " . SESSION_CLEANUP_BATCH . "
@@ -82,8 +82,8 @@ function getActiveSession($pdo, $technician_id) {
 
         $stmt = $pdo->prepare("
             SELECT s.*, k.product_key, k.oem_identifier, k.key_status, k.fail_counter
-            FROM active_sessions s
-            LEFT JOIN oem_keys k ON s.key_id = k.id
+            FROM `" . t('active_sessions') . "` s
+            LEFT JOIN `" . t('oem_keys') . "` k ON s.key_id = k.id
             WHERE s.technician_id = ?
             AND s.is_active = 1
             AND s.expires_at > NOW()

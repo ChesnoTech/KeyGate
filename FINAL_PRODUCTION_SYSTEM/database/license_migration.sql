@@ -4,7 +4,7 @@
 -- Tracks instance license, tier limits, and validation history.
 -- =============================================================
 
-CREATE TABLE IF NOT EXISTS license_info (
+CREATE TABLE IF NOT EXISTS `#__license_info` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     license_key VARCHAR(2048) NOT NULL COMMENT 'JWT license token',
     instance_id VARCHAR(128) NOT NULL COMMENT 'SHA256 fingerprint of this installation',
@@ -26,10 +26,10 @@ CREATE TABLE IF NOT EXISTS license_info (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Default community license limits stored in system_config
-INSERT INTO system_config (config_key, config_value, description) VALUES
+INSERT INTO `#__system_config` (config_key, config_value, description) VALUES
     ('license_tier', 'community', 'Current license tier')
 ON DUPLICATE KEY UPDATE config_key = config_key;
 
-INSERT INTO system_config (config_key, config_value, description) VALUES
+INSERT INTO `#__system_config` (config_key, config_value, description) VALUES
     ('license_instance_id', '', 'Unique instance fingerprint (auto-generated)')
 ON DUPLICATE KEY UPDATE config_key = config_key;

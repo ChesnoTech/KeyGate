@@ -5,7 +5,7 @@ CREATE DATABASE IF NOT EXISTS oem_activation;
 USE oem_activation;
 
 -- Table to store OEM keys
-CREATE TABLE oem_keys (
+CREATE TABLE `#__oem_keys` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     product_key VARCHAR(29) NOT NULL UNIQUE,
     oem_identifier VARCHAR(20) NOT NULL,
@@ -21,7 +21,7 @@ CREATE TABLE oem_keys (
 );
 
 -- Table to track activation attempts
-CREATE TABLE activation_attempts (
+CREATE TABLE `#__activation_attempts` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     key_id INT NOT NULL,
     order_number VARCHAR(10) NOT NULL,
@@ -31,15 +31,15 @@ CREATE TABLE activation_attempts (
     attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     client_ip VARCHAR(45),
     notes TEXT,
-    FOREIGN KEY (key_id) REFERENCES oem_keys(id),
-    FOREIGN KEY (technician_id) REFERENCES technicians(technician_id),
+    FOREIGN KEY (key_id) REFERENCES `#__oem_keys`(id),
+    FOREIGN KEY (technician_id) REFERENCES `#__technicians`(technician_id),
     INDEX idx_order_number (order_number),
     INDEX idx_technician_id (technician_id),
     INDEX idx_attempted_at (attempted_at)
 );
 
 -- Table to store active sessions/tokens
-CREATE TABLE active_sessions (
+CREATE TABLE `#__active_sessions` (
     id INT AUTO_INCREMENT PRIMARY KEY,
     technician_id VARCHAR(20) NOT NULL,
     session_token VARCHAR(64) NOT NULL UNIQUE,
@@ -48,14 +48,14 @@ CREATE TABLE active_sessions (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMP NOT NULL,
     is_active BOOLEAN DEFAULT TRUE,
-    FOREIGN KEY (key_id) REFERENCES oem_keys(id),
+    FOREIGN KEY (key_id) REFERENCES `#__oem_keys`(id),
     INDEX idx_session_token (session_token),
     INDEX idx_technician_id (technician_id),
     INDEX idx_expires_at (expires_at)
 );
 
 -- Table for system configuration
-CREATE TABLE system_config (
+CREATE TABLE `#__system_config` (
     config_key VARCHAR(50) PRIMARY KEY,
     config_value TEXT NOT NULL,
     description TEXT,
@@ -63,7 +63,7 @@ CREATE TABLE system_config (
 );
 
 -- Insert basic configuration
-INSERT INTO system_config (config_key, config_value, description) VALUES
+INSERT INTO `#__system_config` (config_key, config_value, description) VALUES
 ('smtp_server', 'smtp.zoho.com', 'SMTP server for notifications'),
 ('smtp_port', '587', 'SMTP port'),
 ('smtp_username', 'oem.activation@roo24.chesnotech.ru', 'SMTP username'),

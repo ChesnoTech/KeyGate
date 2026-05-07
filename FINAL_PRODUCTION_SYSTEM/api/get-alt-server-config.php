@@ -23,8 +23,8 @@ try {
     // Verify valid session and get technician preferences
     $stmt = $pdo->prepare("
         SELECT s.technician_id, t.preferred_server
-        FROM active_sessions s
-        INNER JOIN technicians t ON s.technician_id = t.technician_id
+        FROM `" . t('active_sessions') . "` s
+        INNER JOIN `" . t('technicians') . "` t ON s.technician_id = t.technician_id
         WHERE s.session_token = ? AND s.expires_at > NOW()
     ");
     $stmt->execute([$sessionToken]);
@@ -38,7 +38,7 @@ try {
     // Helper function to get config value
     function getConfig($key) {
         global $pdo;
-        $stmt = $pdo->prepare("SELECT config_value FROM system_config WHERE config_key = ?");
+        $stmt = $pdo->prepare("SELECT config_value FROM `" . t('system_config') . "` WHERE config_key = ?");
         $stmt->execute([$key]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         return $result ? $result['config_value'] : null;

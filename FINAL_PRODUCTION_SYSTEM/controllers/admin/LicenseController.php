@@ -17,12 +17,12 @@ function handle_license_status(PDO $pdo, array $admin_session, $json_input): voi
     $techCount = 0;
     $keyCount = 0;
     try {
-        $stmt = $pdo->query("SELECT COUNT(*) FROM technicians WHERE status = 'active'");
+        $stmt = $pdo->query("SELECT COUNT(*) FROM `" . t('technicians') . "` WHERE status = 'active'");
         $techCount = (int)$stmt->fetchColumn();
     } catch (Exception $e) { /* table may not exist */ }
 
     try {
-        $stmt = $pdo->query("SELECT COUNT(*) FROM oem_keys");
+        $stmt = $pdo->query("SELECT COUNT(*) FROM `" . t('oem_keys') . "`");
         $keyCount = (int)$stmt->fetchColumn();
     } catch (Exception $e) { /* table may not exist */ }
 
@@ -76,7 +76,7 @@ function handle_license_register(PDO $pdo, array $admin_session, $json_input): v
 function handle_license_deactivate(PDO $pdo, array $admin_session, $json_input): void {
     requirePermission('system_settings', $admin_session);
 
-    $pdo->exec("UPDATE license_info SET is_active = 0");
+    $pdo->exec("UPDATE `" . t('license_info') . "` SET is_active = 0");
     saveConfigBatch($pdo, ['license_tier' => 'community']);
 
     logAdminActivity(

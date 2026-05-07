@@ -180,14 +180,14 @@ function importComprehensiveKeyRow($row, $format) {
 
     try {
         // Check if key already exists
-        $stmt = $pdo->prepare("SELECT id, key_status FROM oem_keys WHERE product_key = ?");
+        $stmt = $pdo->prepare("SELECT id, key_status FROM `" . t('oem_keys') . "` WHERE product_key = ?");
         $stmt->execute([$product_key]);
         $existing = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($existing) {
             // Update existing key
             $stmt = $pdo->prepare("
-                UPDATE oem_keys
+                UPDATE `" . t('oem_keys') . "`
                 SET key_status = ?, oem_identifier = ?, roll_serial = ?, fail_counter = ?,
                     last_use_date = ?, last_use_time = ?, first_usage_date = ?, first_usage_time = ?,
                     updated_at = NOW()
@@ -200,7 +200,7 @@ function importComprehensiveKeyRow($row, $format) {
         } else {
             // Insert new key
             $stmt = $pdo->prepare("
-                INSERT INTO oem_keys (product_key, oem_identifier, roll_serial, key_status, fail_counter,
+                INSERT INTO `" . t('oem_keys') . "` (product_key, oem_identifier, roll_serial, key_status, fail_counter,
                                      last_use_date, last_use_time, first_usage_date, first_usage_time, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
             ");
@@ -242,7 +242,7 @@ function importStandardKeyRow($row, $format) {
 
     try {
         // Check if key already exists
-        $stmt = $pdo->prepare("SELECT id, key_status FROM oem_keys WHERE product_key = ?");
+        $stmt = $pdo->prepare("SELECT id, key_status FROM `" . t('oem_keys') . "` WHERE product_key = ?");
         $stmt->execute([$product_key]);
         $existing = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -250,7 +250,7 @@ function importStandardKeyRow($row, $format) {
             // Update existing key if status changed
             if ($existing['key_status'] !== $key_status) {
                 $stmt = $pdo->prepare("
-                    UPDATE oem_keys
+                    UPDATE `" . t('oem_keys') . "`
                     SET key_status = ?, oem_identifier = ?, barcode = ?, updated_at = NOW()
                     WHERE product_key = ?
                 ");
@@ -262,7 +262,7 @@ function importStandardKeyRow($row, $format) {
         } else {
             // Insert new key
             $stmt = $pdo->prepare("
-                INSERT INTO oem_keys (product_key, oem_identifier, barcode, key_status, roll_serial, created_at)
+                INSERT INTO `" . t('oem_keys') . "` (product_key, oem_identifier, barcode, key_status, roll_serial, created_at)
                 VALUES (?, ?, ?, ?, 'imported', NOW())
             ");
             $stmt->execute([$product_key, $oem_identifier, $barcode, $key_status]);
@@ -321,7 +321,7 @@ function importActivationAttempts($key_id, $row, $format) {
         if (!empty($attempt['attempted_date']) && !empty($attempt['technician_id'])) {
             try {
                 $stmt = $pdo->prepare("
-                    INSERT INTO activation_attempts
+                    INSERT INTO `" . t('activation_attempts') . "`
                     (key_id, technician_id, order_number, attempt_number, attempt_result,
                      attempted_date, attempted_time, attempted_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, NOW())

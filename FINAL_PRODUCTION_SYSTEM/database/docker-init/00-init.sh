@@ -15,16 +15,45 @@ DB="${MARIADB_DATABASE:-oem_activation}"
 SQL_DIR="/docker-entrypoint-initdb.d/sql"
 MYSQL_CMD="mysql -u root -p${MARIADB_ROOT_PASSWORD} ${DB}"
 
+# ── Table prefix support ─────────────────────────────────────
+# SQL files use the Joomla-style sentinel `#__` for table names.
+# At init time we substitute it with $KEYGATE_DB_PREFIX (default: empty
+# string → identical schema to pre-prefix releases).
+PREFIX="${KEYGATE_DB_PREFIX:-}"
+SV_TABLE="${PREFIX}schema_versions"
+
+# Validate prefix: must match ^[a-z][a-z0-9_]{0,9}$ or be empty.
+if [ -n "$PREFIX" ]; then
+    if ! echo "$PREFIX" | grep -qE '^[a-z][a-z0-9_]{0,9}$'; then
+        echo "[ERROR] Invalid KEYGATE_DB_PREFIX='$PREFIX'. Must match ^[a-z][a-z0-9_]{0,9}\$ or be empty."
+        exit 1
+    fi
+fi
+
 echo "=== KeyGate: Database Initialization ==="
 echo "Database: $DB"
 echo "SQL directory: $SQL_DIR"
+echo "Table prefix: ${PREFIX:-<none>}"
+
+# ── Substitute #__ → $PREFIX for every .sql file in $SQL_DIR ──
+# We copy to /tmp/keygate-sql/ so the original mounted volume stays
+# untouched (read-only on some setups).
+STAGING="/tmp/keygate-sql"
+mkdir -p "$STAGING"
+for f in "$SQL_DIR"/*.sql; do
+    [ -f "$f" ] || continue
+    base="$(basename "$f")"
+    # sed -i won't work on read-only mounts; pipe through to a fresh file.
+    sed "s/#__/${PREFIX}/g" "$f" > "$STAGING/$base"
+done
+SQL_DIR="$STAGING"
 
 # ── Step 0: Ensure schema_versions table exists ──────────────
 # This must run unconditionally so the tracking table is always present.
 $MYSQL_CMD < "$SQL_DIR/schema_versions_migration.sql" 2>/dev/null || true
 
 # ── Idempotent migration runner ──────────────────────────────
-# Checks schema_versions before running; records after success.
+# Checks ${PREFIX}schema_versions before running; records after success.
 run_sql() {
     local file="$SQL_DIR/$1"
     local version="$2"
@@ -36,7 +65,7 @@ run_sql() {
 
     # Check if already applied
     local applied
-    applied=$($MYSQL_CMD -N -e "SELECT COUNT(*) FROM schema_versions WHERE filename = '$1'" 2>/dev/null || echo "0")
+    applied=$($MYSQL_CMD -N -e "SELECT COUNT(*) FROM \`${SV_TABLE}\` WHERE filename = '$1'" 2>/dev/null || echo "0")
 
     if [ "$applied" -gt 0 ]; then
         echo "[SKIP] Already applied: $1"
@@ -48,11 +77,18 @@ run_sql() {
         echo "[WARN] Non-fatal errors in $1 (continuing)"
     fi
 
-    # Compute checksum and record
+    # Compute checksum from the original (un-substituted) file so the
+    # checksum is stable regardless of prefix choice. Falls back to staged
+    # copy if the original isn't accessible.
+    local original="/docker-entrypoint-initdb.d/sql/$1"
     local checksum
-    checksum=$(sha256sum "$file" | cut -d' ' -f1)
+    if [ -f "$original" ]; then
+        checksum=$(sha256sum "$original" | cut -d' ' -f1)
+    else
+        checksum=$(sha256sum "$file" | cut -d' ' -f1)
+    fi
 
-    $MYSQL_CMD -e "INSERT INTO schema_versions (version, filename, checksum) VALUES ($version, '$1', '$checksum')"
+    $MYSQL_CMD -e "INSERT INTO \`${SV_TABLE}\` (version, filename, checksum) VALUES ($version, '$1', '$checksum')"
     echo "[DONE] Applied: $1"
 }
 

@@ -43,7 +43,7 @@ function handle_list_usb_devices(PDO $pdo, array $admin_session): void {
     // Get USB device statistics
     $stmt = $pdo->query("
         SELECT device_status, COUNT(*) as count
-        FROM usb_devices
+        FROM `" . t('usb_devices') . "`
         GROUP BY device_status
     ");
     $statusCounts = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
@@ -79,7 +79,7 @@ function handle_register_usb_device(PDO $pdo, array $admin_session, ?array $json
     }
 
     // Check if technician exists and is active
-    $stmt = $pdo->prepare("SELECT technician_id, is_active FROM technicians WHERE technician_id = ?");
+    $stmt = $pdo->prepare("SELECT technician_id, is_active FROM `" . t('technicians') . "` WHERE technician_id = ?");
     $stmt->execute([$technicianId]);
     $technician = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -94,7 +94,7 @@ function handle_register_usb_device(PDO $pdo, array $admin_session, ?array $json
     }
 
     // Check if serial number already exists
-    $stmt = $pdo->prepare("SELECT device_id, device_name FROM usb_devices WHERE device_serial_number = ?");
+    $stmt = $pdo->prepare("SELECT device_id, device_name FROM `" . t('usb_devices') . "` WHERE device_serial_number = ?");
     $stmt->execute([$deviceSerial]);
     $existingDevice = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -109,7 +109,7 @@ function handle_register_usb_device(PDO $pdo, array $admin_session, ?array $json
     // Check max devices per technician limit
     $maxDevices = (int)getConfig('usb_auth_max_devices_per_tech');
     if ($maxDevices > 0) {
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM usb_devices WHERE technician_id = ? AND device_status = 'active'");
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM `" . t('usb_devices') . "` WHERE technician_id = ? AND device_status = 'active'");
         $stmt->execute([$technicianId]);
         $currentCount = $stmt->fetchColumn();
 
@@ -124,7 +124,7 @@ function handle_register_usb_device(PDO $pdo, array $admin_session, ?array $json
 
     // Insert new USB device
     $stmt = $pdo->prepare("
-        INSERT INTO usb_devices (
+        INSERT INTO `" . t('usb_devices') . "` (
             device_serial_number, device_name, technician_id,
             device_manufacturer, device_model, device_capacity_gb,
             device_description, registered_by_admin_id
@@ -166,7 +166,7 @@ function handle_update_usb_device_status(PDO $pdo, array $admin_session, ?array 
     }
 
     // Get device info before update
-    $stmt = $pdo->prepare("SELECT device_name, technician_id FROM usb_devices WHERE device_id = ?");
+    $stmt = $pdo->prepare("SELECT device_name, technician_id FROM `" . t('usb_devices') . "` WHERE device_id = ?");
     $stmt->execute([$deviceId]);
     $device = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -178,7 +178,7 @@ function handle_update_usb_device_status(PDO $pdo, array $admin_session, ?array 
     // Update device status
     if ($newStatus === 'active') {
         $stmt = $pdo->prepare("
-            UPDATE usb_devices
+            UPDATE `" . t('usb_devices') . "`
             SET device_status = 'active',
                 disabled_date = NULL,
                 disabled_by_admin_id = NULL,
@@ -190,7 +190,7 @@ function handle_update_usb_device_status(PDO $pdo, array $admin_session, ?array 
         $disableReason = $json_input['reason'] ?? null;
 
         $stmt = $pdo->prepare("
-            UPDATE usb_devices
+            UPDATE `" . t('usb_devices') . "`
             SET device_status = ?,
                 disabled_date = NOW(),
                 disabled_by_admin_id = ?,
@@ -218,7 +218,7 @@ function handle_delete_usb_device(PDO $pdo, array $admin_session, ?array $json_i
 
     $deviceId = intval($json_input['device_id'] ?? 0);
 
-    $stmt = $pdo->prepare("SELECT device_name, technician_id FROM usb_devices WHERE device_id = ?");
+    $stmt = $pdo->prepare("SELECT device_name, technician_id FROM `" . t('usb_devices') . "` WHERE device_id = ?");
     $stmt->execute([$deviceId]);
     $device = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -227,7 +227,7 @@ function handle_delete_usb_device(PDO $pdo, array $admin_session, ?array $json_i
         return;
     }
 
-    $stmt = $pdo->prepare("DELETE FROM usb_devices WHERE device_id = ?");
+    $stmt = $pdo->prepare("DELETE FROM `" . t('usb_devices') . "` WHERE device_id = ?");
     $stmt->execute([$deviceId]);
 
     logAdminActivity(

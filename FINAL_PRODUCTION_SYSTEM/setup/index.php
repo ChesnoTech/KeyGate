@@ -500,7 +500,7 @@ function setupAdminAccount() {
                    $db['username'], $db['password']);
     
     $stmt = $pdo->prepare("
-        INSERT INTO admin_users (username, full_name, email, password_hash, role, must_change_password)
+        INSERT INTO `" . t('admin_users') . "` (username, full_name, email, password_hash, role, must_change_password)
         VALUES (?, ?, ?, ?, 'super_admin', 0)
     ");
     $stmt->execute([$admin['username'], $admin['full_name'], $admin['email'], $admin['password']]);
@@ -524,7 +524,7 @@ function applySystemConfiguration() {
         ['admin_ip_whitelist_enabled', $config['enable_ip_whitelist'] ? '1' : '0'],
     ];
     
-    $stmt = $pdo->prepare("UPDATE system_config SET config_value = ? WHERE config_key = ?");
+    $stmt = $pdo->prepare("UPDATE `" . t('system_config') . "` SET config_value = ? WHERE config_key = ?");
     foreach ($configs as $cfg) {
         $stmt->execute([$cfg[1], $cfg[0]]);
     }

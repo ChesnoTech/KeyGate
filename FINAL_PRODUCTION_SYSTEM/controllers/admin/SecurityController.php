@@ -9,7 +9,7 @@ function handle_get_2fa_status(PDO $pdo, array $admin_session): void {
     try {
         $stmt = $pdo->prepare("
             SELECT totp_enabled, verified_at, backup_codes
-            FROM admin_totp_secrets
+            FROM `" . t('admin_totp_secrets') . "`
             WHERE admin_id = ?
         ");
         $stmt->execute([$admin_session['admin_id']]);
@@ -48,8 +48,8 @@ function handle_list_trusted_networks(PDO $pdo, array $admin_session): void {
 
     $stmt = $pdo->query("
         SELECT tn.*, au.username as created_by_username
-        FROM trusted_networks tn
-        LEFT JOIN admin_users au ON tn.created_by_admin_id = au.id
+        FROM `" . t('trusted_networks') . "` tn
+        LEFT JOIN `" . t('admin_users') . "` au ON tn.created_by_admin_id = au.id
         ORDER BY tn.created_at DESC
     ");
     $networks = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -78,7 +78,7 @@ function handle_add_trusted_network(PDO $pdo, array $admin_session, ?array $json
     }
 
     $stmt = $pdo->prepare("
-        INSERT INTO trusted_networks (
+        INSERT INTO `" . t('trusted_networks') . "` (
             network_name, ip_range, bypass_2fa, allow_usb_auth, description, created_by_admin_id
         ) VALUES (?, ?, ?, ?, ?, ?)
     ");
@@ -99,7 +99,7 @@ function handle_delete_trusted_network(PDO $pdo, array $admin_session, ?array $j
 
     $networkId = intval($json_input['network_id'] ?? 0);
 
-    $stmt = $pdo->prepare("SELECT network_name FROM trusted_networks WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT network_name FROM `" . t('trusted_networks') . "` WHERE id = ?");
     $stmt->execute([$networkId]);
     $network = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -108,7 +108,7 @@ function handle_delete_trusted_network(PDO $pdo, array $admin_session, ?array $j
         return;
     }
 
-    $stmt = $pdo->prepare("DELETE FROM trusted_networks WHERE id = ?");
+    $stmt = $pdo->prepare("DELETE FROM `" . t('trusted_networks') . "` WHERE id = ?");
     $stmt->execute([$networkId]);
 
     logAdminActivity(

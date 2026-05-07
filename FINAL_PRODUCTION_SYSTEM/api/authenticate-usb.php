@@ -90,8 +90,8 @@ try {
     // Find USB device by serial number
     $stmt = $pdo->prepare("
         SELECT d.*, t.full_name, t.is_active
-        FROM usb_devices d
-        INNER JOIN technicians t ON d.technician_id = t.technician_id
+        FROM `" . t('usb_devices') . "` d
+        INNER JOIN `" . t('technicians') . "` t ON d.technician_id = t.technician_id
         WHERE d.device_serial_number = ?
     ");
     $stmt->execute([$usbSerialNumber]);
@@ -165,7 +165,7 @@ try {
 
     // Insert session
     $stmt = $pdo->prepare("
-        INSERT INTO active_sessions (
+        INSERT INTO `" . t('active_sessions') . "` (
             technician_id, session_token, created_at, expires_at,
             is_active, auth_method, usb_device_id, computer_name
         ) VALUES (?, ?, NOW(), ?, 1, 'usb', ?, ?)
@@ -180,7 +180,7 @@ try {
 
     // Update USB device last used info
     $stmt = $pdo->prepare("
-        UPDATE usb_devices
+        UPDATE `" . t('usb_devices') . "`
         SET last_used_date = NOW(),
             last_used_ip = ?,
             last_used_computer_name = ?,
@@ -191,7 +191,7 @@ try {
 
     // Update technician last login
     $stmt = $pdo->prepare("
-        UPDATE technicians
+        UPDATE `" . t('technicians') . "`
         SET last_login = NOW(),
             failed_login_attempts = 0,
             locked_until = NULL
