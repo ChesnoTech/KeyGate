@@ -54,7 +54,15 @@ async function importLicensePrivateKey(pemPkcs8) {
 // Switched from HS256 → RS256 in v2.3.0. Private key lives ONLY in the
 // Worker secret store (env.LICENSE_PRIVATE_KEY, PEM PKCS#8). KeyGate PHP
 // instances verify with the matching public key embedded in source.
+//
+// P2 addition: every minted JWT carries a `jti` (JWT ID) UUID. The Worker
+// maintains a `revoked:{jti}` KV set; webhook cancellation/refund handlers
+// write to it; /api/validate checks it and returns revoked:true. PHP-side
+// then forces community fallback on next phone-home regardless of grace.
 async function createJwt(payload, env) {
+  // Stamp jti unless caller already supplied one (rebind preserves chain).
+  if (!payload.jti) payload.jti = crypto.randomUUID()
+
   const header = base64UrlEncodeString(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
   const body = base64UrlEncodeString(JSON.stringify(payload))
   const data = `${header}.${body}`
@@ -202,12 +210,19 @@ async function handleGitHubWebhook(request, env) {
   }
 
   if (action === 'cancelled') {
-    // Mark license as revoked in KV
+    // Mark license as revoked in KV + add jti to revocation set (P2).
     const existing = await env.LICENSES.get(`license:${email}`, 'json')
     if (existing) {
       existing.revoked = true
       existing.revoked_at = new Date().toISOString()
       await env.LICENSES.put(`license:${email}`, JSON.stringify(existing))
+      // Best-effort: extract jti from stored JWT and revoke it.
+      try {
+        if (existing.jwt) {
+          const p = JSON.parse(atob(existing.jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+          await revokeJti(env, p.jti, 'github_sponsorship_cancelled')
+        }
+      } catch { /* ignore */ }
     }
 
     return new Response(JSON.stringify({
@@ -279,42 +294,117 @@ async function handleRegister(request, env) {
   }), { status: 200 })
 }
 
+// ── /api/validate (P2-extended) ──
+//
+// Body: { license_key, instance_id, hardware_fingerprint?, version? }
+// Response includes everything the PHP-side phone-home decision needs:
+//   {
+//     valid, tier, revoked, expires_at, hardware_fingerprint,
+//     rebind_quota_remaining, server_time, must_rebind, jti, reason?
+//   }
+// PHP-side caches this response (HMAC-anchored) and uses it to drive
+// the 14d / 30d grace bands.
 async function handleValidate(request, env) {
-  const { license_key, instance_id } = await request.json()
-
+  const { license_key, instance_id, hardware_fingerprint } = await request.json()
   if (!license_key) {
     return new Response(JSON.stringify({ valid: false, error: 'License key required' }), { status: 400 })
   }
+  const serverTime = new Date().toISOString()
+  const nowSec = Math.floor(Date.now() / 1000)
 
-  // Decode JWT (basic check — full verification happens client-side too)
+  let payload
   try {
     const parts = license_key.split('.')
     if (parts.length !== 3) throw new Error('Invalid JWT')
-
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
-
-    // Check expiration
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-      return new Response(JSON.stringify({ valid: false, reason: 'expired' }), { status: 200 })
-    }
-
-    // Check if revoked
-    const email = payload.email
-    if (email) {
-      const stored = await env.LICENSES.get(`license:${email}`, 'json')
-      if (stored && stored.revoked) {
-        return new Response(JSON.stringify({ valid: false, reason: 'revoked' }), { status: 200 })
-      }
-    }
-
+    payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
+  } catch {
     return new Response(JSON.stringify({
-      valid: true,
-      tier: payload.tier,
-      expires_at: new Date(payload.exp * 1000).toISOString(),
-    }), { status: 200 })
-  } catch (e) {
-    return new Response(JSON.stringify({ valid: false, error: 'Invalid license format' }), { status: 400 })
+      valid: false, reason: 'invalid_format', server_time: serverTime,
+    }), { status: 400 })
   }
+
+  // Expiration first — short-circuit the lookups for stale tokens.
+  if (payload.exp && payload.exp < nowSec) {
+    return new Response(JSON.stringify({
+      valid: false, reason: 'expired',
+      tier: payload.tier, jti: payload.jti || null,
+      expires_at: new Date(payload.exp * 1000).toISOString(),
+      server_time: serverTime,
+    }), { status: 200 })
+  }
+
+  // jti revocation check.
+  if (payload.jti) {
+    const revoked = await env.LICENSES.get(`revoked:${payload.jti}`)
+    if (revoked !== null) {
+      return new Response(JSON.stringify({
+        valid: false, reason: 'revoked', revoked: true,
+        tier: payload.tier, jti: payload.jti,
+        server_time: serverTime,
+      }), { status: 200 })
+    }
+  }
+
+  // Email-anchored KV lookup — provides hwfp, rebind_count, revoked flag.
+  let stored = null
+  if (payload.email) {
+    stored = await env.LICENSES.get(`license:${payload.email}`, 'json')
+    if (stored && stored.revoked) {
+      return new Response(JSON.stringify({
+        valid: false, reason: 'revoked', revoked: true,
+        tier: payload.tier, jti: payload.jti || null,
+        server_time: serverTime,
+      }), { status: 200 })
+    }
+  }
+
+  // hwfp drift detection — must_rebind iff JWT and KV agree on fp but
+  // caller's reported hwfp differs from the bound one.
+  let mustRebind = false
+  const boundFp = (stored && stored.hardware_fingerprint) || payload.hwfp || null
+  if (boundFp && hardware_fingerprint && hardware_fingerprint !== boundFp) {
+    mustRebind = true
+  }
+
+  // Optional: instance_id mismatch is informational here; PHP enforces it.
+  void instance_id
+
+  // Rolling-window rebind quota for the email.
+  const QUOTA_LIMIT = 3
+  const QUOTA_WINDOW_S = 365 * 86400
+  let remaining = QUOTA_LIMIT
+  if (payload.email) {
+    const list = await env.LICENSES.list({ prefix: `rebind:${payload.email}:` })
+    let count = 0
+    for (const k of list.keys) {
+      const ts = Date.parse(k.name.split(':')[2]) / 1000
+      if (!isNaN(ts) && (nowSec - ts) < QUOTA_WINDOW_S) count++
+    }
+    remaining = Math.max(0, QUOTA_LIMIT - count)
+  }
+
+  return new Response(JSON.stringify({
+    valid: true,
+    tier: payload.tier,
+    revoked: false,
+    expires_at: payload.exp ? new Date(payload.exp * 1000).toISOString() : null,
+    hardware_fingerprint: boundFp,
+    rebind_quota_remaining: remaining,
+    rebind_quota_limit: QUOTA_LIMIT,
+    server_time: serverTime,
+    must_rebind: mustRebind,
+    jti: payload.jti || null,
+  }), { status: 200 })
+}
+
+// ── Helper: revoke by jti, called by webhook cancel/refund handlers ──
+async function revokeJti(env, jti, reason) {
+  if (!jti) return
+  // KV value is a small JSON tag — useful for forensics.
+  await env.LICENSES.put(`revoked:${jti}`, JSON.stringify({
+    revoked_at: new Date().toISOString(),
+    reason: reason || 'webhook_cancellation',
+  }), { expirationTtl: 10 * 365 * 86400 })
 }
 
 // ── LemonSqueezy Webhook ────────────────────────────────────
@@ -422,6 +512,12 @@ async function handleLemonSqueezyWebhook(request, env) {
       existing.revoked = true
       existing.revoked_at = new Date().toISOString()
       await env.LICENSES.put(`license:${email}`, JSON.stringify(existing))
+      try {
+        if (existing.jwt) {
+          const p = JSON.parse(atob(existing.jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+          await revokeJti(env, p.jti, eventName)
+        }
+      } catch { /* ignore */ }
     }
 
     return new Response(JSON.stringify({
@@ -512,7 +608,7 @@ async function handleTBankWebhook(request, env) {
   }
 
   if (status === 'REVERSED' || status === 'REFUNDED') {
-    // Attempt to find and revoke the license
+    // Attempt to find and revoke the license + add jti to revocation set.
     const parts = orderId.split('_')
     if (parts.length >= 2) {
       try {
@@ -523,6 +619,10 @@ async function handleTBankWebhook(request, env) {
           existing.revoked_at = new Date().toISOString()
           existing.revoke_reason = status.toLowerCase()
           await env.LICENSES.put(`license:${email}`, JSON.stringify(existing))
+          if (existing.jwt) {
+            const p = JSON.parse(atob(existing.jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+            await revokeJti(env, p.jti, `tbank_${status.toLowerCase()}`)
+          }
         }
       } catch { /* ignore parse errors */ }
     }

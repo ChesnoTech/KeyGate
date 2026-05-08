@@ -6,6 +6,7 @@
  */
 
 require_once __DIR__ . '/../../functions/license-helpers.php';
+require_once __DIR__ . '/../../functions/license-phone-home.php';
 
 // ── Get License Status (no auth required — needed for registration wall) ──
 
@@ -67,6 +68,82 @@ function handle_license_status(PDO $pdo, array $admin_session, $json_input): voi
             'rebind_quota_limit'  => 3,
             'rebind_window_days'  => 365,
         ],
+        'phonehome' => _phonehomeStatus($pdo, $license),
+    ]);
+}
+
+/**
+ * Build the phone-home status block for the License page UI (P2).
+ * Reads license_info row + grace band + cached validation response.
+ */
+function _phonehomeStatus(PDO $pdo, array $effective): array {
+    try {
+        $stmt = $pdo->query("SELECT last_validated_at, validation_failure_count,
+                                     last_validation_error, server_time_drift_seconds,
+                                     clock_drift_strikes, current_jti
+                              FROM `" . t('license_info') . "`
+                              WHERE is_active = 1 ORDER BY id DESC LIMIT 1");
+        $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    } catch (Exception $e) {
+        return ['available' => false];
+    }
+    $grace = function_exists('checkPhoneHomeGrace')
+        ? checkPhoneHomeGrace($row)
+        : ['band' => 'ok', 'days_since' => 0, 'banner' => null];
+
+    return [
+        'available'                 => true,
+        'last_validated_at'         => $row['last_validated_at'] ?? null,
+        'failure_count'             => (int)($row['validation_failure_count'] ?? 0),
+        'last_error'                => $row['last_validation_error'] ?? null,
+        'server_time_drift_seconds' => (int)($row['server_time_drift_seconds'] ?? 0),
+        'clock_drift_strikes'       => (int)($row['clock_drift_strikes'] ?? 0),
+        'current_jti'               => $row['current_jti'] ?? null,
+        'grace_band'                => $grace['band'],
+        'grace_days'                => $grace['days_since'],
+        'grace_banner'              => $grace['banner'],
+        'grace_banner_threshold_d'  => 14,
+        'grace_hard_threshold_d'    => 30,
+        // Surface the P2 phone-home banner from getEffectiveLicense() so the
+        // UI can show the same message even after community degrade.
+        'effective_band'            => $effective['phonehome_band'] ?? null,
+        'effective_banner'          => $effective['phonehome_banner'] ?? null,
+    ];
+}
+
+// ── Force phone-home validate (P2) ──
+//
+// Body: {} — admin clicks "Validate now" in the Phone-home card.
+// Bypasses the 24h throttle and synchronously calls the Worker.
+function handle_license_force_validate(PDO $pdo, array $admin_session, $json_input): void {
+    requirePermission('system_settings', $admin_session);
+
+    $resp = phoneHomeValidate($pdo, /*force=*/true);
+    if ($resp === null) {
+        jsonResponse([
+            'success' => false,
+            'error'   => 'Phone-home failed (network or no active license)',
+        ]);
+        return;
+    }
+
+    logAdminActivity(
+        $admin_session['admin_id'],
+        $admin_session['id'] ?? 0,
+        'LICENSE_FORCE_VALIDATE',
+        'Forced phone-home validate (jti=' . substr((string)($resp['jti'] ?? ''), 0, 8) . ')'
+    );
+
+    jsonResponse([
+        'success'      => true,
+        'valid'        => !empty($resp['valid']),
+        'tier'         => $resp['tier']      ?? null,
+        'revoked'      => !empty($resp['revoked']),
+        'must_rebind'  => !empty($resp['must_rebind']),
+        'expires_at'   => $resp['expires_at'] ?? null,
+        'jti'          => $resp['jti']        ?? null,
+        'server_time'  => $resp['server_time'] ?? null,
+        'message'      => 'Validated against license server',
     ]);
 }
 

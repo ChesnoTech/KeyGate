@@ -45,6 +45,7 @@ import {
   useMigrateLegacyLicense,
   useRedetectHardware,
   useRebindLicense,
+  useForceValidate,
 } from '@/hooks/use-license'
 
 const TIER_COLORS: Record<string, string> = {
@@ -80,10 +81,12 @@ export function LicensePage() {
   const migrateMut = useMigrateLegacyLicense()
   const redetectMut = useRedetectHardware()
   const rebindMut = useRebindLicense()
+  const forceValidateMut = useForceValidate()
 
   const license = statusQuery.data?.license
   const usage = statusQuery.data?.usage
   const hardware = statusQuery.data?.hardware
+  const phonehome = statusQuery.data?.phonehome
 
   const handleRegister = async () => {
     if (!licenseKey.trim()) return
@@ -130,6 +133,10 @@ export function LicensePage() {
     const reason = rebindReason.trim()
     const result = await rebindMut.mutateAsync(reason || undefined)
     if (result.success) setRebindReason('')
+  }
+
+  const handleForceValidate = async () => {
+    await forceValidateMut.mutateAsync()
   }
 
   if (statusQuery.isLoading) {
@@ -657,6 +664,82 @@ export function LicensePage() {
                   >
                     {rebindMut.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
                     {t('sub.hw_rebind', 'Rebind to current hardware')}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* P2: Phone-home / revocation / clock-drift status */}
+          {phonehome?.available && (
+            <Card className={
+              phonehome.grace_band === 'expired' || phonehome.effective_band === 'expired'
+                ? 'border-red-300 dark:border-red-700'
+                : phonehome.grace_band === 'banner'
+                  ? 'border-amber-300 dark:border-amber-700'
+                  : ''
+            }>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  {phonehome.grace_band === 'expired' || phonehome.effective_band === 'expired' ? (
+                    <AlertTriangle className="h-4 w-4 text-red-600" />
+                  ) : phonehome.grace_band === 'banner' ? (
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  ) : (
+                    <Globe className="h-4 w-4" />
+                  )}
+                  {t('sub.phonehome_title', 'License validation (phone-home)')}
+                </CardTitle>
+                <CardDescription>
+                  {phonehome.grace_banner || phonehome.effective_banner ||
+                    t('sub.phonehome_desc', 'Daily check against the issuer. 14-day grace if offline; 30-day hard cutoff.')}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 text-xs">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div>
+                    <div className="text-muted-foreground">{t('sub.phonehome_last', 'Last validated')}</div>
+                    <div className="font-mono">
+                      {phonehome.last_validated_at
+                        ? new Date(phonehome.last_validated_at).toLocaleString()
+                        : t('sub.phonehome_never', 'never')}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">{t('sub.phonehome_failures', 'Recent failures')}</div>
+                    <div className="font-mono">{phonehome.failure_count ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">{t('sub.phonehome_drift', 'Clock drift (sec)')}</div>
+                    <div className="font-mono">
+                      {phonehome.server_time_drift_seconds ?? 0}
+                      {(phonehome.clock_drift_strikes ?? 0) > 0 &&
+                        ` · strikes: ${phonehome.clock_drift_strikes}`}
+                    </div>
+                  </div>
+                </div>
+
+                {phonehome.last_error && (
+                  <div className="text-amber-700 dark:text-amber-400 font-mono text-[11px] break-all">
+                    {t('sub.phonehome_last_error', 'Last error')}: {phonehome.last_error}
+                  </div>
+                )}
+
+                {phonehome.current_jti && (
+                  <div className="text-muted-foreground">
+                    JTI: <span className="font-mono">{phonehome.current_jti}</span>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleForceValidate}
+                    disabled={forceValidateMut.isPending || !license?.is_registered}
+                  >
+                    {forceValidateMut.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                    {t('sub.phonehome_force', 'Validate now')}
                   </Button>
                 </div>
               </CardContent>

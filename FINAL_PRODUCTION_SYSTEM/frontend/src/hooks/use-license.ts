@@ -10,6 +10,7 @@ import {
   migrateLegacyLicense,
   redetectHardware,
   rebindLicense,
+  forceValidate,
 } from '@/api/license'
 
 export function useLicenseStatus() {
@@ -122,6 +123,32 @@ export function useRebindLicense() {
         toast.success(data.message || t('license.rebound', 'License rebound to current hardware'))
       } else {
         toast.error(data.error || t('license.rebind_failed', 'Rebind failed'))
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+// P2: force phone-home validate now (bypass 24h throttle).
+export function useForceValidate() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: () => forceValidate(),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['license-status'] })
+      if (data.success) {
+        if (data.revoked) {
+          toast.error(t('license.validate_revoked', 'License revoked by issuer'))
+        } else if (data.must_rebind) {
+          toast.warning(t('license.validate_rebind', 'Hardware rebind required'))
+        } else if (data.valid) {
+          toast.success(t('license.validate_ok', 'Validated successfully'))
+        } else {
+          toast.error(t('license.validate_failed', 'Validation failed'))
+        }
+      } else {
+        toast.error(data.error || t('license.validate_failed', 'Validation failed'))
       }
     },
     onError: (e: Error) => toast.error(e.message),

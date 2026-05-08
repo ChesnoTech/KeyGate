@@ -341,6 +341,7 @@ $action_registry = [
     'license_migrate'          => ['LicenseController.php', 'handle_license_migrate',        true,  true],
     'license_redetect_hw'      => ['LicenseController.php', 'handle_license_redetect_hw',    true,  true],
     'license_rebind'           => ['LicenseController.php', 'handle_license_rebind',         true,  true],
+    'license_force_validate'   => ['LicenseController.php', 'handle_license_force_validate', true,  true],
 
     // system upgrade
     'upgrade_check_github'     => ['UpgradeController.php', 'handle_upgrade_check_github',     false, true],

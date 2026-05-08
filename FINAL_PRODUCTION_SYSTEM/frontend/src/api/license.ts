@@ -43,11 +43,30 @@ export interface LicenseHardware {
   rebind_window_days: number
 }
 
+// P2: phone-home status surfaced to the License page.
+export interface LicensePhoneHome {
+  available: boolean
+  last_validated_at?: string | null
+  failure_count?: number
+  last_error?: string | null
+  server_time_drift_seconds?: number
+  clock_drift_strikes?: number
+  current_jti?: string | null
+  grace_band?: 'ok' | 'banner' | 'expired'
+  grace_days?: number
+  grace_banner?: string | null
+  grace_banner_threshold_d?: number
+  grace_hard_threshold_d?: number
+  effective_band?: string | null
+  effective_banner?: string | null
+}
+
 export interface LicenseStatusResponse {
   success: boolean
   license: LicenseInfo & { rebind_required?: boolean; rebind_grace_ends?: string | null }
   usage: LicenseUsage
   hardware?: LicenseHardware
+  phonehome?: LicensePhoneHome
 }
 
 export function getLicenseStatus() {
@@ -131,4 +150,20 @@ export function rebindLicense(reason?: string) {
     message?: string
     error?: string
   }>('license_rebind', { reason: reason || '' })
+}
+
+// P2: force a phone-home validate now (bypass 24h throttle).
+export function forceValidate() {
+  return apiPostJson<{
+    success: boolean
+    valid?: boolean
+    tier?: string
+    revoked?: boolean
+    must_rebind?: boolean
+    expires_at?: string | null
+    jti?: string | null
+    server_time?: string | null
+    message?: string
+    error?: string
+  }>('license_force_validate')
 }
