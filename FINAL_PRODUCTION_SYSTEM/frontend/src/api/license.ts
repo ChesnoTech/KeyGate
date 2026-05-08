@@ -32,10 +32,22 @@ export interface LicenseUsage {
   keys: number
 }
 
+// P1: hardware fingerprint metadata exposed to the License page so the
+// admin can see current vs. bound state and the rebind quota counter.
+export interface LicenseHardware {
+  current_fingerprint: string
+  components: Record<string, string>
+  bound_fingerprint: string
+  rebind_count: number
+  rebind_quota_limit: number
+  rebind_window_days: number
+}
+
 export interface LicenseStatusResponse {
   success: boolean
-  license: LicenseInfo
+  license: LicenseInfo & { rebind_required?: boolean; rebind_grace_ends?: string | null }
   usage: LicenseUsage
+  hardware?: LicenseHardware
 }
 
 export function getLicenseStatus() {
@@ -90,4 +102,33 @@ export function migrateLegacyLicense(licenseKey: string) {
     message?: string
     error?: string
   }>('license_migrate', { license_key: licenseKey })
+}
+
+// P1: re-detect the server's hardware fingerprint (admin-triggered, force
+// refresh of the cached system_config('server_hwfp')).
+export function redetectHardware() {
+  return apiPostJson<{
+    success: boolean
+    fingerprint?: string
+    components?: Record<string, string>
+    computed_at?: string
+    error?: string
+  }>('license_redetect_hw')
+}
+
+// P1: rebind the active license to the current host's hardware
+// fingerprint. Worker enforces 3-per-365-day quota.
+export function rebindLicense(reason?: string) {
+  return apiPostJson<{
+    success: boolean
+    tier?: string
+    rebind_count?: number
+    rebind_quota_remaining?: number
+    rebind_quota_limit?: number
+    quota_window_days?: number
+    quota_limit?: number
+    retry_after_iso?: string
+    message?: string
+    error?: string
+  }>('license_rebind', { reason: reason || '' })
 }

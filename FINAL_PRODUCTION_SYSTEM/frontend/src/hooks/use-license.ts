@@ -8,6 +8,8 @@ import {
   generateDevLicense,
   claimLicense,
   migrateLegacyLicense,
+  redetectHardware,
+  rebindLicense,
 } from '@/api/license'
 
 export function useLicenseStatus() {
@@ -85,6 +87,41 @@ export function useMigrateLegacyLicense() {
       qc.invalidateQueries({ queryKey: ['license-status'] })
       if (data.success) {
         toast.success(data.message || t('license.migrated', 'License migrated to RS256'))
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+// P1: re-detect server hardware fingerprint (force refresh of cached value).
+export function useRedetectHardware() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: () => redetectHardware(),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['license-status'] })
+      if (data.success) {
+        toast.success(t('license.hw_redetected', 'Hardware fingerprint re-detected'))
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+// P1: rebind license to current host's hardware fingerprint.
+// Worker enforces 3 rebinds per rolling 365 days.
+export function useRebindLicense() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: (reason?: string) => rebindLicense(reason),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['license-status'] })
+      if (data.success) {
+        toast.success(data.message || t('license.rebound', 'License rebound to current hardware'))
+      } else {
+        toast.error(data.error || t('license.rebind_failed', 'Rebind failed'))
       }
     },
     onError: (e: Error) => toast.error(e.message),

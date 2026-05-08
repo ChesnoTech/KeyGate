@@ -34,6 +34,7 @@ import {
   Clock,
   Zap,
   Check,
+  AlertTriangle,
 } from 'lucide-react'
 import {
   useLicenseStatus,
@@ -42,6 +43,8 @@ import {
   useGenerateDevLicense,
   useClaimLicense,
   useMigrateLegacyLicense,
+  useRedetectHardware,
+  useRebindLicense,
 } from '@/hooks/use-license'
 
 const TIER_COLORS: Record<string, string> = {
@@ -67,6 +70,7 @@ export function LicensePage() {
   const [claimEmail, setClaimEmail] = useState('')
   const [claimSponsor, setClaimSponsor] = useState('')
   const [legacyKey, setLegacyKey] = useState('')
+  const [rebindReason, setRebindReason] = useState('')
 
   const statusQuery = useLicenseStatus()
   const registerMut = useRegisterLicense()
@@ -74,9 +78,12 @@ export function LicensePage() {
   const devGenMut = useGenerateDevLicense()
   const claimMut = useClaimLicense()
   const migrateMut = useMigrateLegacyLicense()
+  const redetectMut = useRedetectHardware()
+  const rebindMut = useRebindLicense()
 
   const license = statusQuery.data?.license
   const usage = statusQuery.data?.usage
+  const hardware = statusQuery.data?.hardware
 
   const handleRegister = async () => {
     if (!licenseKey.trim()) return
@@ -113,6 +120,16 @@ export function LicensePage() {
     if (result.success) {
       setLegacyKey('')
     }
+  }
+
+  const handleRedetectHw = async () => {
+    await redetectMut.mutateAsync()
+  }
+
+  const handleRebind = async () => {
+    const reason = rebindReason.trim()
+    const result = await rebindMut.mutateAsync(reason || undefined)
+    if (result.success) setRebindReason('')
   }
 
   if (statusQuery.isLoading) {
@@ -573,6 +590,78 @@ export function LicensePage() {
               </Button>
             </CardContent>
           </Card>
+
+          {/* P1: Hardware fingerprint binding + rebind quota */}
+          {hardware && (
+            <Card className={license?.rebind_required ? 'border-amber-300 dark:border-amber-700' : ''}>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  {license?.rebind_required ? (
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  ) : (
+                    <Shield className="h-4 w-4" />
+                  )}
+                  {t('sub.hw_title', 'Hardware binding')}
+                </CardTitle>
+                <CardDescription>
+                  {license?.rebind_required
+                    ? t('sub.hw_rebind_required', 'License is bound to different hardware. Click Rebind to anchor to current host. Grace ends on') +
+                      ` ${license.rebind_grace_ends ? new Date(license.rebind_grace_ends).toLocaleString() : '—'}`
+                    : t('sub.hw_desc', 'Each license is anchored to the host hardware fingerprint. Quota: 3 rebinds per 365 days.')}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                  <div className="space-y-1">
+                    <div className="text-muted-foreground">{t('sub.hw_current', 'Current host fingerprint')}</div>
+                    <div className="font-mono break-all bg-muted/50 p-2 rounded">
+                      {hardware.current_fingerprint || '—'}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-muted-foreground">{t('sub.hw_bound', 'Bound by license')}</div>
+                    <div className="font-mono break-all bg-muted/50 p-2 rounded">
+                      {hardware.bound_fingerprint || t('sub.hw_unbound', 'unbound')}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-xs text-muted-foreground">
+                  {t('sub.hw_quota', 'Rebinds used')}: <strong>{hardware.rebind_count}</strong> /{' '}
+                  {hardware.rebind_quota_limit} ({hardware.rebind_window_days}d)
+                </div>
+
+                <input
+                  type="text"
+                  className="w-full p-2 text-sm bg-muted/50 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder={t('sub.rebind_reason_placeholder', 'Reason (e.g. motherboard RMA, NIC swap)')}
+                  value={rebindReason}
+                  onChange={(e) => setRebindReason(e.target.value)}
+                />
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRedetectHw}
+                    disabled={redetectMut.isPending}
+                  >
+                    {redetectMut.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                    {t('sub.hw_redetect', 'Re-detect hardware')}
+                  </Button>
+                  <Button
+                    onClick={handleRebind}
+                    disabled={rebindMut.isPending || !license?.is_registered}
+                    variant={license?.rebind_required ? 'default' : 'outline'}
+                    size="sm"
+                  >
+                    {rebindMut.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                    {t('sub.hw_rebind', 'Rebind to current hardware')}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Dev Tools (localhost only) */}
           {(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
