@@ -27,6 +27,10 @@ define('KEYGATE_SPONSORS_URL', 'https://github.com/sponsors/ChesnoTech');
 require_once __DIR__ . '/hardware-fingerprint.php';
 define('KEYGATE_REBIND_GRACE_SECONDS', 7 * 86400);
 
+// P2: phone-home grace bands (14d soft / 30d hard) live in license-phone-home.php.
+// Required there too, but loaded lazily from getEffectiveLicense() to avoid a
+// circular include — this file is required by license-phone-home.php.
+
 // ── License Verification Public Key (RS256, PKCS#8 SPKI) ─────
 // Generated 2026-05-08 alongside Worker secret LICENSE_PRIVATE_KEY.
 // Safe to commit — public key is only useful for verification.
@@ -396,6 +400,53 @@ function getEffectiveLicense(PDO $pdo): array {
             // Hardware-fingerprint helper unavailable (PHP module missing,
             // unsupported OS) — fail open, log, continue with bound tier.
             error_log("KeyGate: hwfp comparison threw: " . $e->getMessage());
+        }
+    }
+
+    // ── 5. Phone-home grace bands (P2) ────────────────────────
+    // Lazy-include phone-home helper (avoids circular require at file top).
+    $phPath = __DIR__ . '/license-phone-home.php';
+    if (is_file($phPath)) {
+        @include_once $phPath;
+        if (function_exists('checkPhoneHomeGrace') && function_exists('firePhoneHomeAsync')) {
+            $grace = checkPhoneHomeGrace($license);
+            if ($grace['band'] === 'expired') {
+                // >30d since last successful validate → degrade to community.
+                try {
+                    $stmt = $pdo->prepare("UPDATE `" . t('license_info') . "`
+                        SET validation_status = 'expired',
+                            last_validation_error = ?
+                        WHERE id = ?");
+                    $stmt->execute([$grace['banner'], $license['id']]);
+                } catch (Exception $e) { /* legacy */ }
+                return _communityLicense(true, [
+                    'phonehome_band'   => 'expired',
+                    'phonehome_banner' => $grace['banner'],
+                    'phonehome_days'   => $grace['days_since'],
+                ]);
+            }
+            // Fire async phone-home (throttled internally to once per 24h).
+            try { firePhoneHomeAsync($pdo); } catch (Exception $e) { /* fail open */ }
+
+            $extra = [];
+            if ($grace['band'] === 'banner') {
+                $extra = [
+                    'phonehome_band'   => 'banner',
+                    'phonehome_banner' => $grace['banner'],
+                    'phonehome_days'   => $grace['days_since'],
+                ];
+            }
+            return array_merge([
+                'tier'             => $tier,
+                'label'            => $tierDef['label'],
+                'max_technicians'  => (int)$license['max_technicians'],
+                'max_keys'         => (int)$license['max_keys'],
+                'features'         => $tierDef['features'],
+                'licensed_to'      => $license['licensed_to_email'] ?? '',
+                'expires_at'       => $license['expires_at'],
+                'is_registered'    => true,
+                'instance_id'      => $license['instance_id'],
+            ], $extra);
         }
     }
 
