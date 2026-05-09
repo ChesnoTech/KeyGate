@@ -27,7 +27,7 @@ main_v3.PS1                                 │   ├── get-key.php
   │                                         │   ├── LicenseController.php
   ├─ Network Diagnostics (MAS-style)        │   └── ... (21 total)
   │   (4-host ping + COM fallback           │
-  │    + MS licensing server test)           ├── admin_v2.php        ← 85 action router
+  │    + MS licensing server test)           ├── admin_v2.php        ← 90 action router
   │                                         │
   ├─ QC Compliance ────────POST──►          ├── functions/           ← 23 helper modules
   │                                         │   ├── email-helpers.php
@@ -70,12 +70,12 @@ CLOUDFLARE WORKER (License Server)
 |--------|-------|
 | Admin Controllers | 21 |
 | API Endpoints | 19 |
-| Admin Actions | 85 |
+| Admin Actions | 90 |
 | Frontend Pages | 24 |
 | Frontend Hooks | 22 |
 | Frontend API Files | 21 |
-| PHP Helper Modules | 23 |
-| DB Migrations | 26 |
+| PHP Helper Modules | 25 |
+| DB Migrations | 29 |
 | Languages | 18 |
 | Sidebar Nav Items | 30 |
 
@@ -191,8 +191,11 @@ CLOUDFLARE WORKER (License Server)
 | 24 | usb_devices_migration.sql | USB device registry |
 | 25 | task_pipeline_migration.sql | Task templates + execution logs |
 | 26 | production_tracking_migration.sql | CBR reports, key pools, work orders, DPK batches |
+| 27 | license_p0_hmac_migration.sql | License row integrity HMAC (P0 anti-piracy) |
+| 28 | license_p1_hwbind_migration.sql | Hardware-bound licensing + 3-per-365 rebind quota (P1) |
+| 29 | license_p2_phonehome_migration.sql | Phone-home grace + revocation jti + clock-drift (P2) |
 
-### Helper Modules (23 files in `functions/`)
+### Helper Modules (25 files in `functions/`)
 | File | Purpose |
 |------|---------|
 | acl.php | Permission checking, role management |
@@ -205,7 +208,9 @@ CLOUDFLARE WORKER (License Server)
 | i18n.php | Translation loading |
 | integration-helpers.php | Event dispatch to osTicket / 1C |
 | key-helpers.php | Key status, recycling logic |
-| license-helpers.php | JWT license validation, tier enforcement |
+| license-helpers.php | JWT license validation, tier enforcement, RS256 verify, row HMAC, hwfp gate |
+| license-phone-home.php | Phone-home validate, grace bands, clock drift, revocation handling (P2) |
+| hardware-fingerprint.php | Cross-OS server hardware fingerprint (machine-id + system UUID + MAC + volume UUID) (P1) |
 | logger.php | Structured logging |
 | network-utils.php | IP whitelisting, trusted networks |
 | push-helpers.php | VAPID push notifications |
