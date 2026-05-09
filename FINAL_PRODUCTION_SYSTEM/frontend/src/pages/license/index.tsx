@@ -34,12 +34,18 @@ import {
   Clock,
   Zap,
   Check,
+  AlertTriangle,
 } from 'lucide-react'
 import {
   useLicenseStatus,
   useRegisterLicense,
   useDeactivateLicense,
   useGenerateDevLicense,
+  useClaimLicense,
+  useMigrateLegacyLicense,
+  useRedetectHardware,
+  useRebindLicense,
+  useForceValidate,
 } from '@/hooks/use-license'
 
 const TIER_COLORS: Record<string, string> = {
@@ -61,14 +67,26 @@ export function LicensePage() {
   const [activeTab, setActiveTab] = useState<Tab>('plan')
   const [licenseKey, setLicenseKey] = useState('')
   const [devLicenseKey, setDevLicenseKey] = useState('')
+  const [devToken, setDevToken] = useState('')
+  const [claimEmail, setClaimEmail] = useState('')
+  const [claimSponsor, setClaimSponsor] = useState('')
+  const [legacyKey, setLegacyKey] = useState('')
+  const [rebindReason, setRebindReason] = useState('')
 
   const statusQuery = useLicenseStatus()
   const registerMut = useRegisterLicense()
   const deactivateMut = useDeactivateLicense()
   const devGenMut = useGenerateDevLicense()
+  const claimMut = useClaimLicense()
+  const migrateMut = useMigrateLegacyLicense()
+  const redetectMut = useRedetectHardware()
+  const rebindMut = useRebindLicense()
+  const forceValidateMut = useForceValidate()
 
   const license = statusQuery.data?.license
   const usage = statusQuery.data?.usage
+  const hardware = statusQuery.data?.hardware
+  const phonehome = statusQuery.data?.phonehome
 
   const handleRegister = async () => {
     if (!licenseKey.trim()) return
@@ -77,10 +95,48 @@ export function LicensePage() {
   }
 
   const handleGenerateDev = async (tier: string) => {
-    const result = await devGenMut.mutateAsync(tier)
+    if (!devToken.trim()) {
+      alert('DEV_TOKEN required. Set it via `wrangler secret put DEV_TOKEN` on the Worker, then paste here.')
+      return
+    }
+    const result = await devGenMut.mutateAsync({ tier, devToken: devToken.trim() })
     if (result.license_key) {
       setDevLicenseKey(result.license_key)
     }
+  }
+
+  const handleClaim = async () => {
+    if (!claimEmail.trim()) return
+    const result = await claimMut.mutateAsync({
+      email: claimEmail.trim(),
+      sponsorLogin: claimSponsor.trim() || undefined,
+    })
+    if (result.license_key) {
+      setClaimEmail('')
+      setClaimSponsor('')
+    }
+  }
+
+  const handleMigrateLegacy = async () => {
+    if (!legacyKey.trim()) return
+    const result = await migrateMut.mutateAsync(legacyKey.trim())
+    if (result.success) {
+      setLegacyKey('')
+    }
+  }
+
+  const handleRedetectHw = async () => {
+    await redetectMut.mutateAsync()
+  }
+
+  const handleRebind = async () => {
+    const reason = rebindReason.trim()
+    const result = await rebindMut.mutateAsync(reason || undefined)
+    if (result.success) setRebindReason('')
+  }
+
+  const handleForceValidate = async () => {
+    await forceValidateMut.mutateAsync()
   }
 
   if (statusQuery.isLoading) {
@@ -479,7 +535,7 @@ export function LicensePage() {
             <CardContent className="space-y-3">
               <textarea
                 className="w-full h-24 p-3 text-xs font-mono bg-muted/50 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="eyJhbGciOiJIUzI1NiIs..."
+                placeholder="eyJhbGciOiJSUzI1NiIs..."
                 value={licenseKey}
                 onChange={(e) => setLicenseKey(e.target.value)}
               />
@@ -489,6 +545,206 @@ export function LicensePage() {
               </Button>
             </CardContent>
           </Card>
+
+          {/* P0: Claim purchase (GitHub Sponsors / pending payments) */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('sub.claim_title', 'Claim a GitHub Sponsors / pending purchase')}</CardTitle>
+              <CardDescription>
+                {t('sub.claim_desc', 'If you sponsored ChesnoTech on GitHub or your LemonSqueezy/T-Bank checkout did not include your instance ID, claim your license here. The server binds it to this installation and issues your key.')}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <input
+                type="email"
+                className="w-full p-2 text-sm bg-muted/50 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder={t('sub.claim_email', 'Email used at checkout / GitHub sponsor email')}
+                value={claimEmail}
+                onChange={(e) => setClaimEmail(e.target.value)}
+              />
+              <input
+                type="text"
+                className="w-full p-2 text-sm bg-muted/50 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder={t('sub.claim_sponsor', 'GitHub sponsor login (optional)')}
+                value={claimSponsor}
+                onChange={(e) => setClaimSponsor(e.target.value)}
+              />
+              <Button onClick={handleClaim} disabled={!claimEmail.trim() || claimMut.isPending} variant="outline">
+                {claimMut.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {t('sub.claim_button', 'Claim & bind to this install')}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* P0: Migrate legacy HS256 license */}
+          <Card className="border-dashed">
+            <CardHeader>
+              <CardTitle className="text-base">{t('sub.migrate_title', 'Migrate legacy license (pre-v2.3)')}</CardTitle>
+              <CardDescription>
+                {t('sub.migrate_desc', 'If you have a license key issued before May 2026 (HS256 algorithm), use this to upgrade it to the new RS256 format. Available until 2026-08-08.')}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <textarea
+                className="w-full h-20 p-3 text-xs font-mono bg-muted/50 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder={t('sub.migrate_placeholder', 'Paste the legacy HS256 license key...')}
+                value={legacyKey}
+                onChange={(e) => setLegacyKey(e.target.value)}
+              />
+              <Button onClick={handleMigrateLegacy} disabled={!legacyKey.trim() || migrateMut.isPending} variant="outline">
+                {migrateMut.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {t('sub.migrate_button', 'Migrate to RS256 & activate')}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* P1: Hardware fingerprint binding + rebind quota */}
+          {hardware && (
+            <Card className={license?.rebind_required ? 'border-amber-300 dark:border-amber-700' : ''}>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  {license?.rebind_required ? (
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  ) : (
+                    <Shield className="h-4 w-4" />
+                  )}
+                  {t('sub.hw_title', 'Hardware binding')}
+                </CardTitle>
+                <CardDescription>
+                  {license?.rebind_required
+                    ? t('sub.hw_rebind_required', 'License is bound to different hardware. Click Rebind to anchor to current host. Grace ends on') +
+                      ` ${license.rebind_grace_ends ? new Date(license.rebind_grace_ends).toLocaleString() : '—'}`
+                    : t('sub.hw_desc', 'Each license is anchored to the host hardware fingerprint. Quota: 3 rebinds per 365 days.')}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                  <div className="space-y-1">
+                    <div className="text-muted-foreground">{t('sub.hw_current', 'Current host fingerprint')}</div>
+                    <div className="font-mono break-all bg-muted/50 p-2 rounded">
+                      {hardware.current_fingerprint || '—'}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-muted-foreground">{t('sub.hw_bound', 'Bound by license')}</div>
+                    <div className="font-mono break-all bg-muted/50 p-2 rounded">
+                      {hardware.bound_fingerprint || t('sub.hw_unbound', 'unbound')}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-xs text-muted-foreground">
+                  {t('sub.hw_quota', 'Rebinds used')}: <strong>{hardware.rebind_count}</strong> /{' '}
+                  {hardware.rebind_quota_limit} ({hardware.rebind_window_days}d)
+                </div>
+
+                <input
+                  type="text"
+                  className="w-full p-2 text-sm bg-muted/50 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder={t('sub.rebind_reason_placeholder', 'Reason (e.g. motherboard RMA, NIC swap)')}
+                  value={rebindReason}
+                  onChange={(e) => setRebindReason(e.target.value)}
+                />
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRedetectHw}
+                    disabled={redetectMut.isPending}
+                  >
+                    {redetectMut.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                    {t('sub.hw_redetect', 'Re-detect hardware')}
+                  </Button>
+                  <Button
+                    onClick={handleRebind}
+                    disabled={rebindMut.isPending || !license?.is_registered}
+                    variant={license?.rebind_required ? 'default' : 'outline'}
+                    size="sm"
+                  >
+                    {rebindMut.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                    {t('sub.hw_rebind', 'Rebind to current hardware')}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* P2: Phone-home / revocation / clock-drift status */}
+          {phonehome?.available && (
+            <Card className={
+              phonehome.grace_band === 'expired' || phonehome.effective_band === 'expired'
+                ? 'border-red-300 dark:border-red-700'
+                : phonehome.grace_band === 'banner'
+                  ? 'border-amber-300 dark:border-amber-700'
+                  : ''
+            }>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  {phonehome.grace_band === 'expired' || phonehome.effective_band === 'expired' ? (
+                    <AlertTriangle className="h-4 w-4 text-red-600" />
+                  ) : phonehome.grace_band === 'banner' ? (
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  ) : (
+                    <Globe className="h-4 w-4" />
+                  )}
+                  {t('sub.phonehome_title', 'License validation (phone-home)')}
+                </CardTitle>
+                <CardDescription>
+                  {phonehome.grace_banner || phonehome.effective_banner ||
+                    t('sub.phonehome_desc', 'Daily check against the issuer. 14-day grace if offline; 30-day hard cutoff.')}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 text-xs">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div>
+                    <div className="text-muted-foreground">{t('sub.phonehome_last', 'Last validated')}</div>
+                    <div className="font-mono">
+                      {phonehome.last_validated_at
+                        ? new Date(phonehome.last_validated_at).toLocaleString()
+                        : t('sub.phonehome_never', 'never')}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">{t('sub.phonehome_failures', 'Recent failures')}</div>
+                    <div className="font-mono">{phonehome.failure_count ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">{t('sub.phonehome_drift', 'Clock drift (sec)')}</div>
+                    <div className="font-mono">
+                      {phonehome.server_time_drift_seconds ?? 0}
+                      {(phonehome.clock_drift_strikes ?? 0) > 0 &&
+                        ` · strikes: ${phonehome.clock_drift_strikes}`}
+                    </div>
+                  </div>
+                </div>
+
+                {phonehome.last_error && (
+                  <div className="text-amber-700 dark:text-amber-400 font-mono text-[11px] break-all">
+                    {t('sub.phonehome_last_error', 'Last error')}: {phonehome.last_error}
+                  </div>
+                )}
+
+                {phonehome.current_jti && (
+                  <div className="text-muted-foreground">
+                    JTI: <span className="font-mono">{phonehome.current_jti}</span>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleForceValidate}
+                    disabled={forceValidateMut.isPending || !license?.is_registered}
+                  >
+                    {forceValidateMut.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                    {t('sub.phonehome_force', 'Validate now')}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Dev Tools (localhost only) */}
           {(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
@@ -502,11 +758,18 @@ export function LicensePage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
+                <input
+                  type="password"
+                  className="w-full p-2 text-sm bg-muted/50 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder={t('sub.dev_token_placeholder', 'DEV_TOKEN (matches Worker secret)')}
+                  value={devToken}
+                  onChange={(e) => setDevToken(e.target.value)}
+                />
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handleGenerateDev('pro')} disabled={devGenMut.isPending}>
+                  <Button variant="outline" size="sm" onClick={() => handleGenerateDev('pro')} disabled={devGenMut.isPending || !devToken.trim()}>
                     {t('sub.gen_pro', 'Generate Pro')}
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleGenerateDev('enterprise')} disabled={devGenMut.isPending}>
+                  <Button variant="outline" size="sm" onClick={() => handleGenerateDev('enterprise')} disabled={devGenMut.isPending || !devToken.trim()}>
                     {t('sub.gen_enterprise', 'Generate Enterprise')}
                   </Button>
                 </div>

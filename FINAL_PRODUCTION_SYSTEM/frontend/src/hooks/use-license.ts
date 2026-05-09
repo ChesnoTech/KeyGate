@@ -6,6 +6,11 @@ import {
   registerLicense,
   deactivateLicense,
   generateDevLicense,
+  claimLicense,
+  migrateLegacyLicense,
+  redetectHardware,
+  rebindLicense,
+  forceValidate,
 } from '@/api/license'
 
 export function useLicenseStatus() {
@@ -47,10 +52,103 @@ export function useDeactivateLicense() {
 export function useGenerateDevLicense() {
   const { t } = useTranslation()
   return useMutation({
-    mutationFn: (tier: string) => generateDevLicense(tier),
+    mutationFn: ({ tier, devToken }: { tier: string; devToken: string }) =>
+      generateDevLicense(tier, devToken),
     onSuccess: (data) => {
       if (data.success) {
         toast.success(data.message || t('license.dev_generated', 'Dev license generated'))
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+export function useClaimLicense() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: ({ email, sponsorLogin }: { email: string; sponsorLogin?: string }) =>
+      claimLicense(email, sponsorLogin),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['license-status'] })
+      if (data.success) {
+        toast.success(data.message || t('license.claimed', 'License claimed and activated'))
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+export function useMigrateLegacyLicense() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: (key: string) => migrateLegacyLicense(key),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['license-status'] })
+      if (data.success) {
+        toast.success(data.message || t('license.migrated', 'License migrated to RS256'))
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+// P1: re-detect server hardware fingerprint (force refresh of cached value).
+export function useRedetectHardware() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: () => redetectHardware(),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['license-status'] })
+      if (data.success) {
+        toast.success(t('license.hw_redetected', 'Hardware fingerprint re-detected'))
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+// P1: rebind license to current host's hardware fingerprint.
+// Worker enforces 3 rebinds per rolling 365 days.
+export function useRebindLicense() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: (reason?: string) => rebindLicense(reason),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['license-status'] })
+      if (data.success) {
+        toast.success(data.message || t('license.rebound', 'License rebound to current hardware'))
+      } else {
+        toast.error(data.error || t('license.rebind_failed', 'Rebind failed'))
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
+// P2: force phone-home validate now (bypass 24h throttle).
+export function useForceValidate() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: () => forceValidate(),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['license-status'] })
+      if (data.success) {
+        if (data.revoked) {
+          toast.error(t('license.validate_revoked', 'License revoked by issuer'))
+        } else if (data.must_rebind) {
+          toast.warning(t('license.validate_rebind', 'Hardware rebind required'))
+        } else if (data.valid) {
+          toast.success(t('license.validate_ok', 'Validated successfully'))
+        } else {
+          toast.error(t('license.validate_failed', 'Validation failed'))
+        }
+      } else {
+        toast.error(data.error || t('license.validate_failed', 'Validation failed'))
       }
     },
     onError: (e: Error) => toast.error(e.message),

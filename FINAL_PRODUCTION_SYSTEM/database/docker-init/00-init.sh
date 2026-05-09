@@ -149,6 +149,15 @@ run_sql "task_pipeline_migration.sql"         25
 # Phase 14: Production tracking & enterprise key management
 run_sql "production_tracking_migration.sql"   26
 
+# Phase 15: License row integrity HMAC (P0 anti-piracy)
+run_sql "license_p0_hmac_migration.sql"       27
+
+# Phase 16: License hardware-fingerprint binding + rebind quota (P1)
+run_sql "license_p1_hwbind_migration.sql"     28
+
+# Phase 17: License phone-home grace + revocation + clock-drift (P2)
+run_sql "license_p2_phonehome_migration.sql"  29
+
 echo ""
 echo "=== Database initialization complete ==="
 echo ""

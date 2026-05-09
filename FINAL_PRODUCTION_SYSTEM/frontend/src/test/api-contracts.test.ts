@@ -177,6 +177,11 @@ const BACKEND_ACTIONS: Record<string, { method: 'GET' | 'POST'; csrf: boolean }>
   license_register:            { method: 'POST', csrf: true },
   license_deactivate:          { method: 'POST', csrf: true },
   license_generate_dev:        { method: 'POST', csrf: true },
+  license_claim:               { method: 'POST', csrf: true },
+  license_migrate:             { method: 'POST', csrf: true },
+  license_redetect_hw:         { method: 'POST', csrf: true },
+  license_rebind:              { method: 'POST', csrf: true },
+  license_force_validate:      { method: 'POST', csrf: true },
 
   // system upgrade
   upgrade_check_github:        { method: 'GET',  csrf: false },

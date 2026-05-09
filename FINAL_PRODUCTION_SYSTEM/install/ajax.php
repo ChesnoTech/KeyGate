@@ -463,6 +463,9 @@ function installerMigrationList(): array {
         ['product_variants_migration.sql',   17],
         ['missing_drivers_migration.sql',    18],
         ['unallocated_space_migration.sql',  19],
+        ['license_p0_hmac_migration.sql',    20],
+        ['license_p1_hwbind_migration.sql',  21],
+        ['license_p2_phonehome_migration.sql', 22],
     ];
 }
 

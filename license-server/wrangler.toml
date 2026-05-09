@@ -7,13 +7,26 @@ compatibility_date = "2024-01-01"
 binding = "LICENSES"
 id = "44c93c6286f44ae1ba2711651a34e78a"
 
-# Environment variables (set via Cloudflare dashboard or `wrangler secret put`)
-# GITHUB_WEBHOOK_SECRET      = "your-github-webhook-secret"
-# LEMONSQUEEZY_WEBHOOK_SECRET = "your-lemonsqueezy-signing-secret"
-# TBANK_TERMINAL_PASSWORD     = "your-tbank-terminal-password"
-# JWT_SECRET                  = "your-jwt-signing-secret"
-# SENDGRID_API_KEY            = "your-sendgrid-key"
-# ADMIN_EMAIL                 = "admin@keygate.dev"
+# Secrets (set via `wrangler secret put NAME` then paste value)
+#
+#   LICENSE_PRIVATE_KEY         RSA PEM PKCS#8. Generated locally with:
+#                                 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out license_priv.pem
+#                                 openssl pkey -in license_priv.pem -pubout -out license_pub.pem
+#                               Public key embedded in PHP source as KEYGATE_LICENSE_PUBLIC_KEY.
+#                               Private key NEVER leaves Worker secret store.
+#   LEGACY_HS256_SECRET         The pre-v2.3 hardcoded HMAC secret. Used by /api/migrate ONLY.
+#                               Delete after 2026-08-08 (90-day window).
+#                               Value: 'keygate-community-verification-key-2026'
+#   DEV_TOKEN                   Random 32-byte hex; gates /api/dev-issue.
+#                               Generate: php -r "echo bin2hex(random_bytes(32));"
+#   GITHUB_WEBHOOK_SECRET       Set by GitHub Sponsors webhook configuration.
+#   LEMONSQUEEZY_WEBHOOK_SECRET Set by LemonSqueezy webhook configuration.
+#   TBANK_TERMINAL_PASSWORD     Set by T-Bank Касса webhook configuration.
+#   SENDGRID_API_KEY            Optional, for email delivery.
+#   ADMIN_EMAIL                 Optional, recipient for admin notifications.
+#
+# Legacy:
+#   JWT_SECRET                  Pre-v2.3.0 HS256 secret. No longer used. Delete after migration window.
 
 [vars]
 ENVIRONMENT = "production"
